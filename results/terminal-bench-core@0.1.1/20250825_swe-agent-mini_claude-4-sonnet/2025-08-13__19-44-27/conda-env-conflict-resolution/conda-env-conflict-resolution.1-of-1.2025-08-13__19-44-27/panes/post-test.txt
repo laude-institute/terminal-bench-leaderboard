@@ -1,0 +1,86 @@
+root@cc64f67e0783:/app# bash /tests/run-tests.sh; tmux wait -S done
+Collecting pytest
+  Downloading pytest-8.4.1-py3-none-any.whl.metadata (7.7 kB)
+Collecting iniconfig>=1 (from pytest)
+  Downloading iniconfig-2.1.0-py3-none-any.whl.metadata (2.7 kB)
+Requirement already satisfied: packaging>=20 in /usr/local/lib/python3.13/site-packages (from pytest) (25.0)
+Collecting pluggy<2,>=1.5 (from pytest)
+  Downloading pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+Requirement already satisfied: pygments>=2.7.2 in /usr/local/lib/python3.13/site-packages (from pytest) (2.19.2)
+Downloading pytest-8.4.1-py3-none-any.whl (365 kB)
+Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+Downloading iniconfig-2.1.0-py3-none-any.whl (6.0 kB)
+Installing collected packages: pluggy, iniconfig, pytest
+Successfully installed iniconfig-2.1.0 pluggy-1.6.0 pytest-8.4.1
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your syst
+em unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you a
+re doing and want to suppress this warning.
+===================================================================== test session starts ======================================================================
+platform linux -- Python 3.13.1, pytest-8.4.1, pluggy-1.6.0 -- /usr/local/bin/python3.13
+cachedir: .pytest_cache
+rootdir: /tests
+plugins: anyio-4.10.0
+collected 3 items
+
+../tests/test_outputs.py::test_environment_exists FAILED                                                                                                 [ 33%]
+../tests/test_outputs.py::test_environment_yml_modified PASSED                                                                                           [ 66%]
+../tests/test_outputs.py::test_imports_script_runs FAILED                                                                                                [100%]
+
+=========================================================================== FAILURES ===========================================================================
+___________________________________________________________________ test_environment_exists ____________________________________________________________________
+
+    def test_environment_exists():
+        """Test that the datasci conda environment exists."""
+        result = subprocess.run(["conda", "env", "list"], capture_output=True, text=True)
+>       assert "datasci" in result.stdout, "datasci environment does not exist"
+E       AssertionError: datasci environment does not exist
+E       assert 'datasci' in '\n# conda environments:\n#\nbase                   /opt/conda\n\n'
+E        +  where '\n# conda environments:\n#\nbase                   /opt/conda\n\n' = CompletedProcess(args=['conda', 'env', 'list'], returncode=0, stdout='\n
+# conda environments:\n#\nbase                   /opt/conda\n\n', stderr='').stdout
+
+/tests/test_outputs.py:11: AssertionError
+___________________________________________________________________ test_imports_script_runs ___________________________________________________________________
+
+    def test_imports_script_runs():
+        """Test that the test_imports.py script can run successfully."""
+        # First ensure we're in the datasci environment
+        test_dir = os.environ["TEST_DIR"]
+        print("Contents of test directory:")
+        result = subprocess.run(["ls", "-la", test_dir], capture_output=True, text=True)
+        print(result.stdout)
+        result = subprocess.run(
+            ["conda", "run", "-n", "datasci", "python", f"{test_dir}/test_imports.py"],
+            capture_output=True,
+            text=True,
+        )
+
+        # Check for successful execution
+>       assert result.returncode == 0, f"test_imports.py failed with error: {result.stderr}"
+E       AssertionError: test_imports.py failed with error:
+E         EnvironmentLocationNotFound: Not a conda environment: /opt/conda/envs/datasci
+E
+E
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['conda', 'run', '-n', 'datasci', 'python', '/tests/test_imports.py'], returncode=1, stdout='', stderr='\nEnvironmen
+tLocationNotFound: Not a conda environment: /opt/conda/envs/datasci\n\n').returncode
+
+/tests/test_outputs.py:59: AssertionError
+--------------------------------------------------------------------- Captured stdout call ---------------------------------------------------------------------
+Contents of test directory:
+total 32
+drwxr-xr-x 3 root root 4096 Aug 14 03:04 .
+drwxr-xr-x 1 root root 4096 Aug 14 03:04 ..
+drwxr-xr-x 2 root root 4096 Aug 14 03:04 __pycache__
+-rw-r--r-- 1 1000 1000   70 Aug  2 22:10 run-tests.sh
+-rw-r--r-- 1 1000 1000   58 Aug  2 22:10 run-uv-pytest.sh
+-rw-r--r-- 1 1000 1000  380 Aug  2 22:10 setup-uv-pytest.sh
+-rw-r--r-- 1 1000 1000 1203 Aug  2 22:10 test_imports.py
+-rw-r--r-- 1 1000 1000 2856 Aug  2 22:10 test_outputs.py
+
+============================================================================ PASSES ============================================================================
+=================================================================== short test summary info ====================================================================
+PASSED ../tests/test_outputs.py::test_environment_yml_modified
+FAILED ../tests/test_outputs.py::test_environment_exists - AssertionError: datasci environment does not exist
+FAILED ../tests/test_outputs.py::test_imports_script_runs - AssertionError: test_imports.py failed with error:
+================================================================= 2 failed, 1 passed in 2.29s ==================================================================
+root@cc64f67e0783:/app#

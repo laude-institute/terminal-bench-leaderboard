@@ -1,0 +1,79 @@
+root@83e53e424c7f:/app# bash /tests/run-tests.sh; tmux wait -S done
+Collecting pytest
+  Downloading pytest-8.4.1-py3-none-any.whl.metadata (7.7 kB)
+Requirement already satisfied: requests in /usr/local/lib/python3.13/site-packages (2.32.5)
+Collecting iniconfig>=1 (from pytest)
+  Downloading iniconfig-2.1.0-py3-none-any.whl.metadata (2.7 kB)
+Requirement already satisfied: packaging>=20 in /usr/local/lib/python3.13/site-packages (from pytest) (25.0)
+Collecting pluggy<2,>=1.5 (from pytest)
+  Downloading pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+Requirement already satisfied: pygments>=2.7.2 in /usr/local/lib/python3.13/site-packages (from pytest) (2.19.2)
+Requirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.13/site-packages (from requests) (3.4.3)
+Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.13/site-packages (from requests) (3.10)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.13/site-packages (from requests) (2.5.0)
+Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.13/site-packages (from requests) (2025.8.3)
+Downloading pytest-8.4.1-py3-none-any.whl (365 kB)
+Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+Downloading iniconfig-2.1.0-py3-none-any.whl (6.0 kB)
+Installing collected packages: pluggy, iniconfig, pytest
+Successfully installed iniconfig-2.1.0 pluggy-1.6.0 pytest-8.4.1
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your syst
+em unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you a
+re doing and want to suppress this warning.
+===================================================================== test session starts ======================================================================
+platform linux -- Python 3.13.7, pytest-8.4.1, pluggy-1.6.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /tests
+plugins: anyio-4.10.0
+collected 4 items
+
+../tests/test_outputs.py::test_jupyter_server_running PASSED                                                                                             [ 25%]
+../tests/test_outputs.py::test_jupyter_config_exists FAILED                                                                                              [ 50%]
+../tests/test_outputs.py::test_sample_notebook_exists PASSED                                                                                             [ 75%]
+../tests/test_outputs.py::test_password_authentication FAILED                                                                                            [100%]
+
+=========================================================================== FAILURES ===========================================================================
+__________________________________________________________________ test_jupyter_config_exists __________________________________________________________________
+
+    def test_jupyter_config_exists():
+        """Test that Jupyter configuration exists with correct settings."""
+        config_path = Path.home() / ".jupyter" / "jupyter_notebook_config.py"
+        assert config_path.exists(), "Jupyter configuration file does not exist"
+
+        # Check if password hash exists in config
+        config_content = config_path.read_text()
+>       assert "c.NotebookApp.password" in config_content, (
+            "Password configuration not found"
+        )
+E       AssertionError: Password configuration not found
+E       assert 'c.NotebookApp.password' in "# Configuration file for notebook.\n\nc = get_config()  #noqa\n\n# Network configuration\nc.ServerApp.ip = '0.0.0.0'
+\nc.ServerApp.port = 8888\nc.ServerApp.open_browser = False\n\n# SSL/HTTPS configuration\nc.ServerApp.certfile = '/app/cert.pem'\nc.ServerApp.keyfile = '/app/ke
+y.pem'\n\n# Authentication\nc.ServerApp.password = 'argon2:$argon2id$v=19$m=10240,t=10,p=8$gobSbuxVGHV6cTnqTUNhwA$M9BpGTLRjpQH0zyVbAwF+4r26/NItJcbcz2TFtZQaKQ'\n
+\n# Allow running as root\nc.ServerApp.allow_root = True\n\n# Set notebook directory\nc.ServerApp.notebook_dir = '/app'"
+
+/tests/test_outputs.py:45: AssertionError
+_________________________________________________________________ test_password_authentication _________________________________________________________________
+
+    def test_password_authentication():
+        """Test that password authentication is configured correctly."""
+
+        config_path = Path.home() / ".jupyter" / "jupyter_notebook_config.py"
+        config_content = config_path.read_text()
+
+        # Extract the password hash from config
+        import re
+
+        password_match = re.search(r"c.NotebookApp.password = '(.*?)'", config_content)
+>       assert password_match, "Cannot find password hash in configuration"
+E       AssertionError: Cannot find password hash in configuration
+E       assert None
+
+/tests/test_outputs.py:96: AssertionError
+============================================================================ PASSES ============================================================================
+=================================================================== short test summary info ====================================================================
+PASSED ../tests/test_outputs.py::test_jupyter_server_running
+PASSED ../tests/test_outputs.py::test_sample_notebook_exists
+FAILED ../tests/test_outputs.py::test_jupyter_config_exists - AssertionError: Password configuration not found
+FAILED ../tests/test_outputs.py::test_password_authentication - AssertionError: Cannot find password hash in configuration
+================================================================= 2 failed, 2 passed in 2.11s ==================================================================
+root@83e53e424c7f:/app#
