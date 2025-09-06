@@ -17,9 +17,14 @@ livecodebenchpro/
 │   ├── run_metadata.json # Execution metadata
 │   ├── oracle.png         # Terminal Screenshot
 │   └── tb.lock          # Terminal-bench lock file
+├── parity_original/       # Original results
+│   ├── diff.txt         # Per-problem Difference
+│   └── log.txt          # Parity test results
 └── parity_adapter/       # Validation results 
     ├── lcbpro-XXXX/     # Task-specific validation data
     ├── results.json     # Parity test results
+    ├── run.log          # Parity test results
+    ├── tb.lock          # Terminal-bench lock file
     └── run_metadata.json # Validation metadata
 ```
 
@@ -39,16 +44,18 @@ Each task (e.g. `lcbpro-2090b`) follows this pattern:
 - **Individual task dirs**: Each contains problem statement and solution verification
 - **`oracle.png`**: Terminal screenshot
 
+### Parity Original (`parity_original/`)
+- **`log.txt`**: 66/402, `x` means it not tested by original papers, for fair comparison, we only count the rest 404 problems for parity test. And it reaches 100% matching.
+- **`diff.txt`**: the per-problem detailed comparison.
+
 ### Parity Testing (`parity_adapter/`)
-- **Purpose**: Validates adapter correctness by comparing oracle vs adapter outputs
-- **Coverage**: tasks with validation results
-- **Files**: Mirror structure of oracle/ for systematic comparison
+- Mirror structure of oracle/ for systematic comparison
 
 ## Usage
 
 Run LiveCodeBench Pro evaluation:
 ```bash
-tb run --dataset-name livecodebenchpro --agent <agent> --model <model>
+tb run --dataset livecodebenchpro --agent <agent> --model <model>
 ```
 
 ## External Judge Integration
