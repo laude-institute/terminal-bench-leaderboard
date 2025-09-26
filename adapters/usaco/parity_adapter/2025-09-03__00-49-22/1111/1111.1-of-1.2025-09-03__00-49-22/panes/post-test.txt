@@ -1,0 +1,173 @@
+root@8741cea7e38d:/app# bash /tests/run-tests.sh; tmux wait -S done
+Hit:1 http://deb.debian.org/debian bookworm InRelease
+Hit:2 http://deb.debian.org/debian bookworm-updates InRelease
+Hit:3 http://deb.debian.org/debian-security bookworm-security InRelease
+Reading package lists... Done
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+curl is already the newest version (7.88.1-10+deb12u12).
+0 upgraded, 0 newly installed, 0 to remove and 30 not upgraded.
+downloading uv 0.7.13 aarch64-unknown-linux-gnu
+no checksums to verify
+installing to /root/.local/bin
+  uv
+  uvx
+everything's installed!
+
+To add $HOME/.local/bin to your PATH, either restart your shell or run:
+
+    source $HOME/.local/bin/env (sh, bash, zsh)
+    source $HOME/.local/bin/env.fish (fish)
+Initialized project `app`
+Using CPython 3.13.1 interpreter at: /usr/local/bin/python3.13
+Creating virtual environment at: .venv
+Resolved 8 packages in 473ms
+Prepared 6 packages in 842ms
+Installed 6 packages in 46ms
+ + iniconfig==2.1.0
+ + numpy==2.3.2
+ + packaging==25.0
+ + pluggy==1.6.0
+ + pygments==2.19.2
+ + pytest==8.4.1
+===================================================================== test session starts ======================================================================
+platform linux -- Python 3.13.1, pytest-8.4.1, pluggy-1.6.0
+rootdir: /tests
+collected 2 items
+
+../tests/test_outputs.py .F                                                                                                                              [100%]
+
+=========================================================================== FAILURES ===========================================================================
+_______________________________________________________________________ test_single_task _______________________________________________________________________
+
+workdir = PosixPath('/tests')
+
+    def test_single_task(workdir):
+        # eval
+        with open(workdir / "data" / "constraint.json", 'r') as f:
+            constraint = json.load(f)
+
+        task_id = constraint["cp_id"]
+        with open("/app/solution.py", "r") as f:
+            completion = f.read()
+        solution_dict = {task_id: [completion]}
+        problem_dict = {task_id: constraint}
+>       result_sets = evaluate_solution_sets(
+            workdir,
+            solution_dict,
+            problem_dict,
+            mode="fail_fast"
+        )
+
+/tests/test_outputs.py:28:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/tests/evaluate.py:26: in evaluate_solution_sets
+    result_sets = judge.judge(workdir, solution_dict, problem_dict, **kwargs)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tests/judges/usaco_batch_judge.py:52: in judge
+    result_list.append(future.result())
+                       ^^^^^^^^^^^^^^^
+/usr/local/lib/python3.13/concurrent/futures/_base.py:449: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.13/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.13/concurrent/futures/thread.py:59: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tests/judges/usaco_batch_judge.py:86: in usaco_judge
+    return usaco_python3_judge(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+workdir = PosixPath('/tests'), problem_id = '1111'
+solution_code = 'import sys\n\ndef main():\n    data = sys.stdin.read().split()\n    if not data:\n        return\n    it = iter(data)...g blocks) * 12\n    res
+ult = (base_blocks - saved) * 12\n    print(result)\n\nif __name__ == "__main__":\n    main()\n'
+runtime_limit = 600, memory_limit = 1280, num_tests = 10, mode = 'fail_fast'
+
+    def usaco_python3_judge(workdir: Union[Path, str],
+                            problem_id: str,
+                            solution_code: str,
+                            runtime_limit: float,
+                            memory_limit: int,
+                            num_tests: int,
+                            mode: str = 'fail_fast') -> Result:
+        '''
+        mode = "fail_fast": returns the first result that fails, or ResultType.ACCEPTED
+            if none fail
+        mode = "eval_all": evaluates on all test cases no matter of result and returns a
+            meta-result with a summary status and result_type, and a results_list of
+            per-test-case Results (summary result_type of the first incorrect result, or
+            ResultType.ACCEPTED)
+        '''
+        # (all show up as runtime error right now)
+        assert mode == 'fail_fast' or mode == 'eval_all', \
+            'Only modes fail_fast and eval_all are supported'
+
+        # saving solution code if save_solution
+        timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M_%S_%f")
+
+        result = {}
+        if mode == 'eval_all':
+            result['result_list'] = []
+        result['problem_id'] = problem_id
+        result['num_tests'] = num_tests
+        assert num_tests > 0, 'Problem cannot have 0 tests'
+
+        # construct judge sandbox directories if they don't exist
+        path = Path(f"{workdir}/predictions/")
+        path.mkdir(parents=True, exist_ok=True)
+        pred_path = os.path.join(path.resolve(), '{}_{}.pred')
+
+        for i in range(1, num_tests+1):
+            input_file, output_file = get_test_in_out_files(workdir, problem_id, i)
+            # include timestamp to avoid concurrency issues
+            pred_file = pred_path.format(i, timestamp)
+
+            # eval
+            result_i = check_correctness(
+                solution_code,
+                i,
+                runtime_limit,
+                memory_limit,
+                input_file,
+                pred_file,
+                output_file
+            )
+            if mode == 'fail_fast':
+>               assert result_i['result_type'] == ResultType.ACCEPTED, \
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                    f"Failed because {result_i} on test {i}."
+E               AssertionError: Failed because {'result_type': <ResultType.WRONG_ANSWER: 2>, 'status': 'wrong answer.\nInput:\n250 25\n930886\n636915\n238335\n7
+60492\n641421\n490027\n636920\n5211\n702567\n465782\n238336\n703135\n979802\n723058\n898167\n478042\n377373\n544919\n898537\n664370\n803526\n241873\n999170\n497
+281\n420925\n336327\n126505\n621729\n925857\n353895\n100545\n233367\n990364\n313750\n426808\n947178\n393584\n502651\n612399\n95060\n993368\n698586\n297539\n4805
+70\n960378\n66601\n612902\n260756\n209441\n429689\n346619\n465779\n738097\n834481\n120709\n704567\n179497\n254586\n455306\n406219\n805732\n409503\n258270\n95970
+8\n226340\n747796\n142618\n122846\n892921\n192379\n537764\n469841\n636913\n87764\n324914\n346491\n148365\n281936\n452551\n899228\n975407\n276121\n794395\n661237
+\n573793\n894428\n231011\n639529\n255763\n854538\n436840\n344818\n670688\n67917\n466996\n987743\n497277\n469786\n338082\n939507\n278611\n127828\n887343\n993373\
+n192374\n473730\n811305\n465777\n648522\n586708\n408282\n412924\n442062\n962600\n419379\n661242\n487131\n684930\n845894\n497282\n548899\n152959\n272813\n187190\
+n952926\n365084\n952928\n855542\n379107\n418418\n262009\n625210\n467587\n319301\n667372\n401255\n44599\n229904\n939811\n702566\n811127\n639533\n100549\n821396\n
+645630\n679292\n480573\n739299\n100541\n352298\n420921\n108581\n499336\n371155\n614769\n981776\n5209\n575579\n421993\n867621\n962504\n801961\n31326\n518944\n613
+202\n936784\n222842\n608872\n849958\n448036\n457753\n383303\n132133\n772890\n517567\n690368\n473788\n66249\n821391\n12497\n294892\n519125\n613996\n209188\n70372
+9\n543921\n803528\n278050\n504794\n858699\n301039\n90428\n144500\n617647\n36159\n522535\n104339\n502215\n60049\n298285\n495343\n903177\n231016\n260289\n717988\n
+585795\n53144\n658390\n655340\n569\n174232\n956042\n723055\n81\n903190\n214677\n730690\n764524\n349614\n328205\n565100\n602726\n204916\n325578\n528946\n819080\n
+218593\n418627\n561886\n788355\n720090\n59479\n806355\n356620\n198987\n498338\n487770\n300606\n412923\n473059\n648518\n990783\n228458\n967637\n620483\n770478\n1
+49314\n645729\n702562\n58025\nPredicted output:\n667440\nCorrect output:\n667512'} on test 2.
+
+/tests/judges/usaco_batch_judge.py:146: AssertionError
+======================================================================= warnings summary =======================================================================
+test_outputs.py::test_single_task
+test_outputs.py::test_single_task
+test_outputs.py::test_single_task
+test_outputs.py::test_single_task
+  /usr/local/lib/python3.13/multiprocessing/popen_fork.py:67: DeprecationWarning: This process (pid=1675) is multi-threaded, use of fork() may lead to deadlocks
+ in the child.
+    self.pid = os.fork()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================================================================ PASSES ============================================================================
+=================================================================== short test summary info ====================================================================
+PASSED ../tests/test_outputs.py::test_solution_exists
+FAILED ../tests/test_outputs.py::test_single_task - AssertionError: Failed because {'result_type': <ResultType.WRONG_ANSWER: 2>, 'status': 'wrong answer.\nInput
+:\n250 25\n930886\n636915\n238335\n760492\n6414...
+=========================================================== 1 failed, 1 passed, 4 warnings in 0.14s ============================================================
+root@8741cea7e38d:/app#
