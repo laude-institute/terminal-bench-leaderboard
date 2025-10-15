@@ -1,0 +1,129 @@
+root@e3be95aebe20:/app# bash /tests/run-tests.sh; tmux wait -S done
+Wrote /tests/config.json for evaluation.
+Hit:1 http://deb.debian.org/debian bookworm InRelease
+Hit:2 http://deb.debian.org/debian bookworm-updates InRelease
+Hit:3 http://deb.debian.org/debian-security bookworm-security InRelease
+Reading package lists... Done
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+curl is already the newest version (7.88.1-10+deb12u14).
+0 upgraded, 0 newly installed, 0 to remove and 40 not upgraded.
+downloading uv 0.7.13 x86_64-unknown-linux-gnu
+no checksums to verify
+installing to /root/.local/bin
+  uv
+  uvx
+everything's installed!
+
+To add $HOME/.local/bin to your PATH, either restart your shell or run:
+
+    source $HOME/.local/bin/env (sh, bash, zsh)
+    source $HOME/.local/bin/env.fish (fish)
+Initialized project `app`
+warning: `VIRTUAL_ENV=/opt/venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instea
+d
+Using CPython 3.13.1 interpreter at: /usr/local/bin/python3.13
+Creating virtual environment at: .venv
+Resolved 7 packages in 63ms
+Prepared 5 packages in 85ms
+Installed 5 packages in 23ms
+ + iniconfig==2.1.0
+ + packaging==25.0
+ + pluggy==1.6.0
+ + pygments==2.19.2
+ + pytest==8.4.1
+warning: `VIRTUAL_ENV=/opt/venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instea
+d
+===================================================================== test session starts ======================================================================
+platform linux -- Python 3.13.1, pytest-8.4.1, pluggy-1.6.0
+rootdir: /tests
+collected 1 item
+
+../tests/test_outputs.py F                                                                                                                               [100%]
+
+=========================================================================== FAILURES ===========================================================================
+_____________________________________________________________ test_numeric_result_within_tolerance _____________________________________________________________
+
+    def test_numeric_result_within_tolerance():
+        """Verify agent writes /app/result.json with expected value within tolerance.
+        Supports numeric, string, list, and dictionary outputs with flexible tolerance handling.
+        """
+        # Read ground truth from protected location (not accessible to agent)
+        config_path = Path("/tests/config.json")  # Absolute path in container
+        assert config_path.exists(), "Missing tests/config.json"
+        config = json.loads(config_path.read_text())
+
+        # Support all data types, not just numeric
+        kind = config.get("kind", "numeric")
+        # Note: We keep the function name for backward compatibility
+
+        result_path = Path("/app/result.json")
+        assert result_path.exists(), "Agent must write /app/result.json with {'value': ...}"
+        result = json.loads(result_path.read_text())
+
+        assert "value" in result, "result.json must contain key 'value'"
+        expected = config.get("expected_output")
+        tol = config.get("tolerance")
+        assert tol is not None, "tests/config.json must include 'tolerance'"
+
+        # Store comparison result
+        comparison_passed = _compare_values(result["value"], expected, tol)
+
+        # Extract and save agent results to host-accessible location
+        try:
+            import shutil
+            # Copy agent's prediction if logs directory is mounted
+            if Path("/logs").exists():
+                # Save agent's result.json
+                if Path("/app/result.json").exists():
+                    shutil.copy("/app/result.json", "/logs/agent_result.json")
+
+                # Create comprehensive comparison file
+                # Calculate difference for numeric values only
+                abs_diff = None
+                if (isinstance(result["value"], (int, float)) and
+                    isinstance(expected, (int, float))):
+                    abs_diff = abs(float(result["value"]) - float(expected))
+
+                comparison_data = {
+                    "agent_prediction": result["value"],
+                    "expected_output": expected,
+                    "tolerance": tol,
+                    "comparison_passed": comparison_passed,
+                    "absolute_difference": abs_diff,
+                    "task_kind": kind,
+                    "task_id": config.get("task_id", "unknown"),
+                    "data_type": type(result["value"]).__name__
+                }
+                Path("/logs/comparison_result.json").write_text(json.dumps(comparison_data, indent=2))
+        except Exception as e:
+            # If file operations fail, continue with test - don't let logging failures break the test
+            pass
+
+        # Original assertion
+>       assert comparison_passed, (
+            f"Result {result['value']} differs from expected {expected} beyond tolerance {tol}"
+        )
+E       AssertionError: Result {'NGC1566': [0.21631141703909815, 0.0035737132485461854], 'NGC1365': [0.21209345482816083, 0.004682654274924628], 'NGC3627': [0.2
+0226760983970102, 0.0034975207747940896], 'NGC4254': [0.19326306365040521, 0.004408847762313956], 'NGC4321': [0.19719565559781096, 0.0039093149816567425], 'NGC4
+535': [0.1749969031686758, 0.004147365396958608], 'NGC5068': [0.16810134558711254, 0.0037997508019435673], 'NGC0628': [0.19064001230604638, 0.003794631279418282
+5], 'NGC1097': [0.20754551616951192, 0.003895965205756199], 'NGC1300': [0.18016609019505553, 0.003877816172470681], 'NGC1512': [0.18730032707935945, 0.004539467
+3872560624], 'NGC1672': [0.2154703834290196, 0.0038154507117535495], 'NGC2835': [0.19252092058460782, 0.0038975201014602398], 'NGC3351': [0.19594534176465003, 0
+.004878597111588194], 'NGC3507': [0.17645402199297752, 0.0045525504538984725], 'NGC4457': [0.19549532299418051, 0.004116119977698947], 'NGC4540': [0.18160912209
+061528, 0.004162306062556073], 'NGC7496': [0.2203202591107068, 0.003944015937151211], 'IC5332': [0.19480919278358008, 0.004029076795096584]} differs from expect
+ed {'IC5332': [0.2, 0.07], 'NGC0628': [0.23, 0.07], 'NGC1087': [0.16, 0.06], 'NGC1300': [0.18, 0.06], 'NGC1365': [0.38, 0.08], 'NGC1385': [0.19, 0.05], 'NGC1433
+': [0.22, 0.06], 'NGC1512': [0.21, 0.06], 'NGC1566': [0.26, 0.06], 'NGC1672': [0.32, 0.07], 'NGC2835': [0.2, 0.06], 'NGC3351': [0.17, 0.06], 'NGC3627': [0.21, 0
+.05], 'NGC4254': [0.16, 0.05], 'NGC4303': [0.32, 0.06], 'NGC4321': [0.26, 0.05], 'NGC4535': [0.17, 0.05], 'NGC5068': [0.34, 0.07], 'NGC7496': [0.25, 0.06]} beyo
+nd tolerance {'IC5332': [0.07, 0.02], 'NGC0628': [0.07, 0.02], 'NGC1087': [0.06, 0.02], 'NGC1300': [0.06, 0.02], 'NGC1365': [0.08, 0.02], 'NGC1385': [0.05, 0.02
+], 'NGC1433': [0.06, 0.02], 'NGC1512': [0.06, 0.02], 'NGC1566': [0.06, 0.02], 'NGC1672': [0.07, 0.02], 'NGC2835': [0.06, 0.02], 'NGC3351': [0.06, 0.02], 'NGC362
+7': [0.05, 0.02], 'NGC4254': [0.05, 0.02], 'NGC4303': [0.06, 0.02], 'NGC4321': [0.05, 0.02], 'NGC4535': [0.05, 0.02], 'NGC5068': [0.07, 0.02], 'NGC7496': [0.06,
+ 0.02]}
+E       assert False
+
+/tests/test_outputs.py:120: AssertionError
+=================================================================== short test summary info ====================================================================
+FAILED ../tests/test_outputs.py::test_numeric_result_within_tolerance - AssertionError: Result {'NGC1566': [0.21631141703909815, 0.0035737132485461854], 'NGC136
+5': [0.21209345482816083, 0.004682654274924628], 'NGC3627': [0.2022...
+====================================================================== 1 failed in 0.07s =======================================================================
+root@e3be95aebe20:/app#

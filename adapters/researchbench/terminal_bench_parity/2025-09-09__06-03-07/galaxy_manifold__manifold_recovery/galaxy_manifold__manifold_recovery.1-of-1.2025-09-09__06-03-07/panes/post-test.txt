@@ -1,0 +1,119 @@
+root@4fe16f266b84:/app# bash /tests/run-tests.sh; tmux wait -S done
+Wrote /tests/config.json for evaluation.
+Hit:1 http://deb.debian.org/debian bookworm InRelease
+Hit:2 http://deb.debian.org/debian bookworm-updates InRelease
+Hit:3 http://deb.debian.org/debian-security bookworm-security InRelease
+Reading package lists... Done
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+curl is already the newest version (7.88.1-10+deb12u14).
+0 upgraded, 0 newly installed, 0 to remove and 40 not upgraded.
+downloading uv 0.7.13 x86_64-unknown-linux-gnu
+no checksums to verify
+installing to /root/.local/bin
+  uv
+  uvx
+everything's installed!
+
+To add $HOME/.local/bin to your PATH, either restart your shell or run:
+
+    source $HOME/.local/bin/env (sh, bash, zsh)
+    source $HOME/.local/bin/env.fish (fish)
+Initialized project `app`
+warning: `VIRTUAL_ENV=/opt/venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instea
+d
+Using CPython 3.13.1 interpreter at: /usr/local/bin/python3.13
+Creating virtual environment at: .venv
+Resolved 7 packages in 37ms
+Prepared 5 packages in 79ms
+Installed 5 packages in 10ms
+ + iniconfig==2.1.0
+ + packaging==25.0
+ + pluggy==1.6.0
+ + pygments==2.19.2
+ + pytest==8.4.1
+warning: `VIRTUAL_ENV=/opt/venv` does not match the project environment path `.venv` and will be ignored; use `--active` to target the active environment instea
+d
+===================================================================== test session starts ======================================================================
+platform linux -- Python 3.13.1, pytest-8.4.1, pluggy-1.6.0
+rootdir: /tests
+collected 1 item
+
+../tests/test_outputs.py F                                                                                                                               [100%]
+
+=========================================================================== FAILURES ===========================================================================
+_____________________________________________________________ test_numeric_result_within_tolerance _____________________________________________________________
+
+    def test_numeric_result_within_tolerance():
+        """Verify agent writes /app/result.json with expected value within tolerance.
+        Supports numeric, string, list, and dictionary outputs with flexible tolerance handling.
+        """
+        # Read ground truth from protected location (not accessible to agent)
+        config_path = Path("/tests/config.json")  # Absolute path in container
+        assert config_path.exists(), "Missing tests/config.json"
+        config = json.loads(config_path.read_text())
+
+        # Support all data types, not just numeric
+        kind = config.get("kind", "numeric")
+        # Note: We keep the function name for backward compatibility
+
+        result_path = Path("/app/result.json")
+        assert result_path.exists(), "Agent must write /app/result.json with {'value': ...}"
+        result = json.loads(result_path.read_text())
+
+        assert "value" in result, "result.json must contain key 'value'"
+        expected = config.get("expected_output")
+        tol = config.get("tolerance")
+        assert tol is not None, "tests/config.json must include 'tolerance'"
+
+        # Store comparison result
+        comparison_passed = _compare_values(result["value"], expected, tol)
+
+        # Extract and save agent results to host-accessible location
+        try:
+            import shutil
+            # Copy agent's prediction if logs directory is mounted
+            if Path("/logs").exists():
+                # Save agent's result.json
+                if Path("/app/result.json").exists():
+                    shutil.copy("/app/result.json", "/logs/agent_result.json")
+
+                # Create comprehensive comparison file
+                # Calculate difference for numeric values only
+                abs_diff = None
+                if (isinstance(result["value"], (int, float)) and
+                    isinstance(expected, (int, float))):
+                    abs_diff = abs(float(result["value"]) - float(expected))
+
+                comparison_data = {
+                    "agent_prediction": result["value"],
+                    "expected_output": expected,
+                    "tolerance": tol,
+                    "comparison_passed": comparison_passed,
+                    "absolute_difference": abs_diff,
+                    "task_kind": kind,
+                    "task_id": config.get("task_id", "unknown"),
+                    "data_type": type(result["value"]).__name__
+                }
+                Path("/logs/comparison_result.json").write_text(json.dumps(comparison_data, indent=2))
+        except Exception as e:
+            # If file operations fail, continue with test - don't let logging failures break the test
+            pass
+
+        # Original assertion
+>       assert comparison_passed, (
+            f"Result {result['value']} differs from expected {expected} beyond tolerance {tol}"
+        )
+E       AssertionError: Result [[0.9909520942055543, 0.09555920743304705, 0.9899113549549234, 0.10106861913285763], [0.9887347788180783, 0.10660800029504988, 0.
+9806731499814824, 0.1398681217572921], [0.9845179440517415, 0.12499931585483502, 0.9800120695133236, 0.14224010754975067]] differs from expected [[0.9983, 0.068
+5, 0.9995, 0.0403], [0.9967, 0.0963, 0.9989, 0.0584], [0.9945, 0.1243, 0.9833, 0.2251]] beyond tolerance [[0.01, 0.01, 0.01, 0.01], [0.01, 0.01, 0.01, 0.01], [0
+.01, 0.01, 0.01, 0.01]]
+E       assert False
+
+/tests/test_outputs.py:120: AssertionError
+=================================================================== short test summary info ====================================================================
+FAILED ../tests/test_outputs.py::test_numeric_result_within_tolerance - AssertionError: Result [[0.9909520942055543, 0.09555920743304705, 0.9899113549549234, 0.
+10106861913285763], [0.9887347788180783, 0.10660800029504988, 0.980...
+====================================================================== 1 failed in 0.07s =======================================================================
+root@4fe16f266b84:/app#
