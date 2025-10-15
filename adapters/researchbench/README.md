@@ -25,17 +25,6 @@ The results demonstrate excellent parity between the original ResearchBench impl
 - **Statistical Equivalence**: The difference of 0.5 percentage points falls well within expected variance for complex scientific tasks
 - **Validation Success**: The adapter successfully maintains the scientific rigor and evaluation standards of the original benchmark
 
-### Experimental Details
-
-- **Agent**: `claude-code=1.0.112`
-- **Model**: `anthropic/claude-3-7-sonnet`
-- **Date**: 2025-09-09
-- **Tasks**: 106 tasks from ResearchBench
-- **Runs**: Averaged over 2 runs
-- **Run IDs**: 
-  - 1st Run: 2025-09-09__16-32-47
-  - 2nd Run: 2025-09-09__16-33-08
-
 ### Repository Links
 
 - **Forked Repository**: https://github.com/StevenDillmann/researchbench
