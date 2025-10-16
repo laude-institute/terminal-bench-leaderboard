@@ -1,0 +1,157 @@
+root@d0e06037e65d:/app# ls -la
+total 20
+drwxr-xr-x 1 root root 4096 Oct  8 15:44 .
+drwxr-xr-x 1 root root 4096 Oct 15 07:20 ..
+drwxr-xr-x 1 root root 4096 Oct 14 12:00 john
+-rwxrwxr-x 1 root root  215 Oct  8 15:44 secrets.7z
+root@d0e06037e65d:/app# apt-get update
+Get:1 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Hit:2 http://archive.ubuntu.com/ubuntu noble InRelease
+Get:3 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+Get:4 http://archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+Get:5 http://security.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1141 kB]
+Get:6 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1928 kB]
+Get:7 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1897 kB]
+Get:8 http://security.ubuntu.com/ubuntu noble-security/main amd64 Packages [1531 kB]
+Get:9 http://security.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [2512 kB]
+Fetched 9388 kB in 2s (4476 kB/s)
+Reading package lists... Done
+root@d0e06037e65d:/app# apt-get install -y p7zip-full libcompress-raw-lzma-perl
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  7zip
+Suggested packages:
+  7zip-standalone 7zip-rar
+The following NEW packages will be installed:
+  7zip libcompress-raw-lzma-perl p7zip-full
+0 upgraded, 3 newly installed, 0 to remove and 28 not upgraded.
+Need to get 1884 kB of archives.
+After this operation, 6452 kB of additional disk space will be used.
+Get:1 http://archive.ubuntu.com/ubuntu noble/universe amd64 7zip amd64 23.01+dfsg-11 [1846 kB]
+Get:2 http://archive.ubuntu.com/ubuntu noble/universe amd64 libcompress-raw-lzma-perl amd64 2.209-1build2 [35.1 kB]
+Get:3 http://archive.ubuntu.com/ubuntu noble/universe amd64 p7zip-full all 16.02+transitional.1 [2500 B]
+Fetched 1884 kB in 1s (1782 kB/s)
+debconf: delaying package configuration, since apt-utils is not installed
+Selecting previously unselected package 7zip.
+(Reading database ... 17136 files and directories currently installed.)
+Preparing to unpack .../7zip_23.01+dfsg-11_amd64.deb ...
+Unpacking 7zip (23.01+dfsg-11) ...
+Selecting previously unselected package libcompress-raw-lzma-perl:amd64.
+Preparing to unpack .../libcompress-raw-lzma-perl_2.209-1build2_amd64.deb ...
+Unpacking libcompress-raw-lzma-perl:amd64 (2.209-1build2) ...
+Selecting previously unselected package p7zip-full.
+Preparing to unpack .../p7zip-full_16.02+transitional.1_all.deb ...
+Unpacking p7zip-full (16.02+transitional.1) ...
+Setting up 7zip (23.01+dfsg-11) ...
+Setting up libcompress-raw-lzma-perl:amd64 (2.209-1build2) ...
+Setting up p7zip-full (16.02+transitional.1) ...
+root@d0e06037e65d:/app# perl -v
+
+This is perl 5, version 38, subversion 2 (v5.38.2) built for x86_64-linux-gnu-thread-multi
+(with 51 registered patches, see perl -V for more detail)
+
+Copyright 1987-2023, Larry Wall
+
+Perl may be copied only under the terms of either the Artistic License or the
+GNU General Public License, which may be found in the Perl 5 source kit.
+
+Complete documentation for Perl, including FAQ lists, should be found on
+this system using "man perl" or "perldoc perl".  If you have access to the
+Internet, point your browser at https://www.perl.org/, the Perl Home Page.
+
+root@d0e06037e65d:/app# perl /app/john/run/7z2john.pl /app/secrets.7z > /app/secrets.7z.hash
+ATTENTION: the hashes might contain sensitive encrypted data. Be careful when sharing or posting these hashes
+root@d0e06037e65d:/app# seq -w 0000 9999 > /app/digits.txt
+root@d0e06037e65d:/app# /app/john/run/john --format=7z --wordlist=/app/digits.txt /app/secrets.7z.hash
+Using default input encoding: UTF-8
+Loaded 1 password hash (7z, 7-Zip archive encryption [SHA256 256/256 AVX2 8x AES])
+Cost 1 (iteration count) is 524288 for all loaded hashes
+Cost 2 (padding size) is 3 for all loaded hashes
+Cost 3 (compression type) is 2 for all loaded hashes
+Cost 4 (data length) is 13 for all loaded hashes
+Will run 32 OpenMP threads
+Note: Passwords longer than 28 rejected
+Press 'q' or Ctrl-C to abort, 'h' for help, almost any other key for status
+1998             (secrets.7z)
+1g 0:00:00:02 DONE (2025-10-15 07:22) 0.4608g/s 943.8p/s 943.8c/s 943.8C/s 1792..2047
+Use the "--show" option to display all of the cracked passwords reliably
+Session completed.
+root@d0e06037e65d:/app# PASSWORD=$(/app/john/run/john --show /app/secrets.7z.hash | awk -F: '/secrets\.7z/{print $2; exit}')
+root@d0e06037e65d:/app# echo "Cracked password: $PASSWORD"
+Cracked password: 1998
+root@d0e06037e65d:/app# mkdir -p /app/extracted
+root@d0e06037e65d:/app# 7z x -p"$PASSWORD" -y /app/secrets.7z -o/app/extracted
+
+7-Zip 23.01 (x64) : Copyright (c) 1999-2023 Igor Pavlov : 2023-06-20
+ 64-bit locale=C.UTF-8 Threads:32 OPEN_MAX:1048576
+
+Scanning the drive for archives:
+1 file, 215 bytes (1 KiB)
+
+Extracting archive: /app/secrets.7z
+--
+Path = /app/secrets.7z
+Type = 7z
+Physical Size = 215
+Headers Size = 199
+Method = LZMA2:12 7zAES
+Solid = -
+Blocks = 1
+
+Everything is Ok
+
+Folders: 1
+Files: 1
+Size:       9
+Compressed: 215
+root@d0e06037e65d:/app# TARGET_FILE=$(find /app/extracted -type f -name 'secrete_file.txt' | head -n 1) && printf "%s\n" "$(cat "$TARGET_FILE")" > /app/solution
+.txt
+cat: '': No such file or directory
+root@d0e06037e65d:/app# ls -l /app/solution.txt
+-rw-r--r-- 1 root root 1 Oct 15 07:22 /app/solution.txt
+root@d0e06037e65d:/app# cat /app/solution.txt
+
+root@d0e06037e65d:/app# 7z l /app/secrets.7z
+
+7-Zip 23.01 (x64) : Copyright (c) 1999-2023 Igor Pavlov : 2023-06-20
+ 64-bit locale=C.UTF-8 Threads:32 OPEN_MAX:1048576
+
+Scanning the drive for archives:
+1 file, 215 bytes (1 KiB)
+
+Listing archive: /app/secrets.7z
+
+--
+Path = /app/secrets.7z
+Type = 7z
+Physical Size = 215
+Headers Size = 199
+Method = LZMA2:12 7zAES
+Solid = -
+Blocks = 1
+
+   Date      Time    Attr         Size   Compressed  Name
+------------------- ----- ------------ ------------  ------------------------
+2025-05-04 21:22:34 D....            0            0  secrets
+2025-05-04 21:22:39 ....A            9           16  secrets/secret_file.txt
+------------------- ----- ------------ ------------  ------------------------
+2025-05-04 21:22:39                  9           16  1 files, 1 folders
+root@d0e06037e65d:/app# ls -laR /app/extracted
+/app/extracted:
+total 16
+drwxr-xr-x 3 root root 4096 Oct 15 07:22 .
+drwxr-xr-x 1 root root 4096 Oct 15 07:22 ..
+drwxr-xr-x 2 root root 4096 May  4 21:22 secrets
+
+/app/extracted/secrets:
+total 12
+drwxr-xr-x 2 root root 4096 May  4 21:22 .
+drwxr-xr-x 3 root root 4096 Oct 15 07:22 ..
+-rw-r--r-- 1 root root    9 May  4 21:22 secret_file.txt
+root@d0e06037e65d:/app# FILE=$(find /app/extracted -type f | head -n 1) && echo "Found file: $FILE" && cat "$FILE" > /app/solution.txt
+Found file: /app/extracted/secrets/secret_file.txt
+root@d0e06037e65d:/app# ls -l /app/solution.txt && cat /app/solution.txt
+-rw-r--r-- 1 root root 9 Oct 15 07:22 /app/solution.txt
+honeybearroot@d0e06037e65d:/app#

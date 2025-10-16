@@ -1,0 +1,590 @@
+root@ed357b46a55a:/app# ls -la
+total 96
+drwxr-xr-x 1 root root  4096 Oct  8 15:44 .
+drwxr-xr-x 1 root root  4096 Oct 15 10:40 ..
+-rw-rw-r-- 1 root root 88805 Oct  8 15:44 graphene.dat
+root@ed357b46a55a:/app# find . -maxdepth 2 -type f -iregex '.*\.(txt|csv|dat)$' -printf '%p\n' 2>/dev/null | sed 's#^\./##'
+root@ed357b46a55a:/app# head -n 20 *.txt 2>/dev/null || true
+root@ed357b46a55a:/app# head -n 20 *.csv 2>/dev/null || true
+root@ed357b46a55a:/app# head -n 20 *.dat 2>/dev/null || true
+47183,554644    19261,547207
+46588,360019    19266,089699
+46008,191298    19077,996963
+45442,488736    19173,287322
+44890,718036    19501,518253
+44352,368927    19506,586203
+43826,959593    19752,431144
+43314,029137    19812,863021
+42813,138290    19678,348151
+42323,866373    19764,871128
+41845,813826    19360,099292
+41378,600916    19413,554878
+40921,863181    19626,191780
+40475,250679    19704,066336
+40038,430487    19495,727898
+39611,084116    19672,573559
+39192,908278    19538,763458
+38783,609488    19344,943112
+38382,908122    19510,307527
+37990,536178    19552,152695
+root@ed357b46a55a:/app# python3 - << 'PY'
+> import os, sys, json, re
+= sse + penalty
+            if score < bes> import numpy as np
+>
+> def detect_file():
+>     candidates = []
+>     for root, dirs, files in os.walk('.'):
+>         # only consider shallow level to avoid noise
+>         depth = root.count(os.sep) - os.getcwd().count(os.sep)
+>         if depth > 1:
+>             continue
+>         for f in files:
+>             if re.search(r'\.(txt|csv|dat)$', f, re.I):
+>                 candidates.append(os.path.join(root, f))
+>     # Prefer files in current dir
+>     candidates.sort(key=lambda p: (0 if os.path.dirname(p) in ('.','') else 1, len(p)))
+>     return candidates[0] if candidates else None
+>
+> fn = detect_file()
+> if not fn:
+>     print('No data file found', file=sys.stderr)
+>     sys.exit(1)
+>
+> # Try to load flexibly
+> raw = None
+> # Try loadtxt without specifying delimiter, skipping lines with non-numeric
+> def try_load(path):
+>     # Read lines, filter comment-like
+>     with open(path, 'r', errors='ignore') as fh:
+>         lines = fh.readlines()
+>     data_lines = []
+>     for ln in lines:
+>         s = ln.strip()
+>         if not s:
+>             continue
+>         if s.startswith('#'):
+>             continue
+>         # keep lines with at least two numbers
+>         toks = re.split(r'[\s,;]+', s)
+>         num_cnt = 0
+>         for t in toks:
+>             try:
+>                 float(t)
+>                 num_cnt += 1
+>             except Exception:
+>                 pass
+>         if num_cnt >= 2:
+>             data_lines.append(s)
+>     if not data_lines:
+>         return None
+>     # split numeric columns
+>     cols = []
+>     xs, ys = [], []
+>     for s in data_lines:
+>         toks = re.split(r'[\s,;]+', s)
+>         nums = []
+>         for t in toks:
+>             try:
+>                 nums.append(float(t))
+>             except Exception:
+>                 pass
+>         if len(nums) >= 2:
+>             xs.append(nums[0])
+>             ys.append(nums[1])
+>     if not xs:
+>         return None
+>     arr = np.column_stack([xs, ys])
+>     return arr
+>
+> raw = try_load(fn)
+> if raw is None or raw.shape[0] < 10:
+>     print('Failed to parse data from', fn, file=sys.stderr)
+>     sys.exit(1)
+>
+> # Sort by x
+> raw = raw[np.argsort(raw[:,0])]
+> x_all = raw[:,0].astype(float)
+> y_all = raw[:,1].astype(float)
+>
+> # Define Lorentzian basis f (height-normalized form)
+> def lorentz_basis(x, x0, gamma):
+>     return 1.0 / (1.0 + ((x - x0)/gamma)**2)
+>
+> # Solve amplitude and offset by linear least squares for fixed x0, gamma
+> def solve_ampl_offset(x, y, x0, gamma):
+>     f = lorentz_basis(x, x0, gamma)
+>     A = np.column_stack([f, np.ones_like(f)])
+>     # least squares
+>     coeff, *_ = np.linalg.lstsq(A, y, rcond=None)
+>     amplitude, offset = coeff[0], coeff[1]
+>     y_fit = amplitude * f + offset
+>     sse = float(np.sum((y - y_fit)**2))
+>     return amplitude, offset, sse
+>
+> # Generic grid-search with refinement
+> def fit_region(x, y, x0_range, gamma_range, coarse_steps=(200, 100), fine_steps=(100, 60)):
+>     x0_min, x0_max = x0_range
+>     g_min, g_max = gamma_range
+>     # Coarse grid
+>     x0_grid = np.linspace(x0_min, x0_max, coarse_steps[0])
+>     g_grid = np.linspace(max(1e-6, g_min), g_max, coarse_steps[1])
+>     best = None
+>     for x0 in x0_grid:
+>         # quick bounds check to keep gamma meaningful
+>         for g in g_grid:
+>             amp, off, sse = solve_ampl_offset(x, y, x0, g)
+>             # prefer positive amplitude; penalize negatives
+>             penalty = 0.0
+>             if amp < 0:
+>                 penalty = (1.0 + (-amp)) * 1e6
+>             score = sse + penalty
+>             if (best is None) or (score < best[0]):
+>                 best = [score, x0, g, amp, off]
+>     # Refine around best
+>     _, bx0, bg, _, _ = best
+>     x0_half_span = max((x0_max - x0_min) / 20.0, 1.0)
+>     g_half_span = max((g_max - g_min) / 20.0, (g_max - g_min)/50.0)
+>     x0_grid = np.linspace(max(x0_min, bx0 - x0_half_span), min(x0_max, bx0 + x0_half_span), fine_steps[0])
+>     g_grid = np.linspace(max(1e-6, bg - g_half_span), bg + g_half_span, fine_steps[1])
+>     for x0 in x0_grid:
+>         for g in g_grid:
+>             amp, off, sse = solve_ampl_offset(x, y, x0, g)
+>             penalty = 0.0
+>             if amp < 0:
+>                 penalty = (1.0 + (-amp)) * 1e6
+>             score = sse + penalty
+>             if score < best[0]:
+>                 best = [score, x0, g, amp, off]
+>     return {
+>         'x0': float(best[1]),
+>         'gamma': float(abs(best[2])),
+>         'amplitude': float(best[3]),
+>         'offset': float(best[4])
+>     }
+>
+> # Determine sensible windows around expected peaks using data bounds
+> xmin, xmax = float(np.min(x_all)), float(np.max(x_all))
+>
+> def region_slice(x, xmin_w, xmax_w):
+>     m = (x >= xmin_w) & (x <= xmax_w)
+>     return m
+>
+> # Define target windows, clipped to data range
+> G_win = (max(1500.0, xmin), min(1700.0, xmax))
+> D2_win = (max(2600.0, xmin), min(2800.0, xmax))
+>
+> # If windows too small or empty, infer peaks via rough maxima near expected positions
+> def ensure_window(x, y, guess_center, width):
+>     lo = max(float(guess_center - width), xmin)
+>     hi = min(float(guess_center + width), xmax)
+>     if hi <= lo:
+>         # fallback to global window
+>         lo, hi = xmin, xmax
+>     return (lo, hi)
+>
+> # If windows have < 20 points, broaden
+> for name, win in [('G', G_win), ('2D', D2_win)]:
+>     m = region_slice(x_all, win[0], win[1])
+>     if np.sum(m) < 20:
+>         if name == 'G':
+>             G_win = ensure_window(x_all, y_all, 1580.0, 150.0)
+>         else:
+>             D2_win = ensure_window(x_all, y_all, 2700.0, 200.0)
+>
+> # Extract regions
+> mG = region_slice(x_all, G_win[0], G_win[1])
+> m2D = region_slice(x_all, D2_win[0], D2_win[1])
+> if np.sum(mG) < 10 or np.sum(m2D) < 10:
+>     print('Insufficient data in windows. Data range:', xmin, xmax, file=sys.stderr)
+>     sys.exit(1)
+>
+> xG, yG = x_all[mG], y_all[mG]
+> x2D, y2D = x_all[m2D], y_all[m2D]
+>
+> # Initial x0 ranges around local maxima for tighter search
+> def initial_x0_range(x, y, lo, hi, pad):
+>     idx = np.argmax(y)
+>     cx = x[idx]
+>     rlo = max(lo, cx - pad)
+>     rhi = min(hi, cx + pad)
+>     if rhi <= rlo:
+>         rlo, rhi = lo, hi
+>     return (rlo, rhi)
+>
+> G_x0_range = initial_x0_range(xG, yG, G_win[0], G_win[1], pad=30.0)
+> D2_x0_range = initial_x0_range(x2D, y2D, D2_win[0], D2_win[1], pad=60.0)
+>
+> # Gamma ranges (HWHM) typical for Raman graphene
+> G_gamma_range = (3.0, 60.0)
+> D2_gamma_range = (5.0, 120.0)
+>
+> # Fit
+> G_params = fit_region(xG, yG, G_x0_range, G_gamma_range, coarse_steps=(120, 80), fine_steps=(120, 80))
+> D2_params = fit_region(x2D, y2D, D2_x0_range, D2_gamma_range, coarse_steps=(120, 80), fine_steps=(120, 80))
+>
+> # Write results.json
+> res = {
+>     'G': {
+>         'x0': G_params['x0'],
+>         'gamma': G_params['gamma'],
+>         'amplitude': G_params['amplitude'],
+>         'offset': G_params['offset']
+>     },
+>     '2D': {
+>         'x0': D2_params['x0'],
+>         'gamma': D2_params['gamma'],
+>         'amplitude': D2_params['amplitude'],
+>         'offset': D2_params['offset']
+>     }
+> }
+> with open('results.json', 'w') as fh:
+>     json.dump(res, fh, indent=2)
+> print('results.json written for file:', fn)
+> PY
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+ModuleNotFoundError: No module named 'numpy'
+root@ed357b46a55a:/app# cat results.json
+cat: results.json: No such file or directory
+root@ed357b46a55a:/app# tail -n 20 graphene.dat
+1653,704408     5869,936650
+1653,440936     5773,130495
+1653,177619     5895,449413
+1652,914454     6214,277617
+1652,651439     6034,852890
+1652,388578     6285,424832
+1652,125866     6004,103504
+1651,863309     6150,102627
+1651,600904     6161,653672
+1651,338647     6193,454093
+1651,076544     6302,950951
+1650,814593     6154,492341
+1650,552790     6150,191176
+1650,291141     6157,269473
+1650,029641     6090,511415
+1649,768294     6062,725860
+1649,507095     6005,066261
+1649,246046     6009,427936
+1648,985151     5911,446799
+1648,724404     5950,923261
+root@ed357b46a55a:/app# python3 - << 'PY'
+j = 0 if i0 > N//2 else N-1
+    selected.append(j)
+elif len(selected) == 0:
+    selected = [N//3, 2*N//3]
+
+# Prepare fit helpers
+
+def lorentz_basis(x, x0, g):
+    t = (x - x0) / g
+    return 1.0 / (1.0 + t*t)
+
+# Solve amplitude and offset using sums
+
+def solve_ampl_offset_sums(x_arr, y_arr, x0, g):
+    Sf2 = 0.0
+    Sf1 = 0.0
+    S1  = 0.0
+    Syf = 0.0
+    Sy  = 0.0
+    Syy = 0.0
+    for x, y in zip(x_arr, y_arr):
+        f = lorentz_basis(x, x0, g)
+        Sf2 += f*f
+        Sf1 += f
+        S1  += 1.0
+        Syf += y*f
+        Sy  += y
+        Syy += y*y
+    # Normal equations matrix
+    a11, a12 = Sf2, Sf1
+    a21, a22 = Sf1, S1
+    det = a11*a22 - a12*a21
+    if abs(det) < 1e-18:
+        return None
+    inv11 =  a22/det
+    inv12 = -a12/det
+    inv21 = -a21/det
+    inv22 =  a11/det
+    # [a, b] = invA * [Syf, Sy]
+    a = inv11*Syf + inv12*Sy
+    b = inv21*Syf + inv22*Sy
+    # Minimal SSE = Syy - [a,b] dot [Syf, Sy]
+    sse = Syy - (a*Syf + b*Sy)
+    return a, b, sse
+
+# Fit a region with grid search and refinement
+
+def fit_region(center_idx):
+    cx = xs[center_idx]
+    w = max(0.12*x_range, 20.0*step)
+    lo = max(x_min, cx - w/2)
+    hi = min(x_max, cx + w/2)
+    # Extract region indices
+    lo_i = 0
+    while lo_i < N and xs[lo_i] < lo:
+        lo_i += 1
+    hi_i = lo_i
+    while hi_i < N and xs[hi_i] <= hi:
+        hi_i += 1
+    x_reg = xs[lo_i:hi_i]
+    y_reg = ys[lo_i:hi_i]
+    M = len(x_reg)
+    if M < 10:
+        # expand if too small
+        x_reg = xs
+        y_reg = ys
+        M = len(x_reg)
+    # Downsample to at most 300 points
+    if M > 300:
+        stride = M // 300
+        x_reg = x_reg[::stride]
+        y_reg = y_reg[::stride]
+        M = len(x_reg)
+    # Initial grids
+    x0_min = max(x_min, cx - w/10)
+    x0_max = min(x_max, cx + w/10)
+    # Gamma based on local window
+    g_min = max(step*2.0, w/80.0)
+    g_max = max(g_min*1.2, w/6.0)
+    # Coarse grid
+    x0_count, g_count = 50, 30
+    best = None
+    for i in range(x0_count):
+        x0 = x0_min + (x0_max - x0_min) * (i / (x0_count - 1))
+        for j > import json, math
+>
+> fn = 'graphene.dat'
+> xs, ys = [], []
+> with open(fn, 'r', errors='ignore') as fh:
+>     for line in fh:
+>         s = line.strip()
+>         if not s or s.startswith('#'): continue
+>         s = s.replace(',', '.')
+>         # Split on whitespace or semicolon
+>         parts = [p for p in s.replace(';', ' ').split() if p]
+>         nums = []
+>         for p in parts:
+>             try:
+>                 nums.append(float(p))
+>             except Exception:
+>                 pass
+>         if len(nums) >= 2:
+>             xs.append(nums[0])
+>             ys.append(nums[1])
+> if len(xs) < 10:
+>     raise SystemExit('Not enough data parsed from graphene.dat')
+> # Sort by x
+> pairs = sorted(zip(xs, ys), key=lambda t: t[0])
+> xs = [p[0] for p in pairs]
+> ys = [p[1] for p in pairs]
+> N = len(xs)
+>
+> # Basic stats
+> x_min, x_max = xs[0], xs[-1]
+> x_range = x_max - x_min if x_max > x_min else 1.0
+>
+> # Compute approximate step
+> if N > 1:
+>     deltas = [abs(xs[i+1]-xs[i]) for i in range(min(N-1, 1000))]
+>     step = sum(deltas)/len(deltas) if deltas else x_range/max(1,N)
+> else:
+>     step = x_range
+>
+> # Smooth y (moving average window size 5)
+> if N >= 5:
+>     k = 2
+>     ysm = ys[:]
+>     for i in range(2, N-2):
+>         ysm[i] = (ys[i-2]+ys[i-1]+ys[i]+ys[i+1]+ys[i+2])/5.0
+> else:
+>     ysm = ys[:]
+>
+> # Find local maxima
+> peaks = []
+> for i in range(1, N-1):
+>     if ysm[i] > ysm[i-1] and ysm[i] > ysm[i+1]:
+>         peaks.append((ysm[i], i))
+> # If no peaks found, use global maxima and mid
+> if not peaks:
+>     idx_max = max(range(N), key=lambda i: ys[i])
+>     peaks = [(ys[idx_max], idx_max)]
+> # Pick top two separated by at least 0.05*x_range
+> peaks.sort(reverse=True)
+> selected = []
+> min_sep = 0.05 * x_range
+> for val, idx in peaks:
+>     xi = xs[idx]
+>     if not selected:
+>         selected.append(idx)
+>     else:
+>         too_close = any(abs(xi - xs[j]) < min_sep for j in selected)
+>         if not too_close:
+>             selected.append(idx)
+>             if len(selected) == 2:
+>                 break
+> if len(selected) == 1:
+>     # pick a second index far from the first
+>     i0 = selected[0]
+>     j = 0 if i0 > N//2 else N-1
+>     selected.append(j)
+> elif len(selected) == 0:
+>     selected = [N//3, 2*N//3]
+>
+> # Prepare fit helpers
+>
+> def lorentz_basis(x, x0, g):
+>     t = (x - x0) / g
+>     return 1.0 / (1.0 + t*t)
+>
+> # Solve amplitude and offset using sums
+>
+> def solve_ampl_offset_sums(x_arr, y_arr, x0, g):
+>     Sf2 = 0.0
+>     Sf1 = 0.0
+>     S1  = 0.0
+>     Syf = 0.0
+>     Sy  = 0.0
+>     Syy = 0.0
+>     for x, y in zip(x_arr, y_arr):
+>         f = lorentz_basis(x, x0, g)
+>         Sf2 += f*f
+>         Sf1 += f
+>         S1  += 1.0
+>         Syf += y*f
+>         Sy  += y
+>         Syy += y*y
+>     # Normal equations matrix
+>     a11, a12 = Sf2, Sf1
+>     a21, a22 = Sf1, S1
+>     det = a11*a22 - a12*a21
+>     if abs(det) < 1e-18:
+>         return None
+>     inv11 =  a22/det
+>     inv12 = -a12/det
+>     inv21 = -a21/det
+>     inv22 =  a11/det
+>     # [a, b] = invA * [Syf, Sy]
+>     a = inv11*Syf + inv12*Sy
+>     b = inv21*Syf + inv22*Sy
+>     # Minimal SSE = Syy - [a,b] dot [Syf, Sy]
+>     sse = Syy - (a*Syf + b*Sy)
+>     return a, b, sse
+>
+> # Fit a region with grid search and refinement
+>
+> def fit_region(center_idx):
+>     cx = xs[center_idx]
+>     w = max(0.12*x_range, 20.0*step)
+>     lo = max(x_min, cx - w/2)
+>     hi = min(x_max, cx + w/2)
+>     # Extract region indices
+>     lo_i = 0
+>     while lo_i < N and xs[lo_i] < lo:
+>         lo_i += 1
+>     hi_i = lo_i
+>     while hi_i < N and xs[hi_i] <= hi:
+>         hi_i += 1
+>     x_reg = xs[lo_i:hi_i]
+>     y_reg = ys[lo_i:hi_i]
+>     M = len(x_reg)
+>     if M < 10:
+>         # expand if too small
+>         x_reg = xs
+>         y_reg = ys
+>         M = len(x_reg)
+>     # Downsample to at most 300 points
+>     if M > 300:
+>         stride = M // 300
+>         x_reg = x_reg[::stride]
+>         y_reg = y_reg[::stride]
+>         M = len(x_reg)
+>     # Initial grids
+>     x0_min = max(x_min, cx - w/10)
+>     x0_max = min(x_max, cx + w/10)
+>     # Gamma based on local window
+>     g_min = max(step*2.0, w/80.0)
+>     g_max = max(g_min*1.2, w/6.0)
+>     # Coarse grid
+>     x0_count, g_count = 50, 30
+>     best = None
+>     for i in range(x0_count):
+>         x0 = x0_min + (x0_max - x0_min) * (i / (x0_count - 1))
+>         for j in range(g_count):
+>             g = g_min + (g_max - g_min) * (j / (g_count - 1))
+>             res = solve_ampl_offset_sums(x_reg, y_reg, x0, g)
+>             if res is None:
+>                 continue
+>             a, b, sse = res
+>             if (best is None) or (sse < best[0]):
+>                 best = [sse, x0, g, a, b]
+>     if best is None:
+>         # Fallback trivial
+>         return {'x0': cx, 'gamma': g_min, 'amplitude': 0.0, 'offset': sum(y_reg)/len(y_reg)}
+>     _, bx0, bg, ba, bb = best
+>     # Refinement around best
+>     x0_span = max((x0_max - x0_min)/10.0, step*5.0)
+>     g_span = max((g_max - g_min)/6.0, g_min*0.5)
+>     x0_lo = max(x_min, bx0 - x0_span)
+>     x0_hi = min(x_max, bx0 + x0_span)
+>     g_lo = max(step*1.0, bg - g_span)
+>     g_hi = bg + g_span
+>     x0_count2, g_count2 = 60, 40
+>     for i in range(x0_count2):
+>         x0 = x0_lo + (x0_hi - x0_lo) * (i / (x0_count2 - 1))
+>         for j in range(g_count2):
+>             g = g_lo + (g_hi - g_lo) * (j / (g_count2 - 1))
+>             res = solve_ampl_offset_sums(x_reg, y_reg, x0, g)
+>             if res is None:
+>                 continue
+>             a, b, sse = res
+>             if sse < best[0]:
+>                 best = [sse, x0, g, a, b]
+>     _, bx0, bg, ba, bb = best
+>     return {'x0': float(bx0), 'gamma': float(abs(bg)), 'amplitude': float(ba), 'offset': float(bb)}
+>
+> # Fit two regions
+> idx1, idx2 = selected[0], selected[1]
+> p1 = fit_region(idx1)
+> p2 = fit_region(idx2)
+> # Assign G and 2D by x0 ordering (lower x0 is G)
+> if p1['x0'] <= p2['x0']:
+>     G_params, D2_params = p1, p2
+> else:
+>     G_params, D2_params = p2, p1
+>
+> res = {
+>     'G': {
+>         'x0': G_params['x0'],
+>         'gamma': G_params['gamma'],
+>         'amplitude': G_params['amplitude'],
+>         'offset': G_params['offset']
+>     },
+>     '2D': {
+>         'x0': D2_params['x0'],
+>         'gamma': D2_params['gamma'],
+>         'amplitude': D2_params['amplitude'],
+>         'offset': D2_params['offset']
+>     }
+> }
+> with open('results.json', 'w') as f:
+>     json.dump(res, f, indent=2)
+> print('results.json written')
+> PY
+results.json written
+root@ed357b46a55a:/app# cat results.json
+{
+  "G": {
+    "x0": 19196.315940164503,
+    "gamma": 398.63106800512827,
+    "amplitude": 73658.65742132445,
+    "offset": 12295.934713543465
+  },
+  "2D": {
+    "x0": 33362.0021745065,
+    "gamma": 1051.0956647066666,
+    "amplitude": 2713.5261208015872,
+    "offset": 18600.86480211561
+  }
+}root@ed357b46a55a:/app#

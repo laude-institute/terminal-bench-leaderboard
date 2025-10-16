@@ -1,0 +1,137 @@
+root@dd05a61a0d9b:/app# cat > /app/main.c.py <<'EOF'
+> #if 0
+> #!/usr/bin/env python3
+> import sys
+>
+> def fib(n):
+>     a, b = 0, 1
+>     for _ in range(n):
+>         a, b = b, a + b
+>     return a
+>
+>
+> def main():
+>     if len(sys.argv) != 2:
+>         print("Usage: python3 main.c.py N")
+>         sys.exit(1)
+>     try:
+>         n = int(sys.argv[1])
+>     except Exception:
+>         print("Invalid integer:", sys.argv[1])
+>         sys.exit(1)
+>     print(fib(n))
+>
+>
+> if __name__ == "__main__":
+>     main()
+> #endif
+> #include <stdio.h>
+> #include <stdlib.h>
+> #include <errno.h>
+>
+> static unsigned long long fib(unsigned long long n) {
+>     unsigned long long a = 0, b = 1, t;
+>     for (unsigned long long i = 0; i < n; ++i) {
+>         t = a + b;
+>         a = b;
+>         b = t;
+>     }
+>     return a;
+> }
+>
+> int main(int argc, char **argv) {
+>     if (argc != 2) {
+>         fprintf(stderr, "Usage: %s N\n", argv[0]);
+>         return 1;
+>     }
+>     errno = 0;
+>     char *end = NULL;
+>     unsigned long long n = strtoull(argv[1], &end, 10);
+>     if (errno || end == argv[1] || *end != '\0') {
+>         fprintf(stderr, "Invalid integer: %s\n", argv[1]);
+>         return 1;
+>     }
+>     printf("%llu\n", fib(n));
+>     return 0;
+> }
+> EOF
+root@dd05a61a0d9b:/app# python3 /app/main.c.py 10
+  File "/app/main.c.py", line 31
+    static unsigned long long fib(unsigned long long n) {
+           ^^^^^^^^
+SyntaxError: invalid syntax
+root@dd05a61a0d9b:/app# gcc /app/main.c.py
+/usr/bin/ld:/app/main.c.py: file format not recognized; treating as linker script
+/usr/bin/ld:/app/main.c.py:3: syntax error
+collect2: error: ld returned 1 exit status
+root@dd05a61a0d9b:/app# ./a.out 10
+bash: ./a.out: No such file or directory
+root@dd05a61a0d9b:/app# cat > /app/main.c.py <<'EOF'
+> #if 0
+> #!/usr/bin/env python3
+> import sys
+>
+> def fib(n):
+>     a, b = 0, 1
+>     for _ in range(n):
+>         a, b = b, a + b
+>     return a
+>
+> def main():
+>     if len(sys.argv) != 2:
+>         print("Usage: python3 main.c.py N")
+>         sys.exit(1)
+>     try:
+>         n = int(sys.argv[1])
+>     except Exception:
+>         print("Invalid integer:", sys.argv[1])
+>         sys.exit(1)
+>     print(fib(n))
+>
+> if __name__ == "__main__":
+>     main()
+> r'''
+> #endif
+> #include <stdio.h>
+> #include <stdlib.h>
+> #include <errno.h>
+>
+> static unsigned long long fib(unsigned long long n) {
+>     unsigned long long a = 0, b = 1, t;
+>     for (unsigned long long i = 0; i < n; ++i) {
+>         t = a + b;
+>         a = b;
+>         b = t;
+>     }
+>     return a;
+> }
+>
+> int main(int argc, char **argv) {
+>     if (argc != 2) {
+>         fprintf(stderr, "Usage: %s N\n", argv[0]);
+>         return 1;
+>     }
+>     errno = 0;
+>     char *end = NULL;
+>     unsigned long long n = strtoull(argv[1], &end, 10);
+>     if (errno || end == argv[1] || *end != '\0') {
+>         fprintf(stderr, "Invalid integer: %s\n", argv[1]);
+>         return 1;
+>     }
+>     printf("%llu\n", fib(n));
+>     return 0;
+> }
+> /* ''' */
+> EOF
+root@dd05a61a0d9b:/app# python3 /app/main.c.py 10
+  File "/app/main.c.py", line 55
+    /* ''' */
+            ^
+SyntaxError: invalid syntax
+root@dd05a61a0d9b:/app# gcc -x c -O2 /app/main.c.py -o /app/a.out
+/app/main.c.py:24:4: warning: missing terminating ' character
+   24 | r'''
+      |    ^
+root@dd05a61a0d9b:/app# /app/a.out 10
+55
+root@dd05a61a0d9b:/app#

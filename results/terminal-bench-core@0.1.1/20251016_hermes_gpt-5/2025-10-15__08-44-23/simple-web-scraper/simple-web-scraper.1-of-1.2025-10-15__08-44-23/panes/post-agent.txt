@@ -1,0 +1,126 @@
+root@d34f893e3960:/app# cat > scraper.py << 'PY'
+> #!/usr/bin/env python3
+> import requests
+> from bs4 import BeautifulSoup
+> import pandas as pd
+> import re
+> import sys
+>
+> URL = 'http://server:8000'
+>
+> def clean_author(text):
+>     if not text:
+>         return ''
+>     t = text.strip()
+>     t = re.sub(r'^\s*by\s+', '', t, flags=re.I)
+>     return t.strip()
+>
+> def main():
+>     try:
+>         resp = requests.get(URL, timeout=10)
+>         resp.raise_for_status()
+>     except Exception as e:
+>         print(f'Error fetching {URL}: {e}', file=sys.stderr)
+>         sys.exit(1)
+>
+>     soup = BeautifulSoup(resp.text, 'html.parser')
+>     books = []
+>     for b in soup.select('div.book'):
+>         title_el = b.select_one('div.book-title')
+>         author_el = b.select_one('div.book-author')
+>         year_el = b.select_one('span.book-year')
+>         rating_el = b.select_one('span.book-rating')
+>         price_el = b.select_one('span.book-price')
+>
+>         title = title_el.get_text(strip=True) if title_el else ''
+>         author = clean_author(author_el.get_text(strip=True)) if author_el else ''
+>
+>         year_num = None
+>         if year_el:
+>             m = re.search(r'(\d{4})', year_el.get_text())
+>             if m:
+>                 try:
+>                     year_num = int(m.group(1))
+>                 except Exception:
+>                     year_num = None
+>
+>         rating = None
+>         if rating_el:
+>             m = re.search(r'(\d+(?:\.\d+)?)', rating_el.get_text())
+>             if m:
+>                 try:
+>                     rating = float(m.group(1))
+>                 except Exception:
+>                     rating = None
+>
+>         price = None
+>         if price_el:
+>             m = re.search(r'(\d+(?:\.\d+)?)', price_el.get_text())
+>             if m:
+>                 try:
+>                     price = float(m.group(1))
+>                 except Exception:
+>                     price = None
+>
+>         books.append({
+>             'title': title,
+>             'author': author,
+>             'year': year_num,
+>             'rating': rating,
+>             'price': price,
+>         })
+>
+>     df = pd.DataFrame(books, columns=['title', 'author', 'year', 'rating', 'price'])
+>     df.to_csv('books.csv', index=False)
+>
+>     total = len(df)
+>     avg_price = float(df['price'].dropna().mean()) if total > 0 else float('nan')
+>
+>     highest_title = 'N/A'
+>     highest_rating_val = None
+>     highest_author = ''
+>     highest_year = ''
+>
+>     if df['rating'].notna().any():
+>         idx = df['rating'].astype(float).idxmax()
+>         row = df.loc[idx]
+>         highest_title = str(row['title'])
+>         highest_rating_val = row['rating']
+>         highest_author = str(row['author'])
+>         highest_year = str(int(row['year'])) if pd.notna(row['year']) else ''
+>
+>     with open('report.txt', 'w', encoding='utf-8') as f:
+>         f.write(f'Total number of books scraped: {total}\n')
+>         if total > 0 and pd.notna(avg_price):
+>             f.write(f'Average book price: ${avg_price:.2f}\n')
+>         else:
+>             f.write('Average book price: N/A\n')
+>         if highest_rating_val is not None:
+>             f.write(f'Highest rated book: {highest_title} ({highest_rating_val}/5)')
+>             if highest_author:
+>                 f.write(f' by {highest_author}')
+>             if highest_year:
+>                 f.write(f', {highest_year}')
+>             f.write('\n')
+>         else:
+>             f.write('Highest rated book: N/A\n')
+>
+> if __name__ == '__main__':
+>     main()
+> PY
+root@d34f893e3960:/app# chmod +x scraper.py
+root@d34f893e3960:/app# python3 scraper.py
+root@d34f893e3960:/app# ls -l books.csv report.txt
+-rw-r--r-- 1 root root 345 Oct 15 10:25 books.csv
+-rw-r--r-- 1 root root 130 Oct 15 10:25 report.txt
+root@d34f893e3960:/app# head -n 5 books.csv
+title,author,year,rating,price
+The Great Gatsby,F. Scott Fitzgerald,1925,4.2,12.99
+To Kill a Mockingbird,Harper Lee,1960,4.8,14.99
+1984,George Orwell,1949,4.6,11.99
+Pride and Prejudice,Jane Austen,1813,4.5,9.99
+root@d34f893e3960:/app# cat report.txt
+Total number of books scraped: 7
+Average book price: $13.85
+Highest rated book: To Kill a Mockingbird (4.8/5) by Harper Lee, 1960
+root@d34f893e3960:/app#

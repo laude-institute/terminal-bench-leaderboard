@@ -1,0 +1,104 @@
+root@1b866c1a243c:/app# cat > server.py << 'PY'
+> #!/usr/bin/env python3
+> from http.server import HTTPServer, BaseHTTPRequestHandler
+> from urllib.parse import urlparse, parse_qs
+> import json
+> import re
+>
+> class FibHandler(BaseHTTPRequestHandler):
+>     def do_GET(self):
+>         parsed = urlparse(self.path)
+>         if parsed.path != '/fib':
+>             self.send_response(404)
+>             self.send_header('Content-Type', 'application/json')
+>             self.end_headers()
+>             self.wfile.write(json.dumps({'error': 'Not Found'}).encode('utf-8'))
+>             return
+>
+>         qs = parse_qs(parsed.query)
+>         if 'n' not in qs or not qs['n']:
+>             self.send_response(400)
+>             self.send_header('Content-Type', 'application/json')
+>             self.end_headers()
+>             self.wfile.write(json.dumps({'error': "Missing 'n' query parameter"}).encode('utf-8'))
+>             return
+>
+>         n_str = qs['n'][0]
+>         if not re.fullmatch(r'\d+', n_str):
+>             self.send_response(400)
+>             self.send_header('Content-Type', 'application/json')
+>             self.end_headers()
+>             self.wfile.write(json.dumps({'error': "'n' must be an integer"}).encode('utf-8'))
+>             return
+>
+>         n = int(n_str)
+>         a, b = 0, 1
+>         for _ in range(n):
+>             a, b = b, a + b
+>
+>         result = a
+>
+>         payload = json.dumps({'result': result})
+>         self.send_response(200)
+>         self.send_header('Content-Type', 'application/json')
+>         self.send_header('Content-Length', str(len(payload)))
+>         self.end_headers()
+>         self.wfile.write(payload.encode('utf-8'))
+>
+>     def log_message(self, format, *args):
+>         return
+>
+> def run():
+>     server = HTTPServer(('0.0.0.0', 3000), FibHandler)
+>     try:
+>         server.serve_forever()
+>     except KeyboardInterrupt:
+>         pass
+>     finally:
+>         server.server_close()
+>
+> if __name__ == '__main__':
+>     run()
+> PY
+root@1b866c1a243c:/app# chmod +x server.py
+root@1b866c1a243c:/app# python3 server.py > server.log 2>&1 &
+[1] 117
+root@1b866c1a243c:/app# sleep 0.2
+curl -i http://localhost:3000/fib
+root@1b866c1a243c:/app# curl -i http://localhost:3000/fib
+bash: curl: command not found
+root@1b866c1a243c:/app# curl -i "http://localhost:3000/fib?n=abc"
+bash: curl: command not found
+root@1b866c1a243c:/app# curl -s "http://localhost:3000/fib?n=10"
+bash: curl: command not found
+root@1b866c1a243c:/app# python3 - << 'PY'
+> import urllib.request, urllib.error
+> urls = [
+>     'http://localhost:3000/fib',
+>     'http://localhost:3000/fib?n=abc',
+>     'http://localhost:3000/fib?n=10'
+> ]
+> for url in urls:
+>     try:
+>         with urllib.request.urlopen(url) as resp:
+>             body = resp.read().decode()
+>             print('URL:', url)
+>             print('Status:', resp.status)
+>             print('Body:', body)
+>     except urllib.error.HTTPError as e:
+>         body = e.read().decode()
+>         print('URL:', url)
+>         print('Status:', e.code)
+>         print('Body:', body)
+> PY
+URL: http://localhost:3000/fib
+Status: 400
+Body: {"error": "Missing 'n' query parameter"}
+URL: http://localhost:3000/fib?n=abc
+Status: 400
+Body: {"error": "'n' must be an integer"}
+URL: http://localhost:3000/fib?n=10
+Status: 200
+Body: {"result": 55}
+root@1b866c1a243c:/app# cat server.log
+root@1b866c1a243c:/app#

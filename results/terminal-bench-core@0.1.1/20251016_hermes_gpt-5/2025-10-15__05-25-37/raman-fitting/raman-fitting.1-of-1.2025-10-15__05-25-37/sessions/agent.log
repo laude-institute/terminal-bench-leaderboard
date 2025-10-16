@@ -1,0 +1,344 @@
+[?2004hroot@9ef6547a9f82:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@9ef6547a9f82:/app# clear
+[?2004l[H[J[3J[?2004hroot@9ef6547a9f82:/app# ls -la
+[?2004ltotal 96
+drwxr-xr-x 1 root root  4096 Oct  8 15:44 .
+drwxr-xr-x 1 root root  4096 Oct 15 07:41 ..
+-rw-rw-r-- 1 root root 88805 Oct  8 15:44 graphene.dat
+[?2004hroot@9ef6547a9f82:/app# python3 -V
+[?2004lPython 3.13.1
+[?2004hroot@9ef6547a9f82:/app# python3 - << 'PY'
+[?2004ln peaks
+
+peaks=find_local_maxima(x,y)
+
+xmin=min(x); xmax=max(x)
+
+def in_range(xmin,xmax,a,b):
+    return xmin<=a and xmax>=b
+
+use_expected=in_range(xmin,xmax,1500,1700) and in_range(xmin,xmax,2500,2900)
+
+def pick_peak_in_window(x,y,peaks,lo,hi):
+    idxs=[i for i in peaks if x[i]>=lo and x[i]<=hi]
+    if not idxs:
+        candidates=[i for i in range(len(y)) if x[i]>=lo and x[i]<=hi]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda i: y[i])
+    return max(idxs, key=lambda i: y[i])
+
+if use_expected:
+    iG=pick_peak_in_window(x,y,peaks,1500,1700)
+    i2D=pick_peak_in_window(x,y,peaks,2500,2900)
+    if iG is None or i2D is None:
+        use_expected=False
+
+if not use_expected:
+    if not peaks:
+        imax=max(range(len(y)), key=lambda i: y[i])
+        candidates=[i for i in range(len(y)) if abs(x[i]-x[imax])>400]
+        if candidates:
+            imax2=max(candidates, key=lambda i: y[i])
+            i1=min(imax,imax2); i2=max(imax,imax2)
+        else:
+            y_sorted=sorted([(y[i],i) for i in range(len(y))], reverse=True)
+            i1=y_sorted[0][1]; i2=y_sorted[1][1]
+    else:
+        peaks_sorted=sorted(peaks, key=lambda i: y[i], reverse=True)
+        i1=peaks_sorted[0]
+        i2=None
+        for i in peaks_sorted[1:]:
+            if abs(x[i]-x[i1])>400:
+                i2=i; break
+        if i2 is None:
+            i2=peaks_sorted[1] if len(peaks_sorted)>1 else peaks_sorted[0]
+    if x[i1] <= x[i2]:
+        iG=i1; i2D=i2
+    else:
+        iG=i2; i2D=i1
+
+def estimate_params(i):
+    x0=x[i]
+    amp=max(y[i]-offset_est, y[i])
+    half=offset_est + amp/2.0
+    n=len(y)
+    left=i
+    for j in range(i-1,-1,-1):
+        if y[j] <= half:
+            left=j; break
+    right=i
+    for j in range(i+1,n):
+        if y[j] <= half:
+            right=j; break
+    def interp_x_at_half(j1,j2):
+        if j1<0 or j2>=n:
+            return None
+        y1=y[j1]; y2=y[j2]
+        x1=x[j1]; x2=x[j2]
+        if y2==y1:
+            return None
+        t=(half - y1)/(y2 - y1)
+        return x1 + t[?2004h> import os, json, math
+[?2004l[?2004h> 
+[?2004l[?2004h> def load_data_from_file(fname):
+[?2004l[?2004h>     x=[]; y=[]
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         with open(fname,'r',errors='ignore') as f:
+[?2004l[?2004h>             for line in f:
+[?2004l[?2004h>                 line=line.strip()
+[?2004l[?2004h>                 if not line or line.startswith('#'):
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 line=line.replace(';',' ').replace(',',' ')
+[?2004l[?2004h>                 parts=[p for p in line.split() if p]
+[?2004l[?2004h>                 if len(parts)<2:
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 a=parts[0]; b=parts[1]
+[?2004l[?2004h>                 try:
+[?2004l[?2004h>                     xf=float(a); yf=float(b)
+[?2004l[?2004h>                 except:
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 x.append(xf); y.append(yf)
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return None
+[?2004l[?2004h>     if len(x)>=50:
+[?2004l[?2004h>         return x,y
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> # Collect candidate files
+[?2004l[?2004h> cand=[]
+[?2004l[?2004h> for fname in os.listdir('.'):
+[?2004l[?2004h>     if not os.path.isfile(fname):
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     lower=fname.lower()
+[?2004l[?2004h>     if any(lower.endswith(ext) for ext in ['.txt','.csv','.dat','.tsv']):
+[?2004l[?2004h>         cand.append(fname)
+[?2004l[?2004h>     elif any(k in lower for k in ['raman','spectrum','graphene']):
+[?2004l[?2004h>         cand.append(fname)
+[?2004l[?2004h> # Try candidates first, then all files
+[?2004l[?2004h> best=None; data=None; chosen=None
+[?2004l[?2004h> for fname in cand + [f for f in os.listdir('.') if os.path.isfile(f)]:
+[?2004l[?2004h>     res=load_data_from_file(fname)
+[?2004l[?2004h>     if res:
+[?2004l[?2004h>         x,y=res
+[?2004l[?2004h>         if not best or len(x)>best[0]:
+[?2004l[?2004h>             best=(len(x),fname)
+[?2004l[?2004h>             data=(x,y)
+[?2004l[?2004h>             chosen=fname
+[?2004l[?2004h> 
+[?2004l[?2004h> if not data:
+[?2004l[?2004h>     raise SystemExit('No suitable data file found in current directory.')
+[?2004l[?2004h> 
+[?2004l[?2004h> x,y=data
+[?2004l[?2004h> # Sort by x
+[?2004l[?2004h> idx=sorted(range(len(x)), key=lambda i: x[i])
+[?2004l[?2004h> x=[x[i] for i in idx]
+[?2004l[?2004h> y=[y[i] for i in idx]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Baseline offset estimate: mean of lowest 20%
+[?2004l[?2004h> ys_sorted=sorted(y)
+[?2004l[?2004h> k=max(int(0.2*len(ys_sorted)),1)
+[?2004l[?2004h> offset_est=sum(ys_sorted[:k])/k
+[?2004l[?2004h> 
+[?2004l[?2004h> def lorentz(x, x0, gamma, amplitude, offset):
+[?2004l[?2004h>     return offset + amplitude / (1.0 + ((x - x0)/gamma)**2)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Find local maxima
+[?2004l[?2004h> def find_local_maxima(x,y):
+[?2004l[?2004h>     peaks=[]
+[?2004l[?2004h>     n=len(y)
+[?2004l[?2004h>     for i in range(1,n-1):
+[?2004l[?2004h>         if y[i] > y[i-1] and y[i] >= y[i+1]:
+[?2004l[?2004h>             peaks.append(i)
+[?2004l[?2004h>     return peaks
+[?2004l[?2004h> 
+[?2004l[?2004h> peaks=find_local_maxima(x,y)
+[?2004l[?2004h> 
+[?2004l[?2004h> xmin=min(x); xmax=max(x)
+[?2004l[?2004h> 
+[?2004l[?2004h> def in_range(xmin,xmax,a,b):
+[?2004l[?2004h>     return xmin<=a and xmax>=b
+[?2004l[?2004h> 
+[?2004l[?2004h> use_expected=in_range(xmin,xmax,1500,1700) and in_range(xmin,xmax,2500,2900)
+[?2004l[?2004h> 
+[?2004l[?2004h> def pick_peak_in_window(x,y,peaks,lo,hi):
+[?2004l[?2004h>     idxs=[i for i in peaks if x[i]>=lo and x[i]<=hi]
+[?2004l[?2004h>     if not idxs:
+[?2004l[?2004h>         candidates=[i for i in range(len(y)) if x[i]>=lo and x[i]<=hi]
+[?2004l[?2004h>         if not candidates:
+[?2004l[?2004h>             return None
+[?2004l[?2004h>         return max(candidates, key=lambda i: y[i])
+[?2004l[?2004h>     return max(idxs, key=lambda i: y[i])
+[?2004l[?2004h> 
+[?2004l[?2004h> if use_expected:
+[?2004l[?2004h>     iG=pick_peak_in_window(x,y,peaks,1500,1700)
+[?2004l[?2004h>     i2D=pick_peak_in_window(x,y,peaks,2500,2900)
+[?2004l[?2004h>     if iG is None or i2D is None:
+[?2004l[?2004h>         use_expected=False
+[?2004l[?2004h> 
+[?2004l[?2004h> if not use_expected:
+[?2004l[?2004h>     if not peaks:
+[?2004l[?2004h>         imax=max(range(len(y)), key=lambda i: y[i])
+[?2004l[?2004h>         candidates=[i for i in range(len(y)) if abs(x[i]-x[imax])>400]
+[?2004l[?2004h>         if candidates:
+[?2004l[?2004h>             imax2=max(candidates, key=lambda i: y[i])
+[?2004l[?2004h>             i1=min(imax,imax2); i2=max(imax,imax2)
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             y_sorted=sorted([(y[i],i) for i in range(len(y))], reverse=True)
+[?2004l[?2004h>             i1=y_sorted[0][1]; i2=y_sorted[1][1]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         peaks_sorted=sorted(peaks, key=lambda i: y[i], reverse=True)
+[?2004l[?2004h>         i1=peaks_sorted[0]
+[?2004l[?2004h>         i2=None
+[?2004l[?2004h>         for i in peaks_sorted[1:]:
+[?2004l[?2004h>             if abs(x[i]-x[i1])>400:
+[?2004l[?2004h>                 i2=i; break
+[?2004l[?2004h>         if i2 is None:
+[?2004l[?2004h>             i2=peaks_sorted[1] if len(peaks_sorted)>1 else peaks_sorted[0]
+[?2004l[?2004h>     if x[i1] <= x[i2]:
+[?2004l[?2004h>         iG=i1; i2D=i2
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         iG=i2; i2D=i1
+[?2004l[?2004h> 
+[?2004l[?2004h> def estimate_params(i):
+[?2004l[?2004h>     x0=x[i]
+[?2004l[?2004h>     amp=max(y[i]-offset_est, y[i])
+[?2004l[?2004h>     half=offset_est + amp/2.0
+[?2004l[?2004h>     n=len(y)
+[?2004l[?2004h>     left=i
+[?2004l[?2004h>     for j in range(i-1,-1,-1):
+[?2004l[?2004h>         if y[j] <= half:
+[?2004l[?2004h>             left=j; break
+[?2004l[?2004h>     right=i
+[?2004l[?2004h>     for j in range(i+1,n):
+[?2004l[?2004h>         if y[j] <= half:
+[?2004l[?2004h>             right=j; break
+[?2004l[?2004h>     def interp_x_at_half(j1,j2):
+[?2004l[?2004h>         if j1<0 or j2>=n:
+[?2004l[?2004h>             return None
+[?2004l[?2004h>         y1=y[j1]; y2=y[j2]
+[?2004l[?2004h>         x1=x[j1]; x2=x[j2]
+[?2004l[?2004h>         if y2==y1:
+[?2004l[?2004h>             return None
+[?2004l[?2004h>         t=(half - y1)/(y2 - y1)
+[?2004l[?2004h>         return x1 + t*(x2-x1)
+[?2004l[?2004h>     xl=None; xr=None
+[?2004l[?2004h>     if left<i and left>=0:
+[?2004l[?2004h>         xl=interp_x_at_half(left, left+1)
+[?2004l[?2004h>     if right>i and right<n:
+[?2004l[?2004h>         xr=interp_x_at_half(right-1, right)
+[?2004l[?2004h>     if xl is not None and xr is not None and xr>xl:
+[?2004l[?2004h>         gamma=(xr - xl)/2.0
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         gamma=15.0 if x0<2000 else 30.0
+[?2004l[?2004h>     span=6*gamma
+[?2004l[?2004h>     if span<40:
+[?2004l[?2004h>         span=40.0
+[?2004l[?2004h>     return x0, gamma, amp, offset_est, span
+[?2004l[?2004h> 
+[?2004l[?2004h> x0G,gG,aG,oG,spanG=estimate_params(iG)
+[?2004l[?2004h> x0D,gD,aD,oD,spanD=estimate_params(i2D)
+[?2004l[?2004h> 
+[?2004l[?2004h> def fit_peak(x, y, x0, gamma, amplitude, offset, span):
+[?2004l[?2004h>     lo=x0 - span/2.0
+[?2004l[?2004h>     hi=x0 + span/2.0
+[?2004l[?2004h>     idx=[i for i in range(len(x)) if x[i]>=lo and x[i]<=hi]
+[?2004l[?2004h>     if len(idx)<5:
+[?2004l[?2004h>         idx=list(range(len(x)))
+[?2004l[?2004h>     xv=[x[i] for i in idx]; yv=[y[i] for i in idx]
+[?2004l[?2004h>     def sse(p):
+[?2004l[?2004h>         x0,g,a,o=p
+[?2004l[?2004h>         if g<=0 or a<=0:
+[?2004l[?2004h>             return float('inf')
+[?2004l[?2004h>         err=0.0
+[?2004l[?2004h>         for xi,yi in zip(xv,yv):
+[?2004l[?2004h>             fi=o + a / (1.0 + ((xi - x0)/g)**2)
+[?2004l[?2004h>             d=yi-fi
+[?2004l[?2004h>             err += d*d
+[?2004l[?2004h>         return err
+[?2004l[?2004h>     params=[x0, gamma, amplitude, offset]
+[?2004l[?2004h>     widths=[span*0.25, gamma*0.5, max(amplitude*0.5, 1e-6), max(amplitude*0.3, 1e-6)]
+[?2004l[?2004h>     for it in range(5):
+[?2004l[?2004h>         for k in range(4):
+[?2004l[?2004h>             pbest=list(params); ebest=sse(pbest)
+[?2004l[?2004h>             w=widths[k]
+[?2004l[?2004h>             if k==1:
+[?2004l[?2004h>                 w=max(2.0, w)
+[?2004l[?2004h>             grid=15
+[?2004l[?2004h>             for t in range(grid):
+[?2004l[?2004h>                 val=params[k] + w * (t/(grid-1) - 0.5) * 2.0
+[?2004l[?2004h>                 trial=list(params)
+[?2004l[?2004h>                 trial[k]=val
+[?2004l[?2004h>                 e=sse(trial)
+[?2004l[?2004h>                 if e<ebest:
+[?2004l[?2004h>                     ebest=e; pbest=trial
+[?2004l[?2004h>             params=pbest
+[?2004l[?2004h>         widths=[w*0.5 for w in widths]
+[?2004l[?2004h>     x0f,gf,af,of=params
+[?2004l[?2004h>     return x0f,gf,af,of
+[?2004l[?2004h> 
+[?2004l[?2004h> x0G,gG,aG,oG=fit_peak(x,y,x0G,gG,aG,oG,spanG)
+[?2004l[?2004h> x0D,gD,aD,oD=fit_peak(x,y,x0D,gD,aD,oD,spanD)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Try refine with scipy if available
+[?2004l[?2004h> try:
+[?2004l[?2004h>     import numpy as np
+[?2004l[?2004h>     from scipy.optimize import curve_fit
+[?2004l[?2004h>     def lorentz_np(xx, x0, gamma, amplitude, offset):
+[?2004l[?2004h>         return offset + amplitude / (1.0 + ((xx - x0)/gamma)**2)
+[?2004l[?2004h>     def refine_with_scipy(x0,g,a,o, span):
+[?2004l[?2004h>         lo=x0 - span/2.0
+[?2004l[?2004h>         hi=x0 + span/2.0
+[?2004l[?2004h>         idx=[i for i in range(len(x)) if x[i]>=lo and x[i]<=hi]
+[?2004l[?2004h>         xv=np.array([x[i] for i in idx], dtype=float)
+[?2004l[?2004h>         yv=np.array([y[i] for i in idx], dtype=float)
+[?2004l[?2004h>         p0=[x0,g,a,o]
+[?2004l[?2004h>         popt,_=curve_fit(lorentz_np, xv, yv, p0=p0, maxfev=5000)
+[?2004l[?2004h>         return tuple(map(float, popt))
+[?2004l[?2004h>     x0G,gG,aG,oG=refine_with_scipy(x0G,gG,aG,oG,spanG)
+[?2004l[?2004h>     x0D,gD,aD,oD=refine_with_scipy(x0D,gD,aD,oD,spanD)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     pass
+[?2004l[?2004h> 
+[?2004l[?2004h> results={
+[?2004l[?2004h>     "G": {
+[?2004l[?2004h>         "x0": float(x0G),
+[?2004l[?2004h>         "gamma": float(gG),
+[?2004l[?2004h>         "amplitude": float(aG),
+[?2004l[?2004h>         "offset": float(oG)
+[?2004l[?2004h>     },
+[?2004l[?2004h>     "2D": {
+[?2004l[?2004h>         "x0": float(x0D),
+[?2004l[?2004h>         "gamma": float(gD),
+[?2004l[?2004h>         "amplitude": float(aD),
+[?2004l[?2004h>         "offset": float(oD)
+[?2004l[?2004h>     }
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('results.json','w') as f:
+[?2004l[?2004h>     json.dump(results, f, indent=2)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('results.json written from file:', chosen)
+[?2004l[?2004h> PY
+[?2004lresults.json written from file: graphene.dat
+[?2004hroot@9ef6547a9f82:/app# cat results.json
+[?2004l{
+  "G": {
+    "x0": 1807.642857142857,
+    "gamma": 0.2530448492013875,
+    "amplitude": 401757.58928571426,
+    "offset": 504084.17902224
+  },
+  "2D": {
+    "x0": 2990.6785714285716,
+    "gamma": 0.6679260271849736,
+    "amplitude": 815975.7589285715,
+    "offset": 525022.6790222401
+  }
+}[?2004hroot@9ef6547a9f82:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@9ef6547a9f82:/app# 

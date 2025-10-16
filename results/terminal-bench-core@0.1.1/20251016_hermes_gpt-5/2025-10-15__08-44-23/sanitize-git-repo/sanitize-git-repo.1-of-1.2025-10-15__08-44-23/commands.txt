@@ -1,0 +1,50 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'pwd\n'
+'git status -s\n'
+'ls -la\n'
+"grep -RInI -E 'AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|\\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\\b|github_pat_[A-Za-z0-9_]{20,}|\\bhf_[A-Za-z0-9]{20,}\\b|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN|aws_access_key_id|aws_secret_access_key|HUGGINGFACEHUB_API_TOKEN|HUGGINGFACE_TOKEN|HUGGINGFACE_API_KEY|HF_TOKEN|GITHUB_TOKEN|GH_TOKEN' --exclude-dir=.git .\n"
+'cat > sanitize_repo.py << \'PY\'\n#!/usr/bin/env python3\nimport subprocess, re, os\n\ndef get_files():\n    out = subprocess.check_output([\'git\',\'ls-files\',\'-z\'])\n    return [p for p in out.split(b\'\\0\') if p]\n\ndef read_text(path):\n    with open(path, \'rb\') as f:\n        data = f.read()\n    try:\n        return data.decode(\'utf-8\')\n    except UnicodeDecodeError:\n        return data.decode(\'utf-8\', errors=\'ignore\')\n\ndef write_text(path, text):\n    with open(path, \'w\', encoding=\'utf-8\', newline=\'\') as f:\n        f.write(text)\n\ndef replace_assignment(text, keys, placeholder):\n    key_alt = \'|\'.join(re.escape(k) for k in keys)\n    pattern = re.compile(r\'(?i)(["\\\']?\\b(?:\' + key_alt + r\')\\b["\\\']?\\s*[:=]\\s*)(["\\\']?)([^"\\\'\\s,#}]+)(\\2)\')\n    return pattern.sub(r\'\\1\\2\' + placeholder + r\'\\3\', text)\n\ndef replace_free_tokens(text):\n    patterns = [\n        (re.compile(r\'\\b(?:AKIA|ASIA)[0-9A-Z]{16}\\b\'), \'<your-aws-access-key-id>\'),\n        (re.compile(r\'\\bgithub_pat_[A-Za-z0-9_]{20,}\\b\'), \'<your-github-token>\'),\n        (re.compile(r\'\\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\\b\'), \'<your-github-token>\'),\n        (re.compile(r\'\\bhf_[A-Za-z0-9]{20,}\\b\'), \'<your-huggingface-token>\'),\n    ]\n    for rx, ph in patterns:\n        text = rx.sub(ph, text)\n    return text\n\ndef main():\n    files = get_files()\n    changed = 0\n    for bpath in files:\n        path = bpath.decode(\'utf-8\', errors=\'ignore\')\n        if not os.path.isfile(path):\n            continue\n        try:\n            txt = read_text(path)\n        except Exception:\n            continue\n        orig = txt\n        txt = replace_assignment(txt, [\'AWS_ACCESS_KEY_ID\', \'aws_access_key_id\'], \'<your-aws-access-key-id>\')\n        txt = replace_assignment(txt, [\'AWS_SECRET_ACCESS_KEY\', \'aws_secret_access_key\'], \'<your-aws-secret-access-key>\')\n        txt = replace_assignment(txt, [\'AWS_SESSION_TOKEN\'], \'<your-aws-session-token>\')\n        txt = replace_assignment(txt, [\'HUGGINGFACEHUB_API_TOKEN\', \'HUGGINGFACE_TOKEN\', \'HUGGINGFACE_API_KEY\', \'HF_TOKEN\'], \'<your-huggingface-token>\')\n        txt = replace_assignment(txt, [\'GITHUB_TOKEN\', \'GH_TOKEN\'], \'<your-github-token>\')\n        txt = replace_free_tokens(txt)\n        if txt != orig:\n            write_text(path, txt)\n            changed += 1\n    print(f"Sanitized files changed: {changed}")\n\nif __name__ == \'__main__\':\n    main()\nPY\n'
+'chmod +x sanitize_repo.py\n'
+'python3 sanitize_repo.py\n'
+"grep -RInI -E 'AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|\\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\\b|github_pat_[A-Za-z0-9_]{20,}|\\bhf_[A-Za-z0-9]{20,}\\b' --exclude-dir=.git .\n"
+'git status -s\n'
+'git diff --name-only\n'
+'cat > sanitize_repo.py << \'PY\'\n#!/usr/bin/env python3\nimport subprocess, re, os\n\ndef get_files():\n    out = subprocess.check_output([\'git\',\'ls-files\',\'-z\'])\n    return [p for p in out.split(b\'\\0\') if p]\n\ndef read_text(path):\n    with open(path, \'rb\') as f:\n        data = f.read()\n    try:\n        return data.decode(\'utf-8\')\n    except UnicodeDecodeError:\n        return data.decode(\'utf-8\', errors=\'ignore\')\n\ndef write_text(path, text):\n    with open(path, \'w\', encoding=\'utf-8\', newline=\'\') as f:\n        f.write(text)\n\ndef replace_assignment(text, keys, placeholder):\n    key_alt = \'|\'.join(re.escape(k) for k in keys)\n    pattern = re.compile(r\'(?i)(["\\\']?\\b(?:\' + key_alt + r\')\\b["\\\']?\\s*[:=]\\s*)(["\\\']?)([^"\\\'\\s,#}]+)(\\2)\')\n    return pattern.sub(r\'\\1\\2\' + placeholder + r\'\\4\', text)\n\ndef replace_free_tokens(text):\n    patterns = [\n        (re.compile(r\'\\b(?:AKIA|ASIA)[0-9A-Z]{16}\\b\'), \'<your-aws-access-key-id>\'),\n        (re.compile(r\'\\bgithub_pat_[A-Za-z0-9_]{20,}\\b\'), \'<your-github-token>\'),\n        (re.compile(r\'\\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\\b\'), \'<your-github-token>\'),\n        (re.compile(r\'\\bhf_[A-Za-z0-9]{20,}\\b\'), \'<your-huggingface-token>\'),\n    ]\n    for rx, ph in patterns:\n        text = rx.sub(ph, text)\n    return text\n\ndef main():\n    files = get_files()\n    changed = 0\n    for bpath in files:\n        path = bpath.decode(\'utf-8\', errors=\'ignore\')\n        if not os.path.isfile(path):\n            continue\n        try:\n            txt = read_text(path)\n        except Exception:\n            continue\n        orig = txt\n        txt = replace_assignment(txt, [\'AWS_ACCESS_KEY_ID\', \'aws_access_key_id\'], \'<your-aws-access-key-id>\')\n        txt = replace_assignment(txt, [\'AWS_SECRET_ACCESS_KEY\', \'aws_secret_access_key\'], \'<your-aws-secret-access-key>\')\n        txt = replace_assignment(txt, [\'AWS_SESSION_TOKEN\'], \'<your-aws-session-token>\')\n        txt = replace_assignment(txt, [\'HUGGINGFACEHUB_API_TOKEN\', \'HUGGINGFACE_TOKEN\', \'HUGGINGFACE_API_KEY\', \'HF_TOKEN\'], \'<your-huggingface-token>\')\n        txt = replace_assignment(txt, [\'GITHUB_TOKEN\', \'GH_TOKEN\'], \'<your-github-token>\')\n        txt = replace_free_tokens(txt)\n        if txt != orig:\n            write_text(path, txt)\n            changed += 1\n    print(f"Sanitized files changed: {changed}")\n\nif __name__ == \'__main__\':\n    main()\nPY\n'
+'chmod +x sanitize_repo.py\n'
+'python3 sanitize_repo.py\n'
+"grep -RInI -E 'AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|\\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\\b|github_pat_[A-Za-z0-9_]{20,}|\\bhf_[A-Za-z0-9]{20,}\\b|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN|aws_access_key_id|aws_secret_access_key|HUGGINGFACEHUB_API_TOKEN|HUGGINGFACE_TOKEN|HUGGINGFACE_API_KEY|HF_TOKEN|GITHUB_TOKEN|GH_TOKEN' --exclude-dir=.git .\n"
+"sed -n '20,60p' ray_processing/ray_cluster.yaml\n"
+"sed -n '110,140p' ray_processing/process.py\n"
+'git status -s\n'
+'git diff --name-only\n'
+"grep -RInI -E 'AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|\\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\\b|github_pat_[A-Za-z0-9_]{20,}|\\bhf_[A-Za-z0-9]{20,}\\b' --exclude-dir=.git .\n"
+"sed -n '20,60p' ray_processing/ray_cluster.yaml\n"
+"sed -n '118,128p' ray_processing/process.py\n"
+"sed -n '80,100p' tools/eval_expdb.py\n"
+"grep -n -E 'AKIA|ASIA|(ghp|gho|ghu|ghs|ghr)_|github_pat_|hf_' exp_data/datasets/tokenized/rw_v2_fasttext_openhermes_vs_rw_v2_bigram_0.1_arcade100k.json\n"
+"grep -RInI -E '<your-aws-access-key-id>|<your-aws-secret-access-key>|<your-aws-session-token>|<your-huggingface-token>|<your-github-token>' --exclude-dir=.git .\n"
+'git status -s\n'
+"sed -n '20,60p' ray_processing/ray_cluster.yaml\n"
+"sed -n '118,130p' ray_processing/process.py\n"
+"sed -n '80,100p' tools/eval_expdb.py\n"
+"sed -i 's/=<your-aws-access-key-id>}/=<your-aws-access-key-id>/g' tools/eval_expdb.py\n"
+"sed -i 's/=<your-aws-secret-access-key>}/=<your-aws-secret-access-key>/g' tools/eval_expdb.py\n"
+"grep -RInI -E 'AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|\\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\\b|github_pat_[A-Za-z0-9_]{20,}|\\bhf_[A-Za-z0-9]{20,}\\b' --exclude-dir=.git .\n"
+"grep -RInI -E 'AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN|aws_access_key_id|aws_secret_access_key|HUGGINGFACEHUB_API_TOKEN|HUGGINGFACE_TOKEN|HUGGINGFACE_API_KEY|HF_TOKEN|GITHUB_TOKEN|GH_TOKEN' --exclude-dir=.git .\n"
+'git status -s\n'
+'sed -i \'s/os.environ\\["AWS_SECRET_ACCESS_KEY"\\]\\s*=\\s*"[^"]*"/os.environ["AWS_SECRET_ACCESS_KEY"] = "<your-aws-secret-access-key>"/\' ray_processing/process.py\n'
+"sed -n '118,130p' ray_processing/process.py\n"
+"grep -RInI 'D4w8z9wKN1aVeT3BpQj6kIuN7wH8X0M9KfV5OqzF' --exclude-dir=.git .\n"
+"grep -RInI -E 'AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|\\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\\b|github_pat_[A-Za-z0-9_]{20,}|\\bhf_[A-Za-z0-9]{20,}\\b' --exclude-dir=.git .\n"
+'git status -s\n'
+"sed -n '80,100p' tools/eval_expdb.py\n"
+"grep -RInI -E 'AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|\\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\\b|github_pat_[A-Za-z0-9_]{20,}|\\bhf_[A-Za-z0-9]{20,}\\b' --exclude-dir=.git .\n"
+"grep -RInI -E '<your-aws-access-key-id>|<your-aws-secret-access-key>|<your-aws-session-token>|<your-huggingface-token>|<your-github-token>' --exclude-dir=.git .\n"
+'rm -f sanitize_repo.py\n'
+'git status -s\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

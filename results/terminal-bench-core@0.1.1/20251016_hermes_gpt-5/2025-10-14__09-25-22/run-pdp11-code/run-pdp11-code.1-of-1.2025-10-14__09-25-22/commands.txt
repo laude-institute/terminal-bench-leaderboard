@@ -1,0 +1,60 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la /app\n'
+'wc -l /app/data.hex\n'
+'head -n 50 /app/data.hex\n'
+'tail -n 50 /app/data.hex\n'
+'awk \'BEGIN{found_star=0} /^\\*/{found_star=1} END{if(found_star){print "STAR_PRESENT"}else{print "NO_STAR"}}\' /app/data.hex\n'
+'awk \'{ for(i=2;i<=NF;i++){ if($i ~ /\\|/){ break } if($i ~ /^[0-9a-fA-F]{2}$/){ printf "%s", $i } } printf "\\n" }\' /app/data.hex | xxd -r -p > /app/recovered.bin\n'
+'ls -la /app/recovered.bin\n'
+'file /app/recovered.bin\n'
+'chmod +x /app/recovered.bin\n'
+'/app/recovered.bin\n'
+'echo $?\n'
+'head -n 1 /app/data.hex\n'
+'awk \'\nfunction o2int(s,    i, d, n){ n=0; for(i=1;i<=length(s);i++){ d=substr(s,i,1)+0; n = n*8 + d } return n }\n{ for(i=2;i<=NF;i++){ w=$i; if(w ~ /^[0-7]{6}$/){ n=o2int(w); lo = n % 256; hi = int(n/256); printf "%c%c", lo, hi } } }\' /app/data.hex > /app/recovered_le.bin\n'
+'awk \'\nfunction o2int(s,    i, d, n){ n=0; for(i=1;i<=length(s);i++){ d=substr(s,i,1)+0; n = n*8 + d } return n }\n{ for(i=2;i<=NF;i++){ w=$i; if(w ~ /^[0-7]{6}$/){ n=o2int(w); lo = n % 256; hi = int(n/256); printf "%c%c", hi, lo } } }\' /app/data.hex > /app/recovered_be.bin\n'
+'ls -la /app/recovered_le.bin /app/recovered_be.bin\n'
+"awk 'BEGIN{min=4}\n{ for(i=1;i<=length($0);i++){ b=substr($0,i,1); c=ord=b; } }\n' /dev/null\n"
+'awk \'function isprint(b){ return (b>=32 && b<=126) }\nfunction dumpstrings(buf, minlen,    i,c,s){ s=""; for(i=1;i<=length(buf);i++){ c=substr(buf,i,1); v=ord(c); if(isprint(v) || v==10){ s = s c } else { if(length(s) >= minlen){ print s } s="" } } if(length(s) >= minlen){ print s } }\nBEGIN{ min=4 }\n{ buf=$0; dumpstrings(buf, min) }\' /app/recovered_le.bin | sort -u > /app/strings_le.txt\n'
+'awk \'function isprint(b){ return (b>=32 && b<=126) }\nfunction dumpstrings(buf, minlen,    i,c,s){ s=""; for(i=1;i<=length(buf);i++){ c=substr(buf,i,1); v=ord(c); if(isprint(v) || v==10){ s = s c } else { if(length(s) >= minlen){ print s } s="" } } if(length(s) >= minlen){ print s } }\nBEGIN{ min=4 }\n{ buf=$0; dumpstrings(buf, min) }\' /app/recovered_be.bin | sort -u > /app/strings_be.txt\n'
+'wc -l /app/strings_le.txt /app/strings_be.txt\n'
+"sed -n '1,200p' /app/strings_le.txt\n"
+"sed -n '1,200p' /app/strings_be.txt\n"
+'grep -E "flag|FLAG|hello|Hello|congrat|print|usage|Version|PDP|Unix|V7|/bin/sh|sh" /app/strings_le.txt /app/strings_be.txt || true\n'
+"perl -ne 'chomp; @f=split(/\\s+/); shift @f; for $w (@f){ next unless $w =~ /^[0-7]{6}$/; $n = oct($w); print chr($n & 0xFF), chr(($n>>8)&0xFF) }' /app/data.hex > /app/recovered_le.bin\n"
+'wc -c /app/recovered_le.bin\n'
+"perl -ne 'chomp; @f=split(/\\s+/); shift @f; for $w (@f){ next unless $w =~ /^[0-7]{6}$/; $n = oct($w); print chr(($n>>8)&0xFF), chr($n & 0xFF) }' /app/data.hex > /app/recovered_be.bin\n"
+'wc -c /app/recovered_be.bin\n'
+"grep -aoE '[ -~]{4,}' /app/recovered_le.bin | sort -u | head -n 200\n"
+"grep -aoE '[ -~]{4,}' /app/recovered_be.bin | sort -u | head -n 200\n"
+'perl -lane \'if($.==1){ for $i (1..$#F){ next if $i==0; printf "%s:%d ", $F[$i], oct($F[$i]) } print "" }\' /app/data.hex\n'
+"dd if=/app/recovered_le.bin bs=1 skip=1088 count=400 2>/dev/null | od -An -c | sed -n '1,80p'\n"
+"dd if=/app/recovered_le.bin bs=1 skip=1088 count=400 2>/dev/null | grep -aoE '[ -~]{2,}' | nl -ba\n"
+"grep -aoE '[ -~]{2,}' /app/recovered_le.bin | nl -ba | sed -n '1,200p'\n"
+"grep -aoE 'Hello|hello|world|flag|FLAG|congrat|print|usage|printf|Hello, world' /app/recovered_le.bin | sort -u\n"
+'od -An -t o2 -N 16 /app/recovered_le.bin\n'
+"grep -obaE '[ -~]{4,}' /app/recovered_le.bin | sed -n '1,200p'\n"
+"grep -oba '%[0-9.+\\-#]*[diuoxXscfeEgG]' /app/recovered_le.bin | sed -n '1,100p'\n"
+"grep -obaE '[A-Za-z0-9 ,.!?_/\\-]{4,}' /app/recovered_le.bin | sed -n '1,400p'\n"
+"grep -obaE '(Hello|hello|world|flag|FLAG|congrat|Unix|PDP|answer|result|value|number|prime|Fibonacci|PI|Euler|e\\^x|sum)' /app/recovered_le.bin || true\n"
+'dd if=/app/recovered_le.bin bs=1 skip=1062 count=30 2>/dev/null | od -An -t o2 -v\n'
+'dd if=/app/recovered_le.bin bs=1 skip=1062 count=30 2>/dev/null | od -An -c -v\n'
+"dd if=/app/recovered_le.bin bs=1 skip=1062 count=30 2>/dev/null | grep -oba '%d' || true\n"
+'perl -e \'$text=1062; $dsize=30; open my $fh, "<:raw", "/app/recovered_le.bin" or die $!; seek($fh,$text,0); read($fh,$buf,$dsize); $pos=index($buf, "%d"); if($pos>=0){ printf("DATA_OFF=%d\\nADDR_OCTAL=%#o\\nADDR_DEC=%d\\n", $text+$pos, $text+$pos, $text+$pos) } else { print "NOT_FOUND\\n" }\'\n'
+'dd if=/app/recovered_le.bin of=/app/text.bin bs=1 count=1062 2>/dev/null\n'
+'perl -e \'$addr_dec=0; while(<STDIN>){ if(/ADDR_DEC=(\\d+)/){ $addr_dec=$1; last } } if(!$addr_dec){ exit 0 } $pat=pack("v", $addr_dec); open my $in, "<:raw", "/app/text.bin" or die $!; local $/; $t=<$in>; $pos=0; while( (my $i=index($t,$pat,$pos))!=-1 ){ print "HIT=",$i,"\\n"; $pos=$i+1 }\' < <(perl -e \'$text=1062; $dsize=30; open my $fh, "<:raw", "/app/recovered_le.bin"; seek($fh,$text,0); read($fh,$buf,$dsize); $pos=index($buf, "%d"); if($pos>=0){ print "ADDR_DEC=".($text+$pos)."\\n" }\')\n'
+'perl -e \'$addr_dec=0; while(<STDIN>){ if(/ADDR_DEC=(\\d+)/){ $addr_dec=$1; last } } open my $in, "<:raw", "/app/text.bin" or die $!; binmode STDOUT; $/=undef; $t=<$in>; for($i=0; $i<length($t); $i++){ if(unpack("v", substr($t,$i,2))==$addr_dec){ $start=$i-16; $start=0 if $start<0; $len=64; print "DUMP_AT=".$i."\\n"; open my $ph, "|-", "od -An -t o2 -v" or die $!; print $ph substr($t,$start,$len); close $ph } }\' < <(perl -e \'$text=1062; $dsize=30; open my $fh, "<:raw", "/app/recovered_le.bin"; seek($fh,$text,0); read($fh,$buf,$dsize); $pos=index($buf, "%d"); print "ADDR_DEC=".($text+$pos)."\\n" if $pos>=0\')\n'
+'perl -e \'$text=1062; open my $in, "<:raw", "/app/text.bin" or die $!; local $/; $t=<$in>; for($i=0;$i<length($t)-16;$i++){ my $w=unpack("v", substr($t,$i,2)); if($w==012716 || $w==012737 || $w==012767){ my $imm=unpack("v", substr($t,$i+2,2)); printf("PUSH_OP=%#o AT=%d IMM_DEC=%d IMM_OCT=%#o\\n", $w, $i, $imm, $imm) } }\'\n'
+'perl -e \'open my $in, "<:raw", "/app/text.bin" or die $!; local $/; $t=<$in>; my @hits; for($i=0;$i<length($t)-4;$i++){ my $op=unpack("v", substr($t,$i,2)); if($op==04737 || $op==04767 || $op==04537 || $op==04567 || $op==04707){ my $addr=unpack("v", substr($t,$i+2,2)); printf("JSR_OP=%#o AT=%d TARGET_OCT=%#o TARGET_DEC=%d\\n", $op, $i, $addr, $addr) } }\'\n'
+'true\n'
+'perl -e \'open my $in, "<:raw", "/app/text.bin" or die $!; local $/; $t=<$in>; my $n=length($t); my @w; for(my $i=0;$i<$n;$i+=2){ push @w, unpack("v", substr($t,$i,2)) } for(my $i=0;$i<@w-1;$i++){ if(($w[$i]==04737 || $w[$i]==04567 || $w[$i]==04767) && $w[$i+1]==01224){ printf("CALL_PRINTF_AT_BYTE=%d WORD_IDX=%d\\n", $i*2, $i); my $start=$i-10; $start=0 if $start<0; for(my $j=$start;$j<$i+2 && $j<@w;$j++){ printf("  IDX=%d OFF=%d OCT=%#06o DEC=%d\\n", $j, $j*2, $w[$j], $w[$j]) } } }\'\n'
+'perl -e \'open my $in, "<:raw", "/app/text.bin" or die $!; local $/; $t=<$in>; my $n=length($t); my @w; for(my $i=0;$i<$n;$i+=2){ push @w, unpack("v", substr($t,$i,2)) } for(my $i=0;$i<@w-2;$i++){ if($w[$i]==012700 && $i+2<@w){ my $imm=$w[$i+1]; my $next=$w[$i+2]; printf("IMM_MOV_R0_AT_IDX=%d BYTE=%d IMM_DEC=%d IMM_OCT=%#06o NEXT_OCT=%#06o\\n", $i, $i*2, $imm, $imm, $next) } }\'\n'
+'perl -e \'$fmt=1078; open my $in, "<:raw", "/app/text.bin" or die $!; local $/; $t=<$in>; my $n=length($t); my @w; for(my $i=0;$i<$n;$i+=2){ push @w, unpack("v", substr($t,$i,2)) } for(my $i=0;$i<@w-6;$i++){ # look for push value, push fmt, then jsr printf\n if($w[$i]==012700 && $w[$i+2]==010046 && $w[$i+3]==012700 && $w[$i+5]==010046 && ($w[$i+6]==04737 || $w[$i+6]==04567 || $w[$i+6]==04767) && $w[$i+7]==01224){ my $imm1=$w[$i+1]; my $imm2=$w[$i+4]; printf("SEQ_AT_BYTE=%d VAL1=%d VAL2=%d\\n", $i*2, $imm1, $imm2) } }\'\n'
+'perl -e \'$fmt=1078; open my $in, "<:raw", "/app/text.bin" or die $!; local $/; $t=<$in>; my $n=length($t); my @w; for(my $i=0;$i<$n;$i+=2){ push @w, unpack("v", substr($t,$i,2)) } for(my $i=0;$i<@w-6;$i++){ if($w[$i]==012700 && $w[$i+2]==010046 && ($w[$i+3]==04737 || $w[$i+3]==04567 || $w[$i+3]==04767) && $w[$i+4]==01224){ printf("ONEARG_SEQ_AT_BYTE=%d VAL=%d\\n", $i*2, $w[$i+1]) } }\'\n'
+'dd if=/app/recovered_le.bin bs=1 skip=1066 count=24 2>/dev/null | od -An -c -v\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

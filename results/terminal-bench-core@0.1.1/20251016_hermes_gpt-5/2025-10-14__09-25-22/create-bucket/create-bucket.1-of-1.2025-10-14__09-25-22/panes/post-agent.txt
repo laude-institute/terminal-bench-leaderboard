@@ -1,0 +1,78 @@
+root@4fbacbed0984:/app# command -v aws >/dev/null 2>&1 || (apt-get update && apt-get install -y awscli)
+root@4fbacbed0984:/app# aws --version
+export REGION=$(aws configure get region 2>/dev/null); if [ -z "$REGION" ]; then export REGION=us-east-1; aws configure set region "$REGION"; fi; echo "Using re
+gion: $REGION"
+if [ "$REGION" = "us-east-1" ]; then aws s3api create-bucket --bucket sample-bucket; else aws s3api create-bucket --bucket sample-bucket --create-bucket-configu
+ration LocationConstraint="$REGION"; fi
+aws-cli/1.38.21 Python/3.11.11 Linux/6.8.0-36-generic botocore/1.37.21
+root@4fbacbed0984:/app# export REGION=$(aws configure get region 2>/dev/null); if [ -z "$REGION" ]; then export REGION=us-east-1; aws configure set region "$REG
+ION"; fi; echo "Using region: $REGION"
+aws s3api put-public-access-block --bucket sample-bucket --public-access-block-configuration BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=fals
+e,RestrictPublicBuckets=false
+Using region: us-east-1
+root@4fbacbed0984:/app# if [ "$REGION" = "us-east-1" ]; then aws s3api create-bucket --bucket sample-bucket; else aws s3api create-bucket --bucket sample-bucket
+ --create-bucket-configuration LocationConstraint="$REGION"; fi
+aws s3api put-bucket-acl --bucket sample-bucket --acl public-read
+{
+    "Location": "/sample-bucket"
+}
+root@4fbacbed0984:/app# aws s3api put-public-access-block --bucket sample-bucket --public-access-block-configuration BlockPublicAcls=false,IgnorePublicAcls=fals
+e,BlockPublicPolicy=false,RestrictPublicBuckets=false
+printf '{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowPublicRead",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::sample-bucket/*"
+    }
+  ]
+}
+' > /tmp/sample-bucket-policy.json
+aws s3api put-bucket-policy --bucket sample-bucket --policy file:///tmp/sample-bucket-policy.json
+root@4fbacbed0984:/app# aws s3api put-bucket-acl --bucket sample-bucket --acl public-read
+aws s3api get-bucket-policy-status --bucket sample-bucket || aws s3api get-bucket-acl --bucket sample-bucket
+root@4fbacbed0984:/app# printf '{
+>   "Version": "2012-10-17",
+>   "Statement": [
+>     {
+>       "Sid": "AllowPublicRead",
+>       "Effect": "Allow",
+>       "Principal": "*",
+>       "Action": "s3:GetObject",
+>       "Resource": "arn:aws:s3:::sample-bucket/*"
+>     }
+>   ]
+> }
+> ' > /tmp/sample-bucket-policy.json
+root@4fbacbed0984:/app# aws s3api put-bucket-policy --bucket sample-bucket --policy file:///tmp/sample-bucket-policy.json
+root@4fbacbed0984:/app# aws s3api get-bucket-policy-status --bucket sample-bucket || aws s3api get-bucket-acl --bucket sample-bucket
+
+An error occurred (InternalFailure) when calling the GetBucketPolicyStatus operation: API action 'GetBucketPolicyStatus' for service 's3' not yet implemented or
+ pro feature - please check https://docs.localstack.cloud/references/coverage/coverage_s3/ for further information
+{
+    "Owner": {
+        "DisplayName": "webfile",
+        "ID": "75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a"
+    },
+    "Grants": [
+        {
+            "Grantee": {
+                "DisplayName": "webfile",
+                "ID": "75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a",
+                "Type": "CanonicalUser"
+            },
+            "Permission": "FULL_CONTROL"
+        },
+        {
+            "Grantee": {
+                "Type": "Group",
+                "URI": "http://acs.amazonaws.com/groups/global/AllUsers"
+            },
+            "Permission": "READ"
+        }
+    ]
+}
+root@4fbacbed0984:/app#

@@ -1,0 +1,41 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'ISO=""; if [ -f alpine.iso ]; then ISO="$PWD/alpine.iso"; else for p in "$PWD" /app /assets /; do f=$(find "$p" -maxdepth 3 -type f -iname \'alpine*.iso\' 2>/dev/null | head -n1); if [ -n "$f" ]; then ISO="$f"; break; fi; done; fi; if [ -z "$ISO" ]; then echo "alpine.iso not found" >&2; exit 1; else echo "Using ISO: $ISO"; fi\n'
+'if ! command -v qemu-system-x86_64 >/dev/null 2>&1; then apt-get update && apt-get install -y qemu-system-x86; fi\n'
+'rm -f /tmp/alpine_console_ready /tmp/alpine_wait.log\n'
+'qemu-system-x86_64 -m 512 -smp 2 -cdrom "$ISO" -boot d -nographic -serial telnet:127.0.0.1:6665,server,nowait -daemonize\n'
+'nohup bash -lc \'while ! { exec 3<>/dev/tcp/127.0.0.1/6665; } 2>/dev/null; do sleep 0.5; done; sed -n "/login:/q" <&3; exec 3>&-; printf "ready" > /tmp/alpine_console_ready\' >/tmp/alpine_wait.log 2>&1 &\n'
+'for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done\n'
+'for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done\n'
+'for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done\n'
+'for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done\n'
+'for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done\n'
+'if [ -f /tmp/alpine_console_ready ]; then echo "Alpine serial console is ready on telnet 127.0.0.1 6665 (login prompt present)."; else echo "Timed out waiting for login prompt; check /tmp/alpine_wait.log" >&2; fi\n'
+"pkill -f '/dev/tcp/127.0.0.1/6665' 2>/dev/null || true\n"
+"pkill -f 'qemu-system-x86_64' 2>/dev/null || true\n"
+'rm -f /tmp/alpine_console_ready /tmp/alpine_wait.log /tmp/alp_root\n'
+'umount -l /mnt/alpineiso 2>/dev/null || true\n'
+'mkdir -p /mnt/alpineiso /tmp/alpineiso\n'
+'bash -lc \'if mount -o loop,ro /app/alpine.iso /mnt/alpineiso 2>/dev/null; then ROOT=/mnt/alpineiso; echo "$ROOT" > /tmp/alp_root; else apt-get update && apt-get install -y libarchive-tools && rm -rf /tmp/alpineiso && mkdir -p /tmp/alpineiso && bsdtar -C /tmp/alpineiso -xf /app/alpine.iso && echo "/tmp/alpineiso" > /tmp/alp_root; fi\'\n'
+'ROOT=$(cat /tmp/alp_root); echo "Using ISO root: $ROOT"; ls -l "$ROOT/boot" 2>/dev/null || true\n'
+'KERNEL=$(find "$(cat /tmp/alp_root)/boot" -maxdepth 1 -type f -name \'vmlinuz*\' | head -n1); INITRD=$(find "$(cat /tmp/alp_root)/boot" -maxdepth 1 -type f -name \'initramfs*\' | head -n1); if [ -z "$KERNEL" ] || [ -z "$INITRD" ]; then echo "Kernel or initramfs not found inside ISO" >&2; exit 1; else echo "Kernel: $KERNEL"; echo "Initrd: $INITRD"; fi\n'
+'qemu-system-x86_64 -m 768 -smp 2 -kernel "$KERNEL" -initrd "$INITRD" -append "console=ttyS0,115200 root=/dev/ram0 alpine_dev=cdrom modules=loop,squashfs,sd-mod,usb-storage printk.time=0" -drive file=/app/alpine.iso,media=cdrom,readonly=on -display none -serial telnet:127.0.0.1:6665,server,nowait -daemonize\n'
+'nohup bash -lc \'until exec 3<>/dev/tcp/127.0.0.1/6665; do sleep 0.5; done; for i in $(seq 1 300); do printf "\\r\\n" >&3; out=$(timeout 1s cat <&3 | tr -d "\\r"); echo "$out" >> /tmp/alpine_wait.log; if printf "%s" "$out" | grep -q "login:"; then printf ready > /tmp/alpine_console_ready; break; fi; sleep 1; done; exec 3>&-\' >/tmp/alpine_wait.log 2>&1 &\n'
+'for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done\n'
+'for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done\n'
+'for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done\n'
+'if [ -f /tmp/alpine_console_ready ]; then echo "Alpine serial console is ready on telnet 127.0.0.1 6665 (login prompt present)."; else echo "Timed out waiting for login prompt; check /tmp/alpine_wait.log" >&2; fi\n'
+'ss -ltnp | grep 6665 || true\n'
+'ps -ef | grep -w qemu-system-x86_64 | grep -v grep || true\n'
+'tail -n 200 /tmp/alpine_wait.log 2>/dev/null || true\n'
+'bash -lc \'exec 3<>/dev/tcp/127.0.0.1/6665; printf "\\r\\n" >&3; out=$(timeout 5s cat <&3 | tr -d "\\r"); echo "$out" >> /tmp/alpine_wait.log; if printf "%s" "$out" | grep -q "login:"; then printf ready > /tmp/alpine_console_ready; fi; exec 3>&-\'\n'
+'nohup bash -lc \'until exec 3<>/dev/tcp/127.0.0.1/6665; do sleep 0.5; done; for i in $(seq 1 600); do printf "\\r\\n" >&3; out=$(timeout 1s cat <&3 | tr -d "\\r"); echo "$out" >> /tmp/alpine_wait.log; if printf "%s" "$out" | grep -q "login:"; then printf ready > /tmp/alpine_console_ready; break; fi; sleep 0.5; done; exec 3>&-\' >/tmp/alpine_wait.log 2>&1 &\n'
+'for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+'for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done\n'
+['C-d']
+['C-d']
+'for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done\n'

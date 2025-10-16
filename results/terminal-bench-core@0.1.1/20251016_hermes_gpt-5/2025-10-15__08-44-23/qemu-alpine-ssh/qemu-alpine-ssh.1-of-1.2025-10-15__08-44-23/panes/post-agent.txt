@@ -1,0 +1,44 @@
+root@b9f69a4f5faa:/app# asciinema rec --stdin /logs/agent.cast
+asciinema: recording asciicast to /logs/agent.cast
+asciinema: press <ctrl-d> or type "exit" when you're done
+root@b9f69a4f5faa:/app# clear
+root@b9f69a4f5faa:/app# ls -la
+total 980176
+drwxr-xr-x 1 root root       4096 Oct 15 09:51 .
+drwxr-xr-x 1 root root       4096 Oct 15 09:53 ..
+-rw-r--r-- 1 root root     197120 Oct 15 09:51 alpine-disk.qcow2
+-rw-r--r-- 1 root root 1003487232 Dec  7  2023 alpine.iso
+root@b9f69a4f5faa:/app# qemu-system-x86_64 --version
+QEMU emulator version 5.2.0 (Debian 1:5.2+dfsg-11+deb11u5)
+Copyright (c) 2003-2020 Fabrice Bellard and the QEMU Project developers
+root@b9f69a4f5faa:/app# test -f alpine.iso || wget -q https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/alpine-virt-3.19.1-x86_64.iso -O alpine.iso
+root@b9f69a4f5faa:/app# qemu-system-x86_64 -daemonize -display none -m 768 -smp 2 -cdrom "$(pwd)/alpine.iso" -boot d -netdev user,id=n1,hostfwd=tcp::2222-:22 -d
+evice e1000,netdev=n1 -serial tcp:127.0.0.1:4444,server,nowait
+root@b9f69a4f5faa:/app# nc 127.0.0.1 4444
+
+root
+passwd
+password123
+password123
+udhcpc -i eth0
+printf "https://dl-cdn.alpinelinux.org/alpine/latest-stable/main\nhttps://dl-cdn.alpinelinux.org/alpine/latest-stable/community\n" > /etc/apk/repositories
+apk update
+apk add openssh
+sed -i -r 's/^[# ]*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+sed -i -r 's/^[# ]*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+rc-service sshd start
+ss -tlnp | grep ':22' || netstat -tnlp | grep ':22'
+exit
+ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 root@localhost
+password123
+exit
+
+
+
+
+
+
+
+
+
+

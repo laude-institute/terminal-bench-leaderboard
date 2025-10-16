@@ -1,0 +1,30 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -l /app\n'
+'head -n 10 /app/data.hex\n'
+'rm -f /app/recovered.bin\n'
+'awk \'{out=""; for(i=2;i<=NF;i++){ if($i=="|" || $i ~ /\\|/) break; if($i ~ /^[0-9A-Fa-f]{2}$/) out = out $i} print out}\' /app/data.hex | xxd -r -p > /app/recovered.bin\n'
+'[ -s /app/recovered.bin ] || awk \'{for(i=2;i<=NF;i++){ if($i ~ /^[0-7]{1,3}$/) printf "%c", strtonum("0" $i) }}\' /app/data.hex > /app/recovered.bin\n'
+'ls -l /app/recovered.bin\n'
+'file /app/recovered.bin\n'
+'chmod +x /app/recovered.bin\n'
+'/app/recovered.bin\n'
+"python3 - <<'PY'\nimport sys\nout=open('/app/recovered.bin','wb')\nwith open('/app/data.hex') as f:\n    for line in f:\n        parts=line.strip().split()\n        if not parts:\n            continue\n        for tok in parts[1:]:\n            if '|' in tok or tok=='|':\n                break\n            if all(ch in '01234567' for ch in tok):\n                w=int(tok,8)\n                out.write(bytes((w & 0xFF, (w>>8) & 0xFF)))\nout.close()\nPY\n"
+'ls -l /app/recovered.bin\n'
+'od -An -to2 -N 16 /app/recovered.bin\n'
+'od -An -tx1 -N 32 /app/recovered.bin\n'
+'/app/recovered.bin\n'
+'echo Exit:$?\n'
+'strings /app/recovered.bin | head -n 50\n'
+"grep -aoE '[ -~]{4,}' /app/recovered.bin | head -n 50\n"
+"grep -aoE '[ -~]{3,}' /app/recovered.bin | sort -u\n"
+"python3 - <<'PY'\nimport sys,string\ns=open('/app/recovered.bin','rb').read()\nout=[]\ncur=[]\nfor b in s:\n    if 32<=b<=126:\n        cur.append(chr(b))\n    else:\n        if cur:\n            out.append(''.join(cur))\n            cur=[]\nif cur:\n    out.append(''.join(cur))\nfor st in out:\n    print(st)\nPY\n"
+'python3 - <<\'PY\'\nimport sys\nfrom pathlib import Path\nbuf=Path(\'/app/recovered.bin\').read_bytes()\n# Parse header as 8 little-endian 16-bit words\nhdr=[int.from_bytes(buf[i:i+2],\'little\') for i in range(0,16,2)]\nmagic,tsz,dsz,bss,syms,entry,trsz,drsz=hdr\n# Locate data section and find "%d"\ndata_off=16+tsz\ndata=buf[data_off:data_off+dsz]\nfmt=b"%d\\x00"\nidx=data.find(fmt)\nprint(f"magic={oct(magic)} tsz={tsz} dsz={dsz} bss={bss} syms={syms} entry={entry} trsz={trsz} drsz={drsz}")\nif idx<0:\n    print("format string not found")\n    sys.exit(1)\nfmt_addr=tsz+idx\nprint(f"fmt_addr={fmt_addr}")\n# Scan text words for 012746 (mov $imm, -(sp))\ntext=buf[16:16+tsz]\nwords=[int.from_bytes(text[i:i+2],\'little\') for i in range(0,len(text),2)]\npush_opcode=int(\'12746\',8)\nfound=None\nfor i in range(len(words)-1):\n    if words[i]==push_opcode and words[i+1]==fmt_addr:\n        found=i\n        break\nif found is None:\n    print("printf format push site not found")\n    sys.exit(1)\n# Expect previous push to be the integer argument\nif found>=2 and words[found-2]==push_opcode:\n    val=words[found-1]\nelse:\n    print("preceding integer push not found in expected pattern")\n    sys.exit(1)\n# Convert to signed 16-bit\nif val>=0x8000:\n    sval=val-0x10000\nelse:\n    sval=val\nprint(f"printed_integer={sval}")\nprint(sval)\nPY\n'
+'echo "File type: PDP-11 Unix a.out (0407). To run: use a PDP-11 emulator (e.g., SIMH) with Unix V6/V7 and execute the binary. Program output is above as the printed integer."\n'
+'python3 - <<\'PY\'\nimport sys\nfrom pathlib import Path\nbuf=Path(\'/app/recovered.bin\').read_bytes()\nhdr=[int.from_bytes(buf[i:i+2],\'little\') for i in range(0,16,2)]\nmagic,tsz,dsz,bss,syms,entry,trsz,drsz=hdr\ntext=buf[16:16+tsz]\ndata=buf[16+tsz:16+tsz+dsz]\nfmt=b"%d\\x00"\nidx_text=text.find(fmt)\nidx_data=data.find(fmt)\nprint(f"magic={oct(magic)} tsz={tsz} dsz={dsz} bss={bss} syms={syms} entry={entry} trsz={trsz} drsz={drsz}")\nif idx_text>=0:\n    fmt_addr=idx_text\n    print(f"fmt found in text at {fmt_addr}")\nelif idx_data>=0:\n    fmt_addr=tsz+idx_data\n    print(f"fmt found in data at {fmt_addr}")\nelse:\n    print("format string not found")\n    sys.exit(1)\nwords=[int.from_bytes(text[i:i+2],\'little\') for i in range(0,len(text),2)]\npush_opcode=int(\'12746\',8)\nfound=None\nfor i in range(len(words)-1):\n    if words[i]==push_opcode and words[i+1]==fmt_addr:\n        found=i\n        break\nif found is None:\n    print("printf format push site not found")\n    sys.exit(1)\nif found>=2 and words[found-2]==push_opcode:\n    val=words[found-1]\nelse:\n    print("preceding integer push not found in expected pattern")\n    sys.exit(1)\nif val>=0x8000:\n    sval=val-0x10000\nelse:\n    sval=val\nprint(f"printed_integer={sval}")\nprint(sval)\nPY\n'
+'echo "File type: PDP-11 Unix a.out (0407). To run: use a PDP-11 emulator (e.g., SIMH) with Unix V6/V7 and execute the binary."\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

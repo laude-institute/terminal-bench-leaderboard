@@ -1,0 +1,16 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'cat > server.py << \'PY\'\n#!/usr/bin/env python3\nfrom http.server import HTTPServer, BaseHTTPRequestHandler\nfrom urllib.parse import urlparse, parse_qs\nimport json\nimport re\n\nclass FibHandler(BaseHTTPRequestHandler):\n    def do_GET(self):\n        parsed = urlparse(self.path)\n        if parsed.path != \'/fib\':\n            self.send_response(404)\n            self.send_header(\'Content-Type\', \'application/json\')\n            self.end_headers()\n            self.wfile.write(json.dumps({\'error\': \'Not Found\'}).encode(\'utf-8\'))\n            return\n\n        qs = parse_qs(parsed.query)\n        if \'n\' not in qs or not qs[\'n\']:\n            self.send_response(400)\n            self.send_header(\'Content-Type\', \'application/json\')\n            self.end_headers()\n            self.wfile.write(json.dumps({\'error\': "Missing \'n\' query parameter"}).encode(\'utf-8\'))\n            return\n\n        n_str = qs[\'n\'][0]\n        if not re.fullmatch(r\'\\d+\', n_str):\n            self.send_response(400)\n            self.send_header(\'Content-Type\', \'application/json\')\n            self.end_headers()\n            self.wfile.write(json.dumps({\'error\': "\'n\' must be an integer"}).encode(\'utf-8\'))\n            return\n\n        n = int(n_str)\n        a, b = 0, 1\n        for _ in range(n):\n            a, b = b, a + b\n\n        result = a\n\n        payload = json.dumps({\'result\': result})\n        self.send_response(200)\n        self.send_header(\'Content-Type\', \'application/json\')\n        self.send_header(\'Content-Length\', str(len(payload)))\n        self.end_headers()\n        self.wfile.write(payload.encode(\'utf-8\'))\n\n    def log_message(self, format, *args):\n        return\n\ndef run():\n    server = HTTPServer((\'0.0.0.0\', 3000), FibHandler)\n    try:\n        server.serve_forever()\n    except KeyboardInterrupt:\n        pass\n    finally:\n        server.server_close()\n\nif __name__ == \'__main__\':\n    run()\nPY\n'
+'chmod +x server.py\n'
+'python3 server.py > server.log 2>&1 &\n'
+'sleep 0.2\n'
+'curl -i http://localhost:3000/fib\n'
+'curl -i "http://localhost:3000/fib?n=abc"\n'
+'curl -s "http://localhost:3000/fib?n=10"\n'
+"python3 - << 'PY'\nimport urllib.request, urllib.error\nurls = [\n    'http://localhost:3000/fib',\n    'http://localhost:3000/fib?n=abc',\n    'http://localhost:3000/fib?n=10'\n]\nfor url in urls:\n    try:\n        with urllib.request.urlopen(url) as resp:\n            body = resp.read().decode()\n            print('URL:', url)\n            print('Status:', resp.status)\n            print('Body:', body)\n    except urllib.error.HTTPError as e:\n        body = e.read().decode()\n        print('URL:', url)\n        print('Status:', e.code)\n        print('Body:', body)\nPY\n"
+'cat server.log\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

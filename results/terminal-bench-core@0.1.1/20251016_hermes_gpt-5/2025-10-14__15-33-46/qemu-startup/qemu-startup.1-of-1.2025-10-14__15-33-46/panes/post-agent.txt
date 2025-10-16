@@ -1,0 +1,70 @@
+root@01006fca7163:/app# asciinema rec --stdin /logs/agent.cast
+asciinema: recording asciicast to /logs/agent.cast
+asciinema: press <ctrl-d> or type "exit" when you're done
+root@01006fca7163:/app# clear
+root@01006fca7163:/app# ls -la
+total 980176
+drwxr-xr-x 1 root root       4096 Oct 14 16:38 .
+drwxr-xr-x 1 root root       4096 Oct 14 16:38 ..
+-rw-r--r-- 1 root root     197120 Oct 14 16:38 alpine-disk.qcow2
+-rw-r--r-- 1 root root 1003487232 Dec  7  2023 alpine.iso
+root@01006fca7163:/app# cat > /app/start_qemu.sh << 'EOF'
+> #!/usr/bin/env bash
+> set -euo pipefail
+> ISO="${1:-}"
+> if [[ -z "${ISO}" || ! -f "${ISO}" ]]; then
+>   ISO=$(ls -1 /app/alpine*.iso 2>/dev/null | head -n1 || true)
+> fi
+> if [[ -z "${ISO}" || ! -f "${ISO}" ]]; then
+>   ISO=$(find /app -maxdepth 3 -type f -name 'alpine*.iso' -print -quit 2>/dev/null || true)
+> fi
+> if [[ -z "${ISO}" || ! -f "${ISO}" ]]; then
+>   ISO=$(find / -maxdepth 4 -type f -name 'alpine*.iso' -print -quit 2>/dev/null || true)
+> fi
+> if [[ -z "${ISO}" || ! -f "${ISO}" ]]; then
+>   echo "alpine.iso not found" >&2
+>   exit 1
+> fi
+> if ! command -v qemu-system-x86_64 >/dev/null 2>&1; then
+>   export DEBIAN_FRONTEND=noninteractive
+>   apt-get update
+>   apt-get install -y qemu-system-x86 telnet
+> fi
+> LOG=/app/qemu.log
+> PORT=6665
+> nohup qemu-system-x86_64 -m 1024 -boot d -cdrom "${ISO}" -serial telnet:127.0.0.1:${PORT},server,nowait -display none -name alpine-telnet >"${LOG}" 2>&1 &
+> # Wait for port listening
+> for i in $(seq 1 120); do
+>   if ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":${PORT}$"; then
+>     break
+>   fi
+>   sleep 1
+> done
+> # Wait for login prompt up to 180s
+> for i in $(seq 1 180); do
+>   if timeout 2 telnet 127.0.0.1 ${PORT} 2>&1 | tr -d '\r' | grep -q -E 'login'; then
+>     echo "READY"
+>     exit 0
+>   fi
+>   sleep 2
+> done
+> echo "Timeout waiting for login prompt" >&2
+> exit 1
+> EOF
+root@01006fca7163:/app# chmod +x /app/start_qemu.sh
+root@01006fca7163:/app# /app/start_qemu.sh
+ss -ltn
+timeout 5 telnet 127.0.0.1 6665
+tail -n 200 /app/qemu.log
+timeout 8 telnet 127.0.0.1 6665
+bash -lc 'export DEBIAN_FRONTEND=noninteractive; command -v qemu-system-x86_64 >/dev/null 2>&1 || { apt-get update && apt-get install -y qemu-system-x86 telnet;
+ }'
+bash -lc 'ss -ltn | grep -q ":6665" || nohup qemu-system-x86_64 -m 1024 -boot d -cdrom /app/alpine.iso -serial telnet:127.0.0.1:6665,server,nowait -display none
+ -name alpine-telnet >/app/qemu.log 2>&1 &'
+bash -lc 'for i in $(seq 1 60); do ss -ltn | grep -q ":6665" && exit 0; sleep 1; done; exit 1'
+bash -lc 'for i in $(seq 1 60); do if timeout 2 telnet 127.0.0.1 6665 2>&1 | tr -d "\r" | grep -q -E "login"; then echo READY; exit 0; fi; sleep 1; done; echo T
+IMEOUT; exit 1'
+/app/start_qemu.sh
+ss -ltn
+timeout 5 telnet 127.0.0.1 6665
+

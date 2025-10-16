@@ -1,0 +1,190 @@
+root@0687b4352899:/app# ls -la
+total 104296
+drwxr-xr-x 1 root root      4096 Oct 14 10:35 .
+drwxr-xr-x 1 root root      4096 Oct 14 10:36 ..
+-rw-r--r-- 1 root root 106785163 Oct 14 10:36 model.bin
+root@0687b4352899:/app# find . -maxdepth 2 -type f -name "*.bin" -print
+./model.bin
+root@0687b4352899:/app# python --version
+Python 3.13.1
+root@0687b4352899:/app# which python
+/usr/local/bin/python
+root@0687b4352899:/app# python3 --version
+Python 3.13.1
+root@0687b4352899:/app# which python3
+/usr/local/bin/python3
+root@0687b4352899:/app# python3 - <<'PY'
+> import sys
+> print('sys.executable:', sys.executable)
+> print('sys.version:', sys.version)
+> try:
+>     import fasttext
+>     print('Imported fasttext:', fasttext)
+>     print('fasttext.__version__:', getattr(fasttext, '__version__', None))
+>     print('fasttext.__file__:', getattr(fasttext, '__file__', None))
+> except Exception:
+>     import traceback
+>     traceback.print_exc()
+> PY
+sys.executable: /usr/local/bin/python3
+sys.version: 3.13.1 (main, Jan 14 2025, 02:51:49) [GCC 12.2.0]
+Imported fasttext: <module 'fasttext' from '/usr/local/lib/python3.13/site-packages/fasttext/__init__.py'>
+fasttext.__version__: None
+fasttext.__file__: /usr/local/lib/python3.13/site-packages/fasttext/__init__.py
+root@0687b4352899:/app# python - <<'PY'
+> import sys
+> print('sys.executable:', sys.executable)
+> print('sys.version:', sys.version)
+> try:
+>     import fasttext
+>     print('Imported fasttext:', fasttext)
+>     print('fasttext.__version__:', getattr(fasttext, '__version__', None))
+>     print('fasttext.__file__:', getattr(fasttext, '__file__', None))
+> except Exception:
+>     import traceback
+>     traceback.print_exc()
+> PY
+sys.executable: /usr/local/bin/python
+sys.version: 3.13.1 (main, Jan 14 2025, 02:51:49) [GCC 12.2.0]
+Imported fasttext: <module 'fasttext' from '/usr/local/lib/python3.13/site-packages/fasttext/__init__.py'>
+fasttext.__version__: None
+fasttext.__file__: /usr/local/lib/python3.13/site-packages/fasttext/__init__.py
+root@0687b4352899:/app# python3 -m pip show fasttext || true
+Name: fasttext
+Version: 0.9.3
+Summary: fasttext Python bindings
+Home-page: https://github.com/facebookresearch/fastText
+Author: Onur Celebi
+Author-email: celebio@fb.com
+License: MIT
+Location: /usr/local/lib/python3.13/site-packages
+Requires: numpy, pybind11, setuptools
+Required-by:
+root@0687b4352899:/app# python3 -m pip list | grep -i fast || true
+fasttext   0.9.3
+root@0687b4352899:/app# ls -la /usr/local/lib/python3.13/site-packages/fasttext
+total 48
+drwxr-xr-x 5 root root  4096 Oct 14 10:35 .
+drwxr-xr-x 1 root root  4096 Oct 14 10:35 ..
+-rw-r--r-- 1 root root 19636 Oct 14 10:35 FastText.py
+-rw-r--r-- 1 root root   659 Oct 14 10:35 __init__.py
+drwxr-xr-x 2 root root  4096 Oct 14 10:35 __pycache__
+drwxr-xr-x 3 root root  4096 Oct 14 10:35 tests
+drwxr-xr-x 3 root root  4096 Oct 14 10:35 util
+root@0687b4352899:/app# python - <<'PY'
+> import fasttext, os, sys, traceback
+> print('fasttext module file:', fasttext.__file__)
+> print('CWD:', os.getcwd())
+> model_path = '/app/model.bin'
+> print('Loading model from', model_path)
+> try:
+>     m = fasttext.load_model(model_path)
+>     print('Model loaded:', type(m))
+>     print('Predict single string:')
+>     print(m.predict('hello world'))
+>     print('Predict list of strings:')
+>     print(m.predict(['hello world','test input']))
+> except Exception:
+>     traceback.print_exc()
+>     sys.exit(1)
+> PY
+fasttext module file: /usr/local/lib/python3.13/site-packages/fasttext/__init__.py
+CWD: /app
+Loading model from /app/model.bin
+Model loaded: <class 'fasttext.FastText._FastText'>
+Predict single string:
+Traceback (most recent call last):
+  File "<stdin>", line 10, in <module>
+  File "/usr/local/lib/python3.13/site-packages/fasttext/FastText.py", line 239, in predict
+    return labels, np.array(probs, copy=False)
+                   ~~~~~~~~^^^^^^^^^^^^^^^^^^^
+ValueError: Unable to avoid copy while creating an array as requested.
+If using `np.array(obj, copy=False)` replace it with `np.asarray(obj)` to allow a copy when needed (no behavior change in NumPy 1.x).
+For more details, see https://numpy.org/devdocs/numpy_2_0_migration_guide.html#adapting-to-changes-in-the-copy-keyword.
+root@0687b4352899:/app# grep -n "copy=False" /usr/local/lib/python3.13/site-packages/fasttext/FastText.py || true
+41:        return np.array(y_scores, copy=False), np.array(y_true, copy=False)
+56:        return np.array(precision, copy=False), np.array(recall, copy=False)
+239:            return labels, np.array(probs, copy=False)
+root@0687b4352899:/app# sed -n '220,260p' /usr/local/lib/python3.13/site-packages/fasttext/FastText.py
+                raise ValueError("predict processes one line at a time (remove '\\n')")
+            entry += "\n"
+            return entry
+
+        if type(text) == list:
+            text = [check(entry) for entry in text]
+            all_labels, all_probs = self.f.multilinePredict(
+                text, k, threshold, on_unicode_error
+            )
+
+            return all_labels, all_probs
+        else:
+            text = check(text)
+            predictions = self.f.predict(text, k, threshold, on_unicode_error)
+            if predictions:
+                probs, labels = zip(*predictions)
+            else:
+                probs, labels = ([], ())
+
+            return labels, np.array(probs, copy=False)
+
+    def get_input_matrix(self):
+        """
+        Get a reference to the full input matrix of a Model. This only
+        works if the model is not quantized.
+        """
+        if self.f.isQuant():
+            raise ValueError("Can't get quantized Matrix")
+        return np.array(self.f.getInputMatrix())
+
+    def get_output_matrix(self):
+        """
+        Get a reference to the full output matrix of a Model. This only
+        works if the model is not quantized.
+        """
+        if self.f.isQuant():
+            raise ValueError("Can't get quantized Matrix")
+        return np.array(self.f.getOutputMatrix())
+
+    def get_words(self, include_freq=False, on_unicode_error="strict"):
+        """
+root@0687b4352899:/app# cp /usr/local/lib/python3.13/site-packages/fasttext/FastText.py /usr/local/lib/python3.13/site-packages/fasttext/FastText.py.bak
+root@0687b4352899:/app# sed -i 's/np.array(probs, copy=False)/np.asarray(probs)/' /usr/local/lib/python3.13/site-packages/fasttext/FastText.py
+root@0687b4352899:/app# python - <<'PY'
+> import fasttext, traceback
+> m = fasttext.load_model('/app/model.bin')
+> print('Model loaded.')
+> try:
+>     print('Single prediction:', m.predict('hello world'))
+>     print('Batch prediction:', m.predict(['hello world','test input']))
+> except Exception:
+>     traceback.print_exc()
+> PY
+Model loaded.
+Single prediction: (('__label__4',), array([0.99451137]))
+Batch prediction: ([['__label__4'], ['__label__0']], [array([0.99451137], dtype=float32), array([0.8588828], dtype=float32)])
+root@0687b4352899:/app# sed -i 's/np.array(y_scores, copy=False)/np.asarray(y_scores)/' /usr/local/lib/python3.13/site-packages/fasttext/FastText.py
+root@0687b4352899:/app# sed -i 's/np.array(y_true, copy=False)/np.asarray(y_true)/' /usr/local/lib/python3.13/site-packages/fasttext/FastText.py
+root@0687b4352899:/app# sed -i 's/np.array(precision, copy=False)/np.asarray(precision)/' /usr/local/lib/python3.13/site-packages/fasttext/FastText.py
+root@0687b4352899:/app# sed -i 's/np.array(recall, copy=False)/np.asarray(recall)/' /usr/local/lib/python3.13/site-packages/fasttext/FastText.py
+root@0687b4352899:/app# grep -n "copy=False" /usr/local/lib/python3.13/site-packages/fasttext/FastText.py || true
+root@0687b4352899:/app# python - <<'PY'
+> import fasttext
+> m = fasttext.load_model('/app/model.bin')
+> print('Model loaded.')
+> print('Single prediction:', m.predict('hello world'))
+> print('Batch prediction:', m.predict(['hello world','test input']))
+> PY
+Model loaded.
+Single prediction: (('__label__4',), array([0.99451137]))
+Batch prediction: ([['__label__4'], ['__label__0']], [array([0.99451137], dtype=float32), array([0.8588828], dtype=float32)])
+root@0687b4352899:/app# python3 - <<'PY'
+> import fasttext
+> m = fasttext.load_model('/app/model.bin')
+> print('Model loaded.')
+> print('Single prediction:', m.predict('hello world'))
+> print('Batch prediction:', m.predict(['hello world','test input']))
+> PY
+Model loaded.
+Single prediction: (('__label__4',), array([0.99451137]))
+Batch prediction: ([['__label__4'], ['__label__0']], [array([0.99451137], dtype=float32), array([0.8588828], dtype=float32)])
+root@0687b4352899:/app#

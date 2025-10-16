@@ -1,0 +1,1936 @@
+root@27b01498d5ec:/app# ls -la
+total 16
+drwxr-xr-x 1 root root 4096 Oct 15 10:43 .
+drwxr-xr-x 1 root root 4096 Oct 15 10:43 ..
+drwxr-xr-x 1 root root 4096 Oct 15 10:43 data
+-rw-rw-r-- 1 root root 3420 Oct  8 15:44 schema.json
+root@27b01498d5ec:/app# cat schema.json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["metadata", "organization", "statistics"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["version", "timestamp", "generator"],
+      "properties": {
+        "version": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "generator": { "type": "string" }
+      }
+    },
+    "organization": {
+      "type": "object",
+      "required": ["name", "founded", "departments"],
+      "properties": {
+        "name": { "type": "string" },
+        "founded": { "type": "string", "format": "date" },
+        "departments": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "budget", "employees", "projects"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "budget": { "type": "number", "minimum": 0 },
+              "employees": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "object",
+                  "required": ["id", "name", "position", "skills", "years_of_service"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "name": { "type": "string" },
+                    "position": { "type": "string" },
+                    "skills": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": { "type": "string" }
+                    },
+                    "years_of_service": { "type": "integer", "minimum": 0 }
+                  }
+                }
+              },
+              "projects": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["name", "status", "members", "deadline"],
+                  "properties": {
+                    "name": { "type": "string" },
+                    "status": {
+                      "type": "string",
+                      "enum": ["Planning", "In Progress", "Testing", "Completed", "On Hold"]
+                    },
+                    "members": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "deadline": { "type": "string", "format": "date" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "required": [
+        "averageDepartmentBudget",
+        "totalEmployees",
+        "skillDistribution",
+        "departmentSizes",
+        "projectStatusDistribution",
+        "averageYearsOfService"
+      ],
+      "properties": {
+        "averageDepartmentBudget": { "type": "number" },
+        "totalEmployees": { "type": "integer" },
+        "skillDistribution": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "departmentSizes": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "projectStatusDistribution": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "averageYearsOfService": { "type": "number" }
+      }
+    }
+  }
+}root@27b01498d5ec:/app# sed -n '1,200p' departments.csv
+sed: can't read departments.csv: No such file or directory
+root@27b01498d5ec:/app# sed -n '1,200p' employees.csv
+sed: can't read employees.csv: No such file or directory
+root@27b01498d5ec:/app# sed -n '1,200p' projects.csv
+sed: can't read projects.csv: No such file or directory
+root@27b01498d5ec:/app# cat > processor.py << 'PY'
+       num = parse_number(v)
+                dept['metadata'][k] = num if num is not None else v
+            departments[str(dept_id)] = dept
+
+# Read employees and attach to departments
+employees = []
+if os.path.exists(employees_csv):
+    with open(employees_csv, newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            e = {k.strip(): (row[k].strip() if row[k] is not None else '') for k in row}
+            emp_id = e.get('id') or e.get('employee_id') or e.get('emp_id') or str(len(employees) + 1)
+            name = e.get('name') or e.get('full_name') or e.get('employee_name') or f"Employee {emp_id}"
+            dept_id = e.get('department_id') or e.get('dept_id') or e.get('department')
+            salary = parse_number(e.get('salary'))
+            role = e.get('role') or e.get('title') or e.get('position')
+            email = e.get('email')
+            # Build employee dict
+            ed = {
+                'id': str(emp_id),
+                'name': name,
+                'role': rol> #!/usr/bin/env python3
+> import csv
+> import json
+> import os
+> import sys
+> from datetime import datetime, timezone
+> from collections import defaultdict
+>
+> # Helper to try parse number
+> def parse_number(value):
+>     if value is None:
+,'ful>         return None
+>     s = str(value).strip()
+>     if s == "":
+>         return None
+>     try:
+>         if "." in s:
+>             return float(s)
+>         return int(s)
+>     except ValueError:
+>         return None
+>
+> # Load schema to read possible metadata like version or id
+> schema = {}
+> schema_path = os.path.join(os.getcwd(), 'schema.json')
+> if os.path.exists(schema_path):
+>     try:
+>         with open(schema_path, 'r', encoding='utf-8') as f:
+>             schema = json.load(f)
+>     except Exception:
+>         schema = {}
+>
+> schema_version = None
+> schema_id = None
+> org_name_in_schema = None
+>
+> # Try to extract hints from schema
+> if isinstance(schema, dict):
+>     schema_version = schema.get('version') or schema.get('$version')
+>     schema_id = schema.get('$id') or schema.get('id')
+>     # Try to find default org name if present
+>     # Search for a property named organization/metadata with a title or default
+>     def find_default_name(d):
+>         if isinstance(d, dict):
+>             for k, v in d.items():
+>                 if k == 'default' and isinstance(v, str):
+>                     return v
+>                 found = find_default_name(v)
+>                 if found:
+>                     return found
+>         elif isinstance(d, list):
+>             for it in d:
+>                 found = find_default_name(it)
+>                 if found:
+>                     return found
+>         return None
+>     org_name_in_schema = find_default_name(schema)
+>
+> # Paths for CSVs
+> base = os.getcwd()
+> departments_csv = os.path.join(base, 'departments.csv')
+> employees_csv = os.path.join(base, 'employees.csv')
+> projects_csv = os.path.join(base, 'projects.csv')
+>
+> # Read departments
+> departments = {}
+> if os.path.exists(departments_csv):
+>     with open(departments_csv, newline='', encoding='utf-8') as f:
+>         reader = csv.DictReader(f)
+>         for row in reader:
+>             # Normalize keys
+>             d = {k.strip(): (row[k].strip() if row[k] is not None else '') for k in row}
+>             # Identify department id
+>             dept_id = d.get('id') or d.get('department_id') or d.get('dept_id')
+>             if dept_id is None or dept_id == '':
+>                 # generate sequential id if missing
+>                 dept_id = str(len(departments) + 1)
+>             # Prepare base structure
+>             dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or f"Department {dept_id}"
+>             dept = {
+>                 'id': str(dept_id),
+>                 'name': dept_name,
+>                 'metadata': {},
+>                 'employees': [],
+>                 'projects': []
+ >             }
+>             # Include other department fields in metadata
+>             for k, v in d.items():
+>                 if k.lower() in ['id', 'department_id', 'dept_id', 'name', 'department_name', 'dept_name']:
+>                     continue
+>                 # Attempt numeric
+o>                 num = parse_number(v)
+>                 dept['metadata'][k] = num if num is not None else v
+>             departments[str(dept_id)] = dept
+>
+> # Read employees and attach to departments
+> employees = []
+> if os.path.exists(employees_csv):
+>     with open(employees_csv, newline='', encoding='utf-8') as f:
+>         reader = csv.DictReader(f)
+>         for row in reader:
+>             e = {k.strip(): (row[k].strip() if row[k] is not None else '') for k in row}
+>             emp_id = e.get('id') or e.get('employee_id') or e.get('emp_id') or str(len(employees) + 1)
+>             name = e.get('name') or e.get('full_name') or e.get('employee_name') or f"Employee {emp_id}"
+>             dept_id = e.get('department_id') or e.get('dept_id') or e.get('department')
+>             salary = parse_number(e.get('salary'))
+>             role = e.get('role') or e.get('title') or e.get('position')
+>             email = e.get('email')
+>             # Build employee dict
+>             ed = {
+>                 'id': str(emp_id),
+>                 'name': name,
+>                 'role': role,
+>                 'email': email,
+>                 'salary': salary
+>             }
+>             # Include remaining fields
+>             for k, v in e.items():
+>                 if k in ['id','employee_id','emp_id','name','full_name','employee_name','department_id','dept_id','department','salary','role','title','positi
+on','email']:
+>                     continue
+>                 num = parse_number(v)
+>                 ed[k] = num if num is not None else v
+>             employees.append((dept_id, ed))
+>
+> # Read projects and attach to departments
+> projects = []
+> if os.path.exists(projects_csv):
+>     with open(projects_csv, newline='', encoding='utf-8') as f:
+>         reader = csv.DictReader(f)
+>         for row in reader:
+>             p = {k.strip(): (row[k].strip() if row[k] is not None else '') for k in row}
+>             proj_id = p.get('id') or p.get('project_id') or p.get('proj_id') or str(len(projects) + 1)
+>             name = p.get('name') or p.get('project_name') or f"Project {proj_id}"
+>             dept_id = p.get('department_id') or p.get('dept_id') or p.get('department')
+>             budget = parse_number(p.get('budget'))
+>             status = p.get('status') or p.get('state')
+>             pd = {
+>                 'id': str(proj_id),
+>                 'name': name,
+>                 'status': status,
+>                 'budget': budget
+>             }
+>             for k, v in p.items():
+>                 if k in ['id','project_id','proj_id','name','project_name','department_id','dept_id','department','budget','status','state']:
+>                     continue
+>                 num = parse_number(v)
+>                 pd[k] = num if num is not None else v
+>             projects.append((dept_id, pd))
+>
+> # Ensure all referenced departments exist
+> for dept_id, _ in employees + projects:
+>     if dept_id and str(dept_id) not in departments:
+>         departments[str(dept_id)] = {
+>             'id': str(dept_id),
+>             'name': f"Department {dept_id}",
+>             'metadata': {},
+>             'employees': [],
+>             'projects': []
+>         }
+>
+> # Attach employees
+> for dept_id, ed in employees:
+>     key = str(dept_id) if dept_id is not None and str(dept_id) != '' else None
+>     if key is None:
+>         # Put under a special Unknown department
+>         key = 'unknown'
+>         if key not in departments:
+>             departments[key] = {
+>                 'id': key,
+>                 'name': 'Unknown Department',
+>                 'metadata': {},
+>                 'employees': [],
+>                 'projects': []
+>             }
+>     departments[key]['employees'].append(ed)
+>
+> # Attach projects
+> for dept_id, pd in projects:
+>     key = str(dept_id) if dept_id is not None and str(dept_id) != '' else None
+>     if key is None:
+>         key = 'unknown'
+>         if key not in departments:
+>             departments[key] = {
+>                 'id': key,
+>                 'name': 'Unknown Department',
+>                 'metadata': {},
+>                 'employees': [],
+>                 'projects': []
+>             }
+>     departments[key]['projects'].append(pd)
+>
+> # Compute statistics
+> total_departments = len(departments)
+> all_emps = [e for d in departments.values() for e in d['employees']]
+> all_projects = [p for d in departments.values() for p in d['projects']]
+>
+> def safe_vals(items, key):
+>     vals = []
+>     for it in items:
+>         v = it.get(key)
+>         if isinstance(v, (int, float)):
+>             vals.append(v)
+>         else:
+>             # try parse number
+>             num = parse_number(v)
+>             if num is not None:
+>                 vals.append(num)
+>     return vals
+>
+> salary_vals = safe_vals(all_emps, 'salary')
+> budget_vals = safe_vals(all_projects, 'budget')
+>
+> def avg(vals):
+>     return (sum(vals) / len(vals)) if vals else None
+>
+> statistics = {
+>     'counts': {
+>         'departments': total_departments,
+>         'employees': len(all_emps),
+>         'projects': len(all_projects)
+>     },
+>     'employees': {
+>         'salary_min': min(salary_vals) if salary_vals else None,
+>         'salary_max': max(salary_vals) if salary_vals else None,
+>         'salary_avg': avg(salary_vals)
+>     },
+>     'projects': {
+>         'budget_min': min(budget_vals) if budget_vals else None,
+>         'budget_max': max(budget_vals) if budget_vals else None,
+>         'budget_avg': avg(budget_vals)
+>     },
+>     'by_department': []
+> }
+>
+> for dept in sorted(departments.values(), key=lambda d: str(d['id'])):
+>     dept_salary_vals = safe_vals(dept['employees'], 'salary')
+>     dept_budget_vals = safe_vals(dept['projects'], 'budget')
+>     statistics['by_department'].append({
+>         'department_id': dept['id'],
+>         'department_name': dept['name'],
+>         'employee_count': len(dept['employees']),
+>         'project_count': len(dept['projects']),
+>         'salary_avg': avg(dept_salary_vals),
+>         'budget_avg': avg(dept_budget_vals)
+>     })
+>
+> # Organization metadata
+> org_metadata = {
+>     'generated_at': datetime.now(timezone.utc).isoformat(),
+>     'source': 'CSV import',
+>     'schema_id': schema_id,
+>     'schema_version': schema_version
+> }
+>
+> # Try to set organization name from schema default or environment
+> org_name = org_name_in_schema or os.environ.get('ORGANIZATION_NAME') or 'Organization'
+>
+> output = {
+>     'metadata': org_metadata,
+>     'organization': {
+>         'name': org_name
+>     },
+>     'departments': list(departments.values()),
+>     'statistics': statistics
+> }
+>
+> # If schema suggests a different top-level structure, attempt to adjust:
+> # For example, if schema has properties like { organization: { metadata, departments, statistics } }
+> try:
+>     props = schema.get('properties') if isinstance(schema, dict) else None
+>     if isinstance(props, dict):
+>         # Heuristic: if schema expects top-level 'organization' object with nested items
+>         if 'organization' in props and 'departments' not in props and 'statistics' not in props and 'metadata' not in props:
+>             output = {
+>                 'organization': {
+>                     'metadata': org_metadata,
+>                     'name': org_name,
+>                     'departments': list(departments.values()),
+>                     'statistics': statistics
+>                 }
+>             }
+> except Exception:
+>     pass
+>
+> # Write organization.json
+> out_path = os.path.join(base, 'organization.json')
+> with open(out_path, 'w', encoding='utf-8') as f:
+>     json.dump(output, f, ensure_ascii=False, indent=2)
+>
+> print(out_path)
+> PY
+root@27b01498d5ec:/app# chmod +x processor.py
+root@27b01498d5ec:/app# python3 processor.py
+/app/organization.json
+root@27b01498d5ec:/app# sed -n '1,200p' organization.json
+{
+  "metadata": {
+    "generated_at": "2025-10-15T10:44:39.202059+00:00",
+    "source": "CSV import",
+    "schema_id": null,
+    "schema_version": null
+  },
+  "organization": {
+    "name": "Organization"
+  },
+  "departments": [],
+  "statistics": {
+    "counts": {
+      "departments": 0,
+      "employees": 0,
+      "projects": 0
+    },
+    "employees": {
+      "salary_min": null,
+      "salary_max": null,
+      "salary_avg": null
+    },
+    "projects": {
+      "budget_min": null,
+      "budget_max": null,
+      "budget_avg": null
+    },
+    "by_department": []
+  }
+}root@27b01498d5ec:/app# ls -la data
+total 20
+drwxr-xr-x 1 root root 4096 Oct 15 10:43 .
+drwxr-xr-x 1 root root 4096 Oct 15 10:44 ..
+-rw-rw-r-- 1 root root  154 Oct  8 15:44 departments.csv
+-rw-rw-r-- 1 root root  992 Oct  8 15:44 employees.csv
+-rw-rw-r-- 1 root root  440 Oct  8 15:44 projects.csv
+root@27b01498d5ec:/app# sed -n '1,200p' data/departments.csv
+id,name,budget
+D001,Engineering,1500000
+D002,Marketing,800000
+D003,Human Resources,400000
+D004,Research & Development,2000000
+D005,Customer Support,600000root@27b01498d5ec:/app# sed -n '1,200p' data/employees.csv
+id,name,position,skills,years_of_service,department_id
+D001-E001,Cristiano Ronaldo,Manager,Python;Leadership;Project Management,10,D001
+D001-E002,Bernardo Silva,Senior Developer,JavaScript;Python;Cloud Services,7,D001
+D001-E003,Sergio Ramos,Team Lead,Java;C++;DevOps,12,D001
+D002-E001,Kylian Mbappe,Designer,UI/UX Design;Communication;Marketing,5,D002
+D002-E002,Vinicius Junior,Specialist,Content Creation;Marketing;Communication,3,D002
+D003-E001,Antonio Silva,Director,Leadership;Communication;Project Management,8,D003
+D003-E002,Diogo Dalot,Coordinator,SQL;Data Analysis;Communication,4,D003
+D004-E001,Lewis Hamilton,Senior Developer,Python;Machine Learning;Data Analysis,9,D004
+D004-E002,Charles Leclerc,Researcher,Research;Python;Data Analysis,6,D004
+D004-E003,Max Verstappen,Analyst,SQL;Data Analysis;Machine Learning,7,D004
+D005-E001,Jude Bellingham,Team Lead,Customer Service;Leadership;Communication,5,D005
+D005-E002,Luka Modric,Specialist,Customer Service;Communication;Sales,11,D005root@27b01498d5ec:/app# sed -n '1,200p' data/projects.csv
+name,status,member_ids,deadline,department_id
+Madrid,In Progress,D001-E001;D001-E002;D001-E003,2025-06-30,D001
+Ferrari,Completed,D001-E002;D001-E003,2025-03-15,D001
+RedBull,Planning,D002-E001;D002-E002,2025-09-10,D002
+McLaren,In Progress,D003-E001;D003-E002,2025-07-20,D003
+Mercedes,Testing,D004-E001;D004-E002;D004-E003,2025-05-15,D004
+Hala,In Progress,D004-E002;D004-E003,2025-08-25,D004
+United,On Hold,D005-E001;D005-E002,2025-11-30,D005root@27b01498d5ec:/app# cat > processor.py << 'PY'
+> #!/usr/bin/env python3
+> import csv
+> import json
+> import os
+> from datetime import datetime, date, timezone
+>
+> DATA_DIR = os.path.join(os.getcwd(), 'data')
+>
+> ALLOWED_STATUSES = {s.lower(): s for s in [
+>     'Planning', 'In Progress', 'Testing', 'Completed', 'On Hold'
+> ]}
+>
+> # Helpers
+>
+> def read_csv(path):
+>     rows = []
+>     if os.path.exists(path):
+>         with open(path, newline='', encoding='utf-8') as f:
+>             reader = csv.DictReader(f)
+>             for row in reader:
+>                 norm = {}
+>                 for k, v in row.items():
+>                     nk = (k or '').strip()
+>                     vv = (v or '').strip()
+>                     norm[nk] = vv
+>                 rows.append(norm)
+>     return rows
+>
+>
+> def parse_number(s):
+>     if s is None:
+>         return None
+>     t = str(s).strip().replace(',', '')
+>     if t == '':
+>         return None
+>     try:
+>         if '.' in t:
+>             return float(t)
+>         return int(t)
+>     except Exception:
+>         return None
+>
+>
+> def parse_date(s):
+>     if not s:
+>         return None
+>     t = s.strip()
+>     # Try common formats
+>     fmts = ['%Y-%m-%d', '%Y/%m/%d', '%d-%m-%Y', '%m/%d/%Y', '%d/%m/%Y']
+>     for fmt in fmts:
+>         try:
+>             dt = datetime.strptime(t, fmt)
+>             return dt.date().isoformat()
+>         except Exception:
+>             pass
+>     # Try date-time
+>     try:
+>         dt = datetime.fromisoformat(t.replace('Z', '+00:00'))
+>         return dt.date().isoformat()
+>     except Exception:
+>         return None
+>
+>
+> def years_between(start_date: date, end_date: date) -> int:
+>     years = end_date.year - start_date.year
+>     if (end_date.month, end_date.day) < (start_date.month, start_date.day):
+>         years -= 1
+>     return max(0, years)
+>
+> # Load CSVs
+> departments_rows = read_csv(os.path.join(DATA_DIR, 'departments.csv'))
+> employees_rows = read_csv(os.path.join(DATA_DIR, 'employees.csv'))
+> projects_rows = read_csv(os.path.join(DATA_DIR, 'projects.csv'))
+>
+> # Build department structures
+> departments = {}
+> for r in departments_rows:
+>     dept_id = r.get('id') or r.get('department_id') or r.get('dept_id') or r.get('code')
+>     if not dept_id:
+>         dept_id = str(len(departments) + 1)
+>     name = r.get('name') or r.get('department_name') or r.get('dept_name') or f'Department {dept_id}'
+>     budget = parse_number(r.get('budget') or r.get('annual_budget') or r.get('dept_budget'))
+>     if budget is None:
+>         budget = 0.0
+>     departments[str(dept_id)] = {
+>         'id': str(dept_id),
+>         'name': name,
+>         'budget': float(budget),
+>         'employees': [],
+>         'projects': []
+>     }
+>
+> # Prepare employee ID -> name map and attach employees
+> emp_id_to_name = {}
+>
+> def split_list(val):
+>     if not val:
+>         return []
+>     parts = []
+>     for sep in [';', ',', '|']:
+>         if sep in val:
+>             parts = [p.strip() for p in val.split(sep)]
+>             break
+>     if not parts:
+>         parts = [val.strip()]
+>     return [p for p in parts if p]
+>
+> # Determine founded date from earliest hire_date if available
+> all_hire_dates = []
+>
+> today = date.today()
+> for r in employees_rows:
+>     emp_id = r.get('id') or r.get('employee_id') or r.get('emp_id') or str(len(emp_id_to_name) + 1)
+>     name = r.get('name') or r.get('full_name') or r.get('employee_name') or f'Employee {emp_id}'
+>     emp_id_to_name[str(emp_id)] = name
+>
+> # Second pass to build employees with details
+> for r in employees_rows:
+>     emp_id = r.get('id') or r.get('employee_id') or r.get('emp_id') or str(len(emp_id_to_name) + 1)
+>     name = r.get('name') or r.get('full_name') or r.get('employee_name') or f'Employee {emp_id}'
+>     dept_id = r.get('department_id') or r.get('dept_id') or r.get('department')
+>     position = r.get('position') or r.get('title') or r.get('role') or 'Staff'
+>     skills_raw = r.get('skills') or r.get('skillset') or r.get('skill_list') or ''
+>     skills = split_list(skills_raw)
+>     if not skills:
+>         # Fallback to position as a skill to satisfy minItems
+>         skills = [position]
+>     yos_raw = r.get('years_of_service') or r.get('years') or r.get('experience_years')
+>     years_of_service = None
+>     num = parse_number(yos_raw)
+>     if isinstance(num, (int, float)):
+>         years_of_service = int(num)
+>     else:
+>         # Try compute from hire date
+>         hire_date_str = r.get('hire_date') or r.get('hired_date') or r.get('start_date') or r.get('started')
+>         hire_iso = parse_date(hire_date_str) if hire_date_str else None
+>         if hire_iso:
+>             try:
+>                 hdt = datetime.strptime(hire_iso, '%Y-%m-%d').date()
+>                 years_of_service = years_between(hdt, today)
+>                 all_hire_dates.append(hdt)
+>             except Exception:
+>                 years_of_service = 0
+>         else:
+>             years_of_service = 0
+>     emp_obj = {
+>         'id': str(emp_id),
+>         'name': name,
+>         'position': position,
+>         'skills': skills,
+>         'years_of_service': int(years_of_service)
+>     }
+>     # Ensure department exists
+>     key = str(dept_id) if dept_id not in (None, '') else 'unknown'
+>     if key not in departments:
+>         departments[key] = {
+>             'id': key,
+>             'name': 'Unknown',
+>             'budget': 0.0,
+>             'employees': [],
+>             'projects': []
+>         }
+>     departments[key]['employees'].append(emp_obj)
+>
+> # Build projects and attach
+> for r in projects_rows:
+>     dept_id = r.get('department_id') or r.get('dept_id') or r.get('department')
+>     name = r.get('name') or r.get('project_name') or 'Project'
+>     status_raw = (r.get('status') or r.get('state') or 'On Hold').strip()
+>     status_key = status_raw.lower()
+>     # Normalize common variants
+>     if status_key in ('inprogress', 'in_progress', 'progress'):
+>         status_key = 'in progress'
+>     elif status_key in ('onhold', 'hold'):
+>         status_key = 'on hold'
+>     elif status_key in ('planned',):
+>         status_key = 'planning'
+>     status = ALLOWED_STATUSES.get(status_key, 'On Hold')
+>     members_raw = r.get('members') or r.get('team') or r.get('assignees') or ''
+>     member_tokens = split_list(members_raw)
+>     members = []
+>     for tok in member_tokens:
+>         # Try ID then fallback to raw/name
+>         if tok in emp_id_to_name:
+>             members.append(emp_id_to_name[tok])
+>         else:
+>             # If token looks like an ID (digits) try again
+>             if tok.isdigit() and str(tok) in emp_id_to_name:
+>                 members.append(emp_id_to_name[str(tok)])
+>             else:
+>                 members.append(tok)
+>     deadline_str = r.get('deadline') or r.get('due_date') or r.get('target_date') or ''
+>     deadline_iso = parse_date(deadline_str) or '2099-12-31'
+>     proj_obj = {
+>         'name': name,
+>         'status': status,
+>         'members': members,
+>         'deadline': deadline_iso
+>     }
+>     key = str(dept_id) if dept_id not in (None, '') else 'unknown'
+>     if key not in departments:
+>         departments[key] = {
+>             'id': key,
+>             'name': 'Unknown',
+>             'budget': 0.0,
+>             'employees': [],
+>             'projects': []
+>         }
+>     departments[key]['projects'].append(proj_obj)
+>
+> # If any department has no budget from CSV, optionally infer from project budgets if present
+> for r in projects_rows:
+>     b = parse_number(r.get('budget') or r.get('cost') or r.get('allocated_budget'))
+>     if b is not None:
+>         dept_id = r.get('department_id') or r.get('dept_id') or r.get('department')
+>         key = str(dept_id) if dept_id not in (None, '') else 'unknown'
+>         if key in departments and departments[key].get('budget', 0) == 0:
+>             # If multiple projects with budget, we can sum as department budget if originally 0
+>             departments[key]['budget'] += float(b)
+>
+> # Compute statistics
+> all_depts = list(departments.values())
+> # Filter out placeholder 'unknown' if it was created but has no real id in data
+> # Keep it anyway as it may have employees/projects; schema only requires minItems
+>
+> budgets = [d['budget'] for d in all_depts if isinstance(d.get('budget'), (int, float))]
+> avg_dept_budget = (sum(budgets) / len(budgets)) if budgets else 0.0
+>
+> total_employees = sum(len(d['employees']) for d in all_depts)
+>
+> skill_distribution = {}
+> for d in all_depts:
+>     for e in d['employees']:
+>         for s in e.get('skills', []):
+>             if not s:
+>                 continue
+>             skill_distribution[s] = skill_distribution.get(s, 0) + 1
+>
+> department_sizes = {d['name']: len(d['employees']) for d in all_depts}
+>
+> status_distribution = {}
+> for d in all_depts:
+>     for p in d['projects']:
+>         st = p.get('status') or 'On Hold'
+>         status_distribution[st] = status_distribution.get(st, 0) + 1
+>
+> all_yos = []
+> for d in all_depts:
+>     for e in d['employees']:
+>         y = e.get('years_of_service')
+>         if isinstance(y, int):
+>             all_yos.append(y)
+>         else:
+>             try:
+>                 all_yos.append(int(y))
+>             except Exception:
+>                 pass
+> avg_yos = (sum(all_yos) / len(all_yos)) if all_yos else 0.0
+>
+> # Organization metadata and details
+> metadata = {
+>     'version': '1.0.0',
+>     'timestamp': datetime.now(timezone.utc).isoformat(),
+>     'generator': 'csv-to-json-processor'
+> }
+>
+> # Derive organization name and founded date heuristically
+> org_name = os.environ.get('ORGANIZATION_NAME') or 'ACME Corporation'
+> if all_hire_dates:
+>     earliest = min(all_hire_dates)
+>     founded = date(earliest.year, 1, 1).isoformat()
+> else:
+>     founded = '2000-01-01'
+>
+> output = {
+>     'metadata': metadata,
+>     'organization': {
+>         'name': org_name,
+>         'founded': founded,
+>         'departments': all_depts
+>     },
+>     'statistics': {
+>         'averageDepartmentBudget': avg_dept_budget,
+>         'totalEmployees': total_employees,
+>         'skillDistribution': skill_distribution,
+>         'departmentSizes': department_sizes,
+>         'projectStatusDistribution': status_distribution,
+>         'averageYearsOfService': avg_yos
+>     }
+> }
+>
+> with open(os.path.join(os.getcwd(), 'organization.json'), 'w', encoding='utf-8') as f:
+>     json.dump(output, f, ensure_ascii=False, indent=2)
+>
+> print('/app/organization.json')
+> PY
+root@27b01498d5ec:/app# chmod +x processor.py
+root@27b01498d5ec:/app# python3 processor.py
+/app/organization.json
+root@27b01498d5ec:/app# sed -n '1,200p' organization.json
+{
+  "metadata": {
+    "version": "1.0.0",
+    "timestamp": "2025-10-15T10:46:32.967132+00:00",
+    "generator": "csv-to-json-processor"
+  },
+  "organization": {
+    "name": "ACME Corporation",
+    "founded": "2000-01-01",
+    "departments": [
+      {
+        "id": "D001",
+        "name": "Engineering",
+        "budget": 1500000.0,
+        "employees": [
+          {
+            "id": "D001-E001",
+            "name": "Cristiano Ronaldo",
+            "position": "Manager",
+            "skills": [
+              "Python",
+              "Leadership",
+              "Project Management"
+            ],
+            "years_of_service": 10
+          },
+          {
+            "id": "D001-E002",
+            "name": "Bernardo Silva",
+            "position": "Senior Developer",
+            "skills": [
+              "JavaScript",
+              "Python",
+              "Cloud Services"
+            ],
+            "years_of_service": 7
+          },
+          {
+            "id": "D001-E003",
+            "name": "Sergio Ramos",
+            "position": "Team Lead",
+            "skills": [
+              "Java",
+              "C++",
+              "DevOps"
+            ],
+            "years_of_service": 12
+          }
+        ],
+        "projects": [
+          {
+            "name": "Madrid",
+            "status": "In Progress",
+            "members": [],
+            "deadline": "2025-06-30"
+          },
+          {
+            "name": "Ferrari",
+            "status": "Completed",
+            "members": [],
+            "deadline": "2025-03-15"
+          }
+        ]
+      },
+      {
+        "id": "D002",
+        "name": "Marketing",
+        "budget": 800000.0,
+        "employees": [
+          {
+            "id": "D002-E001",
+            "name": "Kylian Mbappe",
+            "position": "Designer",
+            "skills": [
+              "UI/UX Design",
+              "Communication",
+              "Marketing"
+            ],
+            "years_of_service": 5
+          },
+          {
+            "id": "D002-E002",
+            "name": "Vinicius Junior",
+            "position": "Specialist",
+            "skills": [
+              "Content Creation",
+              "Marketing",
+              "Communication"
+            ],
+            "years_of_service": 3
+          }
+        ],
+        "projects": [
+          {
+            "name": "RedBull",
+            "status": "Planning",
+            "members": [],
+            "deadline": "2025-09-10"
+          }
+        ]
+      },
+      {
+        "id": "D003",
+        "name": "Human Resources",
+        "budget": 400000.0,
+        "employees": [
+          {
+            "id": "D003-E001",
+            "name": "Antonio Silva",
+            "position": "Director",
+            "skills": [
+              "Leadership",
+              "Communication",
+              "Project Management"
+            ],
+            "years_of_service": 8
+          },
+          {
+            "id": "D003-E002",
+            "name": "Diogo Dalot",
+            "position": "Coordinator",
+            "skills": [
+              "SQL",
+              "Data Analysis",
+              "Communication"
+            ],
+            "years_of_service": 4
+          }
+        ],
+        "projects": [
+          {
+            "name": "McLaren",
+            "status": "In Progress",
+            "members": [],
+            "deadline": "2025-07-20"
+          }
+        ]
+      },
+      {
+        "id": "D004",
+        "name": "Research & Development",
+        "budget": 2000000.0,
+        "employees": [
+          {
+            "id": "D004-E001",
+            "name": "Lewis Hamilton",
+            "position": "Senior Developer",
+            "skills": [
+              "Python",
+              "Machine Learning",
+              "Data Analysis"
+            ],
+            "years_of_service": 9
+          },
+          {
+            "id": "D004-E002",
+            "name": "Charles Leclerc",
+            "position": "Researcher",
+            "skills": [
+              "Research",
+              "Python",
+              "Data Analysis"
+            ],
+            "years_of_service": 6
+          },
+          {
+            "id": "D004-E003",
+            "name": "Max Verstappen",
+            "position": "Analyst",
+            "skills": [
+              "SQL",
+              "Data Analysis",
+              "Machine Learning"
+            ],
+            "years_of_service": 7
+          }
+        ],
+        "projects": [
+          {
+            "name": "Mercedes",
+            "status": "Testing",
+            "members": [],
+            "deadline": "2025-05-15"
+          },
+          {
+            "name": "Hala",
+            "status": "In Progress",
+            "members": [],
+            "deadline": "2025-08-25"
+          }
+        ]
+      },
+      {
+        "id": "D005",
+        "name": "Customer Support",
+        "budget": 600000.0,
+        "employees": [
+          {
+            "id": "D005-E001",
+            "name": "Jude Bellingham",
+root@27b01498d5ec:/app# cat > processor.py << 'PY'
+tment_id') or r.get('dept_id') or r.get('code')
+    if not dept_id:
+        dept_id = str(len(departments) + 1)
+    name = r.get('name') or r.get('department_name') or r.get('dept_name') or f'Department {dept_id}'
+    budget = parse_number(r.get('budget') or r.get('annual_budget') or r.get('dept_budget'))
+    if budget is None:
+        budget = 0.0
+    departments[str(dept_id)] = {
+        'id': str(dept_id),
+        'name': name,
+        'budget': float(budget),
+        'employees': [],
+        'projects': []
+    }
+
+# Prepare employee ID -> name map and attach employees
+emp_id_to_name = {}
+
+def split_list(val):
+    if not val:
+        return []
+    parts = []
+    for sep in [';', ',', '|']:
+        if sep in val:
+            parts = [p.strip() for p in val.split(sep)]
+            break
+    if not parts:
+        parts = [val.strip()]
+    return [p for p in parts if p]
+
+# Determine founded date from earliest hire_date if available
+all_hire_dates = []
+
+today = date.today()
+for r in employees_rows:
+    emp_id = r.get('id') or r.get('employee_id') or r.get('emp_id') or str(len(emp_id_to_name) + 1)
+    name = r.get('name') or r.get('full_name') or r.get('employee_name') or f'Employee {emp_id}'
+    emp_id_to_name[str(emp_id)] = name
+
+# Build employees with details
+for r in employees_rows:
+    emp_id = r.get('id') or r.get('employee_id') or r.get('emp_id') or str(len(emp_id_to_name) + 1)
+    name = r.get('name') or r.get('full_name') or r.get('employee_name') or f'Employee {emp_id}'
+    dept_id = r.get('department_id') or r.get('dept_id') or r.get('department')
+    position = r.get('position') or r.get('title') or r.get('role') or 'Staff'
+    skills_raw = r.get('skills') or r.get('skillset') or r.get('skill_list') or ''
+    skills = split_list(skills_raw)
+    if not skills:
+        skills = [position]
+    yos_raw = r.get('years_of_service') or r.get('years') or r.get('experience_years')
+    years_of_service = None
+    num = parse_number(yos_raw)
+    if isinstance(num, (int, float)):
+        years_of_service = int(num)
+    else:
+        hire_date> #!/usr/bin/env python3
+> import csv
+> import json
+> import os
+> from datetime import datetime, date, timezone
+>
+> DATA_DIR = os.path.join(os.getcwd(), 'data')
+>
+> ALLOWED_STATUSES = {s.lower(): s for s in [
+>     'Planning', 'In Progress', 'Testing', 'Completed', 'On Hold'
+> ]}
+>
+> # Helpers
+>
+> def read_csv(path):
+>     rows = []
+>     if os.path.exists(path):
+>         with open(path, newline='', encoding='utf-8') as f:
+>             reader = csv.DictReader(f)
+>             for row in reader:
+>                 norm = {}
+>                 for k, v in row.items():
+>                     nk = (k or '').strip()
+>                     vv = (v or '').strip()
+>                     norm[nk] = vv
+>                 rows.append(norm)
+>     return rows
+>
+>
+> def parse_number(s):
+>     if s is None:
+>         return None
+>     t = str(s).strip().replace(',', '')
+>     if t == '':
+>         return None
+>     try:
+>         if '.' in t:
+>             return float(t)
+>         return int(t)
+>     except Exception:
+>         return None
+>
+>
+> def parse_date(s):
+>     if not s:
+>         return None
+>     t = s.strip()
+>     # Try common formats
+>     fmts = ['%Y-%m-%d', '%Y/%m/%d', '%d-%m-%Y', '%m/%d/%Y', '%d/%m/%Y']
+>     for fmt in fmts:
+>         try:
+>             dt = datetime.strptime(t, fmt)
+>             return dt.date().isoformat()
+>         except Exception:
+>             pass
+>     # Try date-time
+>     try:
+>         dt = datetime.fromisoformat(t.replace('Z', '+00:00'))
+>         return dt.date().isoformat()
+>     except Exception:
+>         return None
+>
+>
+> def years_between(start_date: date, end_date: date) -> int:
+>     years = end_date.year - start_date.year
+>     if (end_date.month, end_date.day) < (start_date.month, start_date.day):
+>         years -= 1
+>     return max(0, years)
+>
+> # Load CSVs
+> departments_rows = read_csv(os.path.join(DATA_DIR, 'departments.csv'))
+> employees_rows = read_csv(os.path.join(DATA_DIR, 'employees.csv'))
+> projects_rows = read_csv(os.path.join(DATA_DIR, 'projects.csv'))
+>
+> # Build department structures
+> departments = {}
+> for r in departments_rows:
+>     dept_id = r.get('id') or r.get('department_id') or r.get('dept_id') or r.get('code')
+>     if not dept_id:
+>         dept_id = str(len(departments) + 1)
+>     name = r.get('name') or r.get('department_name') or r.get('dept_name') or f'Department {dept_id}'
+>     budget = parse_number(r.get('budget') or r.get('annual_budget') or r.get('dept_budget'))
+>     if budget is None:
+>         budget = 0.0
+>     departments[str(dept_id)] = {
+>         'id': str(dept_id),
+>         'name': name,
+>         'budget': float(budget),
+>         'employees': [],
+>         'projects': []
+>     }
+>
+> # Prepare employee ID -> name map and attach employees
+> emp_id_to_name = {}
+>
+> def split_list(val):
+>     if not val:
+>         return []
+>     parts = []
+>     for sep in [';', ',', '|']:
+>         if sep in val:
+>             parts = [p.strip() for p in val.split(sep)]
+>             break
+>     if not parts:
+>         parts = [val.strip()]
+>     return [p for p in parts if p]
+>
+> # Determine founded date from earliest hire_date if available
+> all_hire_dates = []
+>
+> today = date.today()
+> for r in employees_rows:
+>     emp_id = r.get('id') or r.get('employee_id') or r.get('emp_id') or str(len(emp_id_to_name) + 1)
+>     name = r.get('name') or r.get('full_name') or r.get('employee_name') or f'Employee {emp_id}'
+>     emp_id_to_name[str(emp_id)] = name
+>
+> # Build employees with details
+> for r in employees_rows:
+>     emp_id = r.get('id') or r.get('employee_id') or r.get('emp_id') or str(len(emp_id_to_name) + 1)
+>     name = r.get('name') or r.get('full_name') or r.get('employee_name') or f'Employee {emp_id}'
+>     dept_id = r.get('department_id') or r.get('dept_id') or r.get('department')
+>     position = r.get('position') or r.get('title') or r.get('role') or 'Staff'
+>     skills_raw = r.get('skills') or r.get('skillset') or r.get('skill_list') or ''
+>     skills = split_list(skills_raw)
+>     if not skills:
+>         skills = [position]
+>     yos_raw = r.get('years_of_service') or r.get('years') or r.get('experience_years')
+>     years_of_service = None
+>     num = parse_number(yos_raw)
+>     if isinstance(num, (int, float)):
+>         years_of_service = int(num)
+>     else:
+>         hire_date_str = r.get('hire_date') or r.get('hired_date') or r.get('start_date') or r.get('started')
+>         hire_iso = parse_date(hire_date_str) if hire_date_str else None
+>         if hire_iso:
+>             try:
+>                 hdt = datetime.strptime(hire_iso, '%Y-%m-%d').date()
+>                 years_of_service = years_between(hdt, today)
+>                 all_hire_dates.append(hdt)
+>             except Exception:
+>                 years_of_service = 0
+>         else:
+>             years_of_service = 0
+>     emp_obj = {
+>         'id': str(emp_id),
+>         'name': name,
+>         'position': position,
+>         'skills': skills,
+>         'years_of_service': int(years_of_service)
+>     }
+>     key = str(dept_id) if dept_id not in (None, '') else 'unknown'
+>     if key not in departments:
+>         departments[key] = {
+>             'id': key,
+>             'name': 'Unknown',
+>             'budget': 0.0,
+>             'employees': [],
+>             'projects': []
+>         }
+>     departments[key]['employees'].append(emp_obj)
+>
+> # Build projects and attach
+> for r in projects_rows:
+>     dept_id = r.get('department_id') or r.get('dept_id') or r.get('department')
+>     name = r.get('name') or r.get('project_name') or 'Project'
+>     status_raw = (r.get('status') or r.get('state') or 'On Hold').strip()
+>     status_key = status_raw.lower()
+>     if status_key in ('inprogress', 'in_progress', 'progress'):
+>         status_key = 'in progress'
+>     elif status_key in ('onhold', 'hold'):
+>         status_key = 'on hold'
+>     elif status_key in ('planned',):
+>         status_key = 'planning'
+>     status = ALLOWED_STATUSES.get(status_key, 'On Hold')
+>     members_raw = r.get('members') or r.get('member_ids') or r.get('team') or r.get('assignees') or ''
+>     member_tokens = split_list(members_raw)
+>     members = []
+>     for tok in member_tokens:
+>         if tok in emp_id_to_name:
+>             members.append(emp_id_to_name[tok])
+>         elif tok.isdigit() and str(tok) in emp_id_to_name:
+>             members.append(emp_id_to_name[str(tok)])
+>         else:
+>             members.append(tok)
+>     deadline_str = r.get('deadline') or r.get('due_date') or r.get('target_date') or ''
+>     deadline_iso = parse_date(deadline_str) or '2099-12-31'
+>     proj_obj = {
+>         'name': name,
+>         'status': status,
+>         'members': members,
+>         'deadline': deadline_iso
+>     }
+>     key = str(dept_id) if dept_id not in (None, '') else 'unknown'
+>     if key not in departments:
+>         departments[key] = {
+>             'id': key,
+>             'name': 'Unknown',
+>             'budget': 0.0,
+>             'employees': [],
+>             'projects': []
+>         }
+>     departments[key]['projects'].append(proj_obj)
+>
+> # Infer department budget from project budgets if missing
+> for r in projects_rows:
+>     b = parse_number(r.get('budget') or r.get('cost') or r.get('allocated_budget'))
+>     if b is not None:
+>         dept_id = r.get('department_id') or r.get('dept_id') or r.get('department')
+>         key = str(dept_id) if dept_id not in (None, '') else 'unknown'
+>         if key in departments and departments[key].get('budget', 0) == 0:
+>             departments[key]['budget'] += float(b)
+>
+> # Compute statistics
+> all_depts = list(departments.values())
+>
+> budgets = [d['budget'] for d in all_depts if isinstance(d.get('budget'), (int, float))]
+> avg_dept_budget = (sum(budgets) / len(budgets)) if budgets else 0.0
+>
+> total_employees = sum(len(d['employees']) for d in all_depts)
+>
+> skill_distribution = {}
+> for d in all_depts:
+>     for e in d['employees']:
+>         for s in e.get('skills', []):
+>             if not s:
+>                 continue
+>             skill_distribution[s] = skill_distribution.get(s, 0) + 1
+>
+> department_sizes = {d['name']: len(d['employees']) for d in all_depts}
+>
+> status_distribution = {}
+> for d in all_depts:
+>     for p in d['projects']:
+>         st = p.get('status') or 'On Hold'
+>         status_distribution[st] = status_distribution.get(st, 0) + 1
+>
+> all_yos = []
+> for d in all_depts:
+>     for e in d['employees']:
+>         y = e.get('years_of_service')
+>         if isinstance(y, int):
+>             all_yos.append(y)
+>         else:
+>             try:
+>                 all_yos.append(int(y))
+>             except Exception:
+>                 pass
+> avg_yos = (sum(all_yos) / len(all_yos)) if all_yos else 0.0
+>
+> # Organization metadata and details
+> metadata = {
+>     'version': '1.0.0',
+>     'timestamp': datetime.now(timezone.utc).isoformat(),
+>     'generator': 'csv-to-json-processor'
+> }
+>
+> org_name = os.environ.get('ORGANIZATION_NAME') or 'ACME Corporation'
+> if all_hire_dates:
+>     earliest = min(all_hire_dates)
+>     founded = date(earliest.year, 1, 1).isoformat()
+> else:
+>     founded = '2000-01-01'
+>
+> output = {
+>     'metadata': metadata,
+>     'organization': {
+>         'name': org_name,
+>         'founded': founded,
+>         'departments': all_depts
+>     },
+>     'statistics': {
+>         'averageDepartmentBudget': avg_dept_budget,
+>         'totalEmployees': total_employees,
+>         'skillDistribution': skill_distribution,
+>         'departmentSizes': department_sizes,
+>         'projectStatusDistribution': status_distribution,
+>         'averageYearsOfService': avg_yos
+>     }
+> }
+>
+> with open(os.path.join(os.getcwd(), 'organization.json'), 'w', encoding='utf-8') as f:
+>     json.dump(output, f, ensure_ascii=False, indent=2)
+>
+> print('/app/organization.json')
+> PY
+root@27b01498d5ec:/app# chmod +x processor.py
+root@27b01498d5ec:/app# python3 processor.py
+/app/organization.json
+root@27b01498d5ec:/app# sed -n '1,240p' organization.json
+{
+  "metadata": {
+    "version": "1.0.0",
+    "timestamp": "2025-10-15T10:47:10.300504+00:00",
+    "generator": "csv-to-json-processor"
+  },
+  "organization": {
+    "name": "ACME Corporation",
+    "founded": "2000-01-01",
+    "departments": [
+      {
+        "id": "D001",
+        "name": "Engineering",
+        "budget": 1500000.0,
+        "employees": [
+          {
+            "id": "D001-E001",
+            "name": "Cristiano Ronaldo",
+            "position": "Manager",
+            "skills": [
+              "Python",
+              "Leadership",
+              "Project Management"
+            ],
+            "years_of_service": 10
+          },
+          {
+            "id": "D001-E002",
+            "name": "Bernardo Silva",
+            "position": "Senior Developer",
+            "skills": [
+              "JavaScript",
+              "Python",
+              "Cloud Services"
+            ],
+            "years_of_service": 7
+          },
+          {
+            "id": "D001-E003",
+            "name": "Sergio Ramos",
+            "position": "Team Lead",
+            "skills": [
+              "Java",
+              "C++",
+              "DevOps"
+            ],
+            "years_of_service": 12
+          }
+        ],
+        "projects": [
+          {
+            "name": "Madrid",
+            "status": "In Progress",
+            "members": [
+              "Cristiano Ronaldo",
+              "Bernardo Silva",
+              "Sergio Ramos"
+            ],
+            "deadline": "2025-06-30"
+          },
+          {
+            "name": "Ferrari",
+            "status": "Completed",
+            "members": [
+              "Bernardo Silva",
+              "Sergio Ramos"
+            ],
+            "deadline": "2025-03-15"
+          }
+        ]
+      },
+      {
+        "id": "D002",
+        "name": "Marketing",
+        "budget": 800000.0,
+        "employees": [
+          {
+            "id": "D002-E001",
+            "name": "Kylian Mbappe",
+            "position": "Designer",
+            "skills": [
+              "UI/UX Design",
+              "Communication",
+              "Marketing"
+            ],
+            "years_of_service": 5
+          },
+          {
+            "id": "D002-E002",
+            "name": "Vinicius Junior",
+            "position": "Specialist",
+            "skills": [
+              "Content Creation",
+              "Marketing",
+              "Communication"
+            ],
+            "years_of_service": 3
+          }
+        ],
+        "projects": [
+          {
+            "name": "RedBull",
+            "status": "Planning",
+            "members": [
+              "Kylian Mbappe",
+              "Vinicius Junior"
+            ],
+            "deadline": "2025-09-10"
+          }
+        ]
+      },
+      {
+        "id": "D003",
+        "name": "Human Resources",
+        "budget": 400000.0,
+        "employees": [
+          {
+            "id": "D003-E001",
+            "name": "Antonio Silva",
+            "position": "Director",
+            "skills": [
+              "Leadership",
+              "Communication",
+              "Project Management"
+            ],
+            "years_of_service": 8
+          },
+          {
+            "id": "D003-E002",
+            "name": "Diogo Dalot",
+            "position": "Coordinator",
+            "skills": [
+              "SQL",
+              "Data Analysis",
+              "Communication"
+            ],
+            "years_of_service": 4
+          }
+        ],
+        "projects": [
+          {
+            "name": "McLaren",
+            "status": "In Progress",
+            "members": [
+              "Antonio Silva",
+              "Diogo Dalot"
+            ],
+            "deadline": "2025-07-20"
+          }
+        ]
+      },
+      {
+        "id": "D004",
+        "name": "Research & Development",
+        "budget": 2000000.0,
+        "employees": [
+          {
+            "id": "D004-E001",
+            "name": "Lewis Hamilton",
+            "position": "Senior Developer",
+            "skills": [
+              "Python",
+              "Machine Learning",
+              "Data Analysis"
+            ],
+            "years_of_service": 9
+          },
+          {
+            "id": "D004-E002",
+            "name": "Charles Leclerc",
+            "position": "Researcher",
+            "skills": [
+              "Research",
+              "Python",
+              "Data Analysis"
+            ],
+            "years_of_service": 6
+          },
+          {
+            "id": "D004-E003",
+            "name": "Max Verstappen",
+            "position": "Analyst",
+            "skills": [
+              "SQL",
+              "Data Analysis",
+              "Machine Learning"
+            ],
+            "years_of_service": 7
+          }
+        ],
+        "projects": [
+          {
+            "name": "Mercedes",
+            "status": "Testing",
+            "members": [
+              "Lewis Hamilton",
+              "Charles Leclerc",
+              "Max Verstappen"
+            ],
+            "deadline": "2025-05-15"
+          },
+          {
+            "name": "Hala",
+            "status": "In Progress",
+            "members": [
+              "Charles Leclerc",
+              "Max Verstappen"
+            ],
+            "deadline": "2025-08-25"
+          }
+        ]
+      },
+      {
+        "id": "D005",
+        "name": "Customer Support",
+        "budget": 600000.0,
+        "employees": [
+          {
+            "id": "D005-E001",
+            "name": "Jude Bellingham",
+            "position": "Team Lead",
+            "skills": [
+              "Customer Service",
+              "Leadership",
+              "Communication"
+            ],
+            "years_of_service": 5
+          },
+          {
+            "id": "D005-E002",
+            "name": "Luka Modric",
+            "position": "Specialist",
+            "skills": [
+              "Customer Service",
+              "Communication",
+              "Sales"
+            ],
+            "years_of_service": 11
+          }
+        ],
+root@27b01498d5ec:/app# sed -n '240,600p' organization.json
+        ],
+        "projects": [
+          {
+            "name": "United",
+            "status": "On Hold",
+            "members": [
+              "Jude Bellingham",
+              "Luka Modric"
+            ],
+            "deadline": "2025-11-30"
+          }
+        ]
+      }
+    ]
+  },
+  "statistics": {
+    "averageDepartmentBudget": 1060000.0,
+    "totalEmployees": 12,
+    "skillDistribution": {
+      "Python": 4,
+      "Leadership": 3,
+      "Project Management": 2,
+      "JavaScript": 1,
+      "Cloud Services": 1,
+      "Java": 1,
+      "C++": 1,
+      "DevOps": 1,
+      "UI/UX Design": 1,
+      "Communication": 6,
+      "Marketing": 2,
+      "Content Creation": 1,
+      "SQL": 2,
+      "Data Analysis": 4,
+      "Machine Learning": 2,
+      "Research": 1,
+      "Customer Service": 2,
+      "Sales": 1
+    },
+    "departmentSizes": {
+      "Engineering": 3,
+      "Marketing": 2,
+      "Human Resources": 2,
+      "Research & Development": 3,
+      "Customer Support": 2
+    },
+    "projectStatusDistribution": {
+      "In Progress": 3,
+      "Completed": 1,
+      "Planning": 1,
+      "Testing": 1,
+      "On Hold": 1
+    },
+    "averageYearsOfService": 7.25
+  }
+}root@27b01498d5ec:/app# python3 processor.py
+/app/organization.json
+root@27b01498d5ec:/app# sed -n '1,220p' organization.json
+{
+  "metadata": {
+    "version": "1.0.0",
+    "timestamp": "2025-10-15T10:47:32.386821+00:00",
+    "generator": "csv-to-json-processor"
+  },
+  "organization": {
+    "name": "ACME Corporation",
+    "founded": "2000-01-01",
+    "departments": [
+      {
+        "id": "D001",
+        "name": "Engineering",
+        "budget": 1500000.0,
+        "employees": [
+          {
+            "id": "D001-E001",
+            "name": "Cristiano Ronaldo",
+            "position": "Manager",
+            "skills": [
+              "Python",
+              "Leadership",
+              "Project Management"
+            ],
+            "years_of_service": 10
+          },
+          {
+            "id": "D001-E002",
+            "name": "Bernardo Silva",
+            "position": "Senior Developer",
+            "skills": [
+              "JavaScript",
+              "Python",
+              "Cloud Services"
+            ],
+            "years_of_service": 7
+          },
+          {
+            "id": "D001-E003",
+            "name": "Sergio Ramos",
+            "position": "Team Lead",
+            "skills": [
+              "Java",
+              "C++",
+              "DevOps"
+            ],
+            "years_of_service": 12
+          }
+        ],
+        "projects": [
+          {
+            "name": "Madrid",
+            "status": "In Progress",
+            "members": [
+              "Cristiano Ronaldo",
+              "Bernardo Silva",
+              "Sergio Ramos"
+            ],
+            "deadline": "2025-06-30"
+          },
+          {
+            "name": "Ferrari",
+            "status": "Completed",
+            "members": [
+              "Bernardo Silva",
+              "Sergio Ramos"
+            ],
+            "deadline": "2025-03-15"
+          }
+        ]
+      },
+      {
+        "id": "D002",
+        "name": "Marketing",
+        "budget": 800000.0,
+        "employees": [
+          {
+            "id": "D002-E001",
+            "name": "Kylian Mbappe",
+            "position": "Designer",
+            "skills": [
+              "UI/UX Design",
+              "Communication",
+              "Marketing"
+            ],
+            "years_of_service": 5
+          },
+          {
+            "id": "D002-E002",
+            "name": "Vinicius Junior",
+            "position": "Specialist",
+            "skills": [
+              "Content Creation",
+              "Marketing",
+              "Communication"
+            ],
+            "years_of_service": 3
+          }
+        ],
+        "projects": [
+          {
+            "name": "RedBull",
+            "status": "Planning",
+            "members": [
+              "Kylian Mbappe",
+              "Vinicius Junior"
+            ],
+            "deadline": "2025-09-10"
+          }
+        ]
+      },
+      {
+        "id": "D003",
+        "name": "Human Resources",
+        "budget": 400000.0,
+        "employees": [
+          {
+            "id": "D003-E001",
+            "name": "Antonio Silva",
+            "position": "Director",
+            "skills": [
+              "Leadership",
+              "Communication",
+              "Project Management"
+            ],
+            "years_of_service": 8
+          },
+          {
+            "id": "D003-E002",
+            "name": "Diogo Dalot",
+            "position": "Coordinator",
+            "skills": [
+              "SQL",
+              "Data Analysis",
+              "Communication"
+            ],
+            "years_of_service": 4
+          }
+        ],
+        "projects": [
+          {
+            "name": "McLaren",
+            "status": "In Progress",
+            "members": [
+              "Antonio Silva",
+              "Diogo Dalot"
+            ],
+            "deadline": "2025-07-20"
+          }
+        ]
+      },
+      {
+        "id": "D004",
+        "name": "Research & Development",
+        "budget": 2000000.0,
+        "employees": [
+          {
+            "id": "D004-E001",
+            "name": "Lewis Hamilton",
+            "position": "Senior Developer",
+            "skills": [
+              "Python",
+              "Machine Learning",
+              "Data Analysis"
+            ],
+            "years_of_service": 9
+          },
+          {
+            "id": "D004-E002",
+            "name": "Charles Leclerc",
+            "position": "Researcher",
+            "skills": [
+              "Research",
+              "Python",
+              "Data Analysis"
+            ],
+            "years_of_service": 6
+          },
+          {
+            "id": "D004-E003",
+            "name": "Max Verstappen",
+            "position": "Analyst",
+            "skills": [
+              "SQL",
+              "Data Analysis",
+              "Machine Learning"
+            ],
+            "years_of_service": 7
+          }
+        ],
+        "projects": [
+          {
+            "name": "Mercedes",
+            "status": "Testing",
+            "members": [
+              "Lewis Hamilton",
+              "Charles Leclerc",
+              "Max Verstappen"
+            ],
+            "deadline": "2025-05-15"
+          },
+          {
+            "name": "Hala",
+            "status": "In Progress",
+            "members": [
+              "Charles Leclerc",
+              "Max Verstappen"
+            ],
+            "deadline": "2025-08-25"
+          }
+        ]
+      },
+      {
+        "id": "D005",
+        "name": "Customer Support",
+        "budget": 600000.0,
+        "employees": [
+          {
+            "id": "D005-E001",
+            "name": "Jude Bellingham",
+root@27b01498d5ec:/app# sed -n '220,600p' organization.json
+            "name": "Jude Bellingham",
+            "position": "Team Lead",
+            "skills": [
+              "Customer Service",
+              "Leadership",
+              "Communication"
+            ],
+            "years_of_service": 5
+          },
+          {
+            "id": "D005-E002",
+            "name": "Luka Modric",
+            "position": "Specialist",
+            "skills": [
+              "Customer Service",
+              "Communication",
+              "Sales"
+            ],
+            "years_of_service": 11
+          }
+        ],
+        "projects": [
+          {
+            "name": "United",
+            "status": "On Hold",
+            "members": [
+              "Jude Bellingham",
+              "Luka Modric"
+            ],
+            "deadline": "2025-11-30"
+          }
+        ]
+      }
+    ]
+  },
+  "statistics": {
+    "averageDepartmentBudget": 1060000.0,
+    "totalEmployees": 12,
+    "skillDistribution": {
+      "Python": 4,
+      "Leadership": 3,
+      "Project Management": 2,
+      "JavaScript": 1,
+      "Cloud Services": 1,
+      "Java": 1,
+      "C++": 1,
+      "DevOps": 1,
+      "UI/UX Design": 1,
+      "Communication": 6,
+      "Marketing": 2,
+      "Content Creation": 1,
+      "SQL": 2,
+      "Data Analysis": 4,
+      "Machine Learning": 2,
+      "Research": 1,
+      "Customer Service": 2,
+      "Sales": 1
+    },
+    "departmentSizes": {
+      "Engineering": 3,
+      "Marketing": 2,
+      "Human Resources": 2,
+      "Research & Development": 3,
+      "Customer Support": 2
+    },
+    "projectStatusDistribution": {
+      "In Progress": 3,
+      "Completed": 1,
+      "Planning": 1,
+      "Testing": 1,
+      "On Hold": 1
+    },
+    "averageYearsOfService": 7.25
+  }
+}root@27b01498d5ec:/app#

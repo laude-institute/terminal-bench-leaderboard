@@ -1,0 +1,108 @@
+root@3f661c3b3e7a:/app# mkdir -p /app/ssl
+root@3f661c3b3e7a:/app# openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -keyout /app/ssl/server.key -out /app/ssl/server.crt -nodes -subj "/O=DevOps Team/C
+N=dev-internal.company.local"
+...+......+.........+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*......+..+...............+...+...+.......+..++++++++++++++++++++++++++++++
++++++++++++++++++++++++++++++++++++*...+...+.....+......+....+.....+.......+.........+..+...+.........................+..+.......+..+..........+.....+....+.....
+....+........+..................+.+......+.....+...+.+...+...+............+...+...+.....+......+.............+..+...+.............+.....+.......+...+..+........
+....+...+...+...+.+........+...+..........+.....+.......+.....+..........+...........+.+..............+..........+...........+...+............+...+...+....+....
+..+...+............+..+...+....+.........+.....+....+.....+...+.........+...+.......+......+..+.............+..+..........+......+.........+..+....+..+.........
++...+.+.....+..........+..+...+.+.....+................+...+..+...+.+...+..+...+......+......+......+............+...+.......+......+..+....+........+.......+..
+...+.+...+..............+.+..+.......+...+..+.......+.....+......+.............+......+...+..+...+..........+......+..+...+......+...............+.+........+.+.
+..+........+...+.+...+........+...+....+......+..+....+..............+....+.....+............+...+............+......+.........+..........+.........+..+...+....
++......+......+...+.....+..........+............+......+........+.+......+.....+...+.......+..+................+..............+...+.........+...................
++..+...+......+................+.....+....+.....+.............+...+.....+............+...+.......+..+.........+.+......+++++++++++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++
+...........+....+..+......+.........+...+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*..+......+...+.....+......+..........+...+...+...+....
+.+.........+.+...........+...+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*.........+.+..+....+......+.....+..................+..........+..
++.......+...............+...+...+.....+......+..........+.....+.+...+.........+...+.....+..........+........+............+............+.+......+...+......+.....
+.+...+..+...............+.........+....+..+.+........+.+...+........+.......+...+..+.+..+....+...+..+.........+..........+.....+.........+.+....................
++......+.+..+..................+.........+...+.+.....................+...........+...+....+..................+...+...........+..........+...+........+.......+..
++....+..............+.............+..+.+...........+...+..................+...+.+......+..+...+.........+.+............+............+.........+..+...+....+...+.
+....+...+.+..............+.........+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-----
+root@3f661c3b3e7a:/app# chmod 600 /app/ssl/server.key
+root@3f661c3b3e7a:/app# cat /app/ssl/server.key /app/ssl/server.crt > /app/ssl/server.pem
+root@3f661c3b3e7a:/app# chmod 600 /app/ssl/server.pem
+root@3f661c3b3e7a:/app# printf "Subject:\n%s\n\nValidity:\n%s\n\nSHA-256 Fingerprint:\n%s\n" "$(openssl x509 -in /app/ssl/server.crt -noout -subject)" "$(openss
+l x509 -in /app/ssl/server.crt -noout -dates)" "$(openssl x509 -in /app/ssl/server.crt -noout -fingerprint -sha256)" > /app/ssl/verification.txt
+root@3f661c3b3e7a:/app# cat > /app/check_cert.py << 'PY'
+> #!/usr/bin/env python3
+> import os
+> import ssl
+> import subprocess
+> from datetime import datetime
+>
+> CERT_PATH = "/app/ssl/server.crt"
+> KEY_PATH = "/app/ssl/server.key"
+>
+> def main():
+>     if not (os.path.exists(CERT_PATH) and os.path.exists(KEY_PATH)):
+>         print("Certificate or key file missing")
+>         raise SystemExit(1)
+>
+>     # Try loading cert chain to ensure it can be loaded
+>     try:
+>         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+>         ctx.load_cert_chain(certfile=CERT_PATH, keyfile=KEY_PATH)
+>     except Exception as e:
+>         print(f"Failed to load certificate: {e}")
+>         raise SystemExit(1)
+>
+>     # Get subject and enddate using openssl
+>     subj_proc = subprocess.run(
+>         ["openssl", "x509", "-in", CERT_PATH, "-noout", "-subject", "-nameopt", "RFC2253"],
+>         capture_output=True, text=True
+>     )
+>     end_proc = subprocess.run(
+>         ["openssl", "x509", "-in", CERT_PATH, "-noout", "-enddate"],
+>         capture_output=True, text=True
+>     )
+>
+>     if subj_proc.returncode != 0 or end_proc.returncode != 0:
+>         print("Failed to retrieve certificate details via openssl")
+>         raise SystemExit(1)
+>
+>     subject_line = subj_proc.stdout.strip()
+>     end_line = end_proc.stdout.strip()
+>
+>     # Parse CN
+>     subject = subject_line.split("subject=", 1)[-1]
+>     cn = None
+>     for part in subject.split(","):
+>         part = part.strip()
+>         if part.startswith("CN="):
+>             cn = part.split("=", 1)[1].strip()
+>             break
+>
+>     if not cn:
+>         print("Common Name not found in subject")
+>         raise SystemExit(1)
+>
+>     # Parse notAfter date
+>     if end_line.startswith("notAfter="):
+>         end_val = end_line.split("=", 1)[1].strip()
+>     else:
+>         end_val = end_line.strip()
+>
+>     # Normalize spaces for single-digit days
+>     while "  " in end_val:
+>         end_val = end_val.replace("  ", " ")
+>
+>     try:
+>         dt = datetime.strptime(end_val, "%b %d %H:%M:%S %Y %Z")
+>     except ValueError:
+>         # Fallback ignoring timezone token
+>         dt = datetime.strptime(" ".join(end_val.split()[:-1]), "%b %d %H:%M:%S %Y")
+>
+>     print(f"Common Name: {cn}")
+>     print(f"Expiration Date: {dt.strftime('%Y-%m-%d')}")
+>     print("Certificate verification successful")
+>
+> if __name__ == "__main__":
+>     main()
+> PY
+root@3f661c3b3e7a:/app# python3 /app/check_cert.py
+Common Name: dev-internal.company.local
+Expiration Date: 2026-10-14
+Certificate verification successful
+root@3f661c3b3e7a:/app#

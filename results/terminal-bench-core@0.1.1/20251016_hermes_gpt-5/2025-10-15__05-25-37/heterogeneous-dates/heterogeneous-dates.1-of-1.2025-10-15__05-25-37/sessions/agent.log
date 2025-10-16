@@ -1,0 +1,53 @@
+[?2004hroot@46af2fdbe52d:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@46af2fdbe52d:/app# clear
+[?2004l[H[J[3J[?2004hroot@46af2fdbe52d:/app# ls -la
+[?2004ltotal 16
+drwxr-xr-x 1 root root 4096 Oct  8 15:44 .
+drwxr-xr-x 1 root root 4096 Oct 15 07:22 ..
+-rw-rw-r-- 1 root root  121 Oct  8 15:44 daily_temp_sf_high.csv
+-rw-rw-r-- 1 root root  184 Oct  8 15:44 daily_temp_sf_low.csv
+[?2004hroot@46af2fdbe52d:/app# sed -n '1,5p' daily_temp_sf_high.csv
+[?2004ldate,temperature
+2025-04-19,64
+2025-04-20,63
+2025-04-21,70
+2025-04-22,66
+[?2004hroot@46af2fdbe52d:/app# sed -n '1,5p' daily_temp_sf_low.csv
+[?2004ldate,temperature
+04/19/2025 06:00:00,48
+04/20/2025 06:00:00,52
+04-23-2025 06:00:00,52
+04-22-2025 06:00:00,48
+[?2004hroot@46af2fdbe52d:/app# awk -F',' 'FNR==1{# detect header: if any non-numeric in entire line, mark header for this file
+[?2004l[?2004h>   header=0;
+[?2004l[?2004h>   for(i=1;i<=NF;i++){ if($i!~/^-?[0-9]+(\.[0-9]+)?$/){ header=1; break } }
+[?2004l[?2004h> }
+[?2004l[?2004h> {
+[?2004l[?2004h>   # Extract temperature field: if multiple fields, assume temperature is the last numeric field
+[?2004l[?2004h>   temp="";
+[?2004l[?2004h>   for(i=NF;i>=1;i--){ if($i~/^-?[0-9]+(\.[0-9]+)?$/){ temp=$i; break } }
+[?2004l[?2004h>   if(FNR==1 && header==1){ next } # skip header line for each file
+[?2004l[?2004h>   if(temp!=""){ print temp } }
+[?2004l[?2004h> ' daily_temp_sf_high.csv > .high_vals.tmp
+[?2004l[?2004hroot@46af2fdbe52d:/app# awk -F',' 'FNR==1{ header=0; for(i=1;i<=NF;i++){ if($i!~/^-?[0-9]+(\.[0-9]+)?$/){ header=1; break } } }
+[?2004l[?2004h> {
+[?2004l[?2004h>   temp="";
+[?2004l[?2004h>   for(i=NF;i>=1;i--){ if($i~/^-?[0-9]+(\.[0-9]+)?$/){ temp=$i; break } }
+[?2004l[?2004h>   if(FNR==1 && header==1){ next }
+[?2004l[?2004h>   if(temp!=""){ print temp } }
+[?2004l[?2004h> ' daily_temp_sf_low.csv > .low_vals.tmp
+[?2004l[?2004hroot@46af2fdbe52d:/app# paste .high_vals.tmp .low_vals.tmp | awk '{sum+=($1-$2); n++} END{ if(n>0){ printf("%0.6f\n", sum/n) } }' > avg_temp.txt
+[?2004l[?2004hroot@46af2fdbe52d:/app# cat avg_temp.txt
+[?2004l5.000000
+[?2004hroot@46af2fdbe52d:/app# awk -F',' 'NR>1{print $1","$2}' daily_temp_sf_high.csv > .high_map.csv
+[?2004l[?2004hroot@46af2fdbe52d:/app# awk -F',' 'NR>1{ d=$1; split(d,p,/[ ]/); d=p[1]; gsub("/","-", d); split(d,a,"-"); if (length(a[1])==4) nd=d; else nd=sprintf("%04d-%02d-%02d", a[3], a[1], a[2]); print nd","$2 }' daily_temp_sf_low.csv > .low_map.csv
+[?2004l[?2004hroot@46af2fdbe52d:/app# awk -F',' 'FNR==NR{h[$1]=$2; next} {l[$1]=$2} END{n=0; s=0; for (d in h) if (d in l) {s+=h[d]-l[d]; n++} if (n>0) printf("%0.6f\n", s/n)}' .high_map.csv .low_map.csv > avg_temp.txt
+[?2004l[?2004hroot@46af2fdbe52d:/app# cat avg_temp.txt
+[?2004l11.428571
+[?2004hroot@46af2fdbe52d:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@46af2fdbe52d:/app# 

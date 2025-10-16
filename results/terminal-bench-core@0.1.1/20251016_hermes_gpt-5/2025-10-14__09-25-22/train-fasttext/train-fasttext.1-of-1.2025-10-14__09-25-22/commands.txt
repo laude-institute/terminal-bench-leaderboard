@@ -1,0 +1,40 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'ls -la data\n'
+'python3 --version\n'
+'which fasttext\n'
+'pip install -q fasttext==0.9.2\n'
+'export TRAIN_FILE=""; for pat in data/*train*.txt data/train*.ft.txt data/train.txt data/train.ft.txt; do for f in $pat; do if [ -f "$f" ]; then export TRAIN_FILE="$f"; break 2; fi; done; done; echo "TRAIN_FILE=$TRAIN_FILE"\n'
+'if [ -z "$TRAIN_FILE" ]; then echo "No training file found under data/. Please ensure a train file exists."; fi\n'
+'rm -f data/train_split.txt data/val.txt\n'
+'if [ -n "$TRAIN_FILE" ]; then awk \'NR%10==0{print > "data/val.txt"; next} {print > "data/train_split.txt"}\' "$TRAIN_FILE"; fi\n'
+'wc -l data/train_split.txt data/val.txt\n'
+'cat > train.py << \'PY\'\nimport os\nimport fasttext\n\ntrain_file = "data/train_split.txt"\nval_file = "data/val.txt"\nprint("Training on", train_file)\n\nmodel = fasttext.train_supervised(\n    input=train_file,\n    lr=0.5,\n    epoch=15,\n    wordNgrams=2,\n    dim=100,\n    loss="softmax",\n    verbose=2\n)\n\ndef eval_file(m, path, name):\n    if os.path.exists(path):\n        N, p, r = m.test(path)\n        print(f"{name} N={N} P@1={p:.4f} R@1={r:.4f}")\n        return p\n    else:\n        print(f"{name} missing: {path}")\n        return None\n\np_val = eval_file(model, val_file, "VAL before quantization")\n\nmodel.save_model("model_temp.bin")\nsize_mb = os.path.getsize("model_temp.bin") / (1024 * 1024)\nprint(f"Non-quantized model size: {size_mb:.2f} MB")\n\nprint("Quantizing model to reduce size...")\nmodel.quantize(input=train_file, qnorm=True, retrain=True, cutoff=200000, dsub=2)\n\np_val_q = eval_file(model, val_file, "VAL after quantization")\n\nmodel.save_model("model.bin")\nsize_mb2 = os.path.getsize("model.bin") / (1024 * 1024)\nprint(f"Final model size: {size_mb2:.2f} MB")\n\n# Attempt to evaluate on any provided test file if present\nfor cand in ["data/test.txt", "data/test.ft.txt"]:\n    if os.path.exists(cand):\n        try:\n            eval_file(model, cand, f"TEST {cand}")\n        except Exception as e:\n            print(f"Could not test on {cand}: {e}")\nPY\n'
+'python3 train.py\n'
+'ls -lh model.bin\n'
+'curl -sS https://bootstrap.pypa.io/get-pip.py -o get-pip.py\n'
+'python3 get-pip.py\n'
+'pip --version\n'
+'pip install -q pyarrow pandas\n'
+'cat > prepare.py << \'PY\'\nimport os\nimport sys\nimport random\nimport re\nimport pyarrow.parquet as pq\nimport pyarrow as pa\n\ntrain_path = \'data/train-00000-of-00001.parquet\'\nval_ratio = 0.1\nrandom.seed(42)\n\nif not os.path.exists(train_path):\n    print(\'Training parquet not found:\', train_path)\n    sys.exit(1)\n\npf = pq.ParquetFile(train_path)\nschema = pf.schema\ncols = [n for n in schema.names]\nprint(\'Schema columns:\', cols)\n\n# Heuristics to pick text and label columns\ntext_candidates = [c for c in cols if any(k in c.lower() for k in [\'text\',\'review\',\'content\',\'sentence\',\'body\'])]\nlabel_candidates = [c for c in cols if any(k in c.lower() for k in [\'label\',\'labels\',\'sentiment\',\'stars\',\'rating\',\'polarity\',\'target\',\'y\'])]\n\n# Fallbacks\nif not text_candidates:\n    # Choose first string column\n    for i, f in enumerate(schema):\n        if pa.types.is_string(f.type) or pa.types.is_large_string(f.type):\n            text_candidates = [f.name]\n            break\nif not label_candidates:\n    # Choose first non-string column\n    for i, f in enumerate(schema):\n        if not (pa.types.is_string(f.type) or pa.types.is_large_string(f.type)):\n            label_candidates = [f.name]\n            break\n\nif not text_candidates or not label_candidates:\n    print(\'Could not infer text or label columns.\')\n    sys.exit(1)\n\ntext_col = text_candidates[0]\nlabel_col = label_candidates[0]\nprint(\'Using text_col:\', text_col, \'label_col:\', label_col)\n\nos.makedirs(\'data\', exist_ok=True)\ntrain_out = open(\'data/train.txt\', \'w\', encoding=\'utf-8\')\nval_out = open(\'data/val.txt\', \'w\', encoding=\'utf-8\')\n\nre_ws = re.compile(r"\\s+")\n\ndef fmt_label(v):\n    s = str(v).strip()\n    return f"__label__{s}"\n\ndef clean_text(t):\n    t = \'\' if t is None else str(t)\n    t = t.replace(\'\\n\',\' \').replace(\'\\r\',\' \')\n    t = re_ws.sub(\' \', t).strip()\n    return t\n\nn_train = 0\nn_val = 0\nn_total = 0\n\nfor batch in pf.iter_batches(batch_size=50000):\n    bcols = {name: batch.columns[i] for i, name in enumerate(batch.schema.names)}\n    if text_col not in bcols or label_col not in bcols:\n        print(\'Batch missing required columns\')\n        continue\n    t_arr = bcols[text_col]\n    l_arr = bcols[label_col]\n    bsz = len(batch)\n    for i in range(bsz):\n        t = t_arr[i].as_py() if hasattr(t_arr[i], \'as_py\') else t_arr[i]\n        l = l_arr[i].as_py() if hasattr(l_arr[i], \'as_py\') else l_arr[i]\n        if t is None or l is None:\n            continue\n        line = f"{fmt_label(l)} {clean_text(t)}\\n"\n        if random.random() < val_ratio:\n            val_out.write(line)\n            n_val += 1\n        else:\n            train_out.write(line)\n            n_train += 1\n        n_total += 1\n\ntrain_out.close()\nval_out.close()\nprint(f\'Wrote train.txt={n_train} lines, val.txt={n_val} lines, total processed={n_total}\')\nPY\n'
+'python3 prepare.py\n'
+'wc -l data/train.txt data/val.txt\n'
+'pip install -q pybind11\n'
+'pip install --no-cache-dir fasttext==0.9.2\n'
+"cat > train_ft.py << 'PY'\nimport os\nimport fasttext\n\ntrain_file = 'data/train.txt'\nval_file = 'data/val.txt'\nprint('Training on', train_file)\n\nmodel = fasttext.train_supervised(\n    input=train_file,\n    lr=0.5,\n    epoch=15,\n    wordNgrams=2,\n    dim=100,\n    loss='softmax',\n    verbose=2\n)\n\nN, p, r = model.test(val_file)\nprint(f'VAL before quantization N={N} P@1={p:.4f} R@1={r:.4f}')\n\nmodel.save_model('model_temp.bin')\nsize_mb = os.path.getsize('model_temp.bin') / (1024*1024)\nprint(f'Non-quantized model size: {size_mb:.2f} MB')\n\nprint('Quantizing model to reduce size...')\nmodel.quantize(input=train_file, qnorm=True, retrain=True, cutoff=200000, dsub=2)\n\nN2, p2, r2 = model.test(val_file)\nprint(f'VAL after quantization N={N2} P@1={p2:.4f} R@1={r2:.4f}')\n\nmodel.save_model('model.bin')\nsize_mb2 = os.path.getsize('model.bin') / (1024*1024)\nprint(f'Final model size: {size_mb2:.2f} MB')\nPY\n"
+'python3 train_ft.py\n'
+'ls -lh model.bin\n'
+'apt-get update\n'
+'apt-get install -y git build-essential\n'
+'git clone https://github.com/facebookresearch/fastText.git\n'
+'make -C fastText\n'
+'./fastText/fasttext supervised -input data/train.txt -output /app/model -lr 0.5 -epoch 20 -wordNgrams 2 -dim 100 -loss softmax -minCount 2\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+'./fastText/fasttext test /app/model.bin data/val.txt\n'
+['C-d']
+['C-d']
+'./fastText/fasttext quantize -input data/train.txt -output /app/model -qnorm -retrain -cutoff 200000 -dsub 2\n'
+'./fastText/fasttext test /app/model.ftz data/val.txt\n'

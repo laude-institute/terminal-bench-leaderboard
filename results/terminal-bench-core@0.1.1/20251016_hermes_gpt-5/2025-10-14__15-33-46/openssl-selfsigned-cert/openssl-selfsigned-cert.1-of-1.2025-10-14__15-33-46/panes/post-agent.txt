@@ -1,0 +1,40 @@
+root@c5e780e5e275:/app# mkdir -p /app/ssl
+root@c5e780e5e275:/app# openssl genrsa -out /app/ssl/server.key 2048
+root@c5e780e5e275:/app# chmod 600 /app/ssl/server.key
+root@c5e780e5e275:/app# openssl req -new -x509 -key /app/ssl/server.key -out /app/ssl/server.crt -days 365 -subj "/O=DevOps Team/CN=dev-internal.company.local"
+root@c5e780e5e275:/app# cat /app/ssl/server.key /app/ssl/server.crt > /app/ssl/server.pem
+root@c5e780e5e275:/app# printf "%s\n%s\n%s\n" "$(openssl x509 -in /app/ssl/server.crt -noout -subject)" "$(openssl x509 -in /app/ssl/server.crt -noout -dates)"
+"$(openssl x509 -in /app/ssl/server.crt -noout -fingerprint -sha256)" > /app/ssl/verification.txt
+root@c5e780e5e275:/app# printf '%s\n' '#!/usr/bin/env python3' 'import os' 'import ssl' 'import subprocess' 'import re' 'from datetime import datetime' '' 'CRT_
+PATH = "/app/ssl/server.crt"' '' 'def main():' '    if not os.path.exists(CRT_PATH):' '        raise FileNotFoundError(f"Certificate not found at {CRT_PATH}")'
+'    # Try loading certificate to verify it is valid' '    with open(CRT_PATH, "rb") as f:' '        pem = f.read()' '    try:' '        der = ssl.PEM_cert_to_D
+ER_cert(pem.decode())' '    except Exception as e:' '        raise RuntimeError(f"Failed to load certificate: {e}")' '    # Use openssl to get subject and endda
+te' '    result = subprocess.run(["openssl","x509","-in",CRT_PATH,"-noout","-subject","-enddate"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)' '
+    if result.returncode != 0:' '        raise RuntimeError(f"OpenSSL error: {result.stderr.strip()}")' '    out = result.stdout' '    subject_line = next((line
+ for line in out.splitlines() if line.startswith("subject=")), "")' '    enddate_line = next((line for line in out.splitlines() if line.startswith("notAfter="))
+, "")' '    # Extract CN' '    cn = None' '    m = re.search(r"CN\s*=\s*([^,\n/]+)", subject_line)' '    if m:' '        cn = m.group(1).strip()' '    else:' '
+       # Try slash-delimited format' '        m2 = re.search(r"/CN=([^/\n]+)", subject_line)' '        if m2:' '            cn = m2.group(1).strip()' '    if no
+t cn:' '        raise RuntimeError("Could not parse Common Name from certificate subject")' '    # Parse expiration date' '    if not enddate_line.startswith("n
+otAfter="):' '        raise RuntimeError("Could not find certificate end date")' '    date_str = enddate_line.split("=",1)[1].strip()' '    try:' '        exp =
+ datetime.strptime(date_str, "%b %d %H:%M:%S %Y %Z")' '    except Exception:' '        # Fallback: remove timezone and parse' '        tz_removed = date_str.rsp
+lit(" ", 1)[0]' '        exp = datetime.strptime(tz_removed, "%b %d %H:%M:%S %Y")' '    print(f"Common Name: {cn}")' '    print(f"Expiration Date: {exp.strftime
+("%Y-%m-%d")}")' '    print("Certificate verification successful")' '' 'if __name__ == "__main__":' '    main()' > /app/check_cert.py
+root@c5e780e5e275:/app# chmod +x /app/check_cert.py
+root@c5e780e5e275:/app# python3 /app/check_cert.py
+Common Name: dev-internal.company.local
+Expiration Date: 2026-10-14
+Certificate verification successful
+root@c5e780e5e275:/app#
+
+
+
+
+
+
+
+
+
+
+
+
+

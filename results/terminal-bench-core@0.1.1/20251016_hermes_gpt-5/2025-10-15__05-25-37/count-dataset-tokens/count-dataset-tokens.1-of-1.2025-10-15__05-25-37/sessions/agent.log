@@ -1,0 +1,1960 @@
+[?2004hroot@1e287e0ce32a:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@1e287e0ce32a:/app# clear
+[?2004l[H[J[3J[?2004hroot@1e287e0ce32a:/app# python3 -V
+[?2004lPython 3.13.1
+[?2004hroot@1e287e0ce32a:/app# pip -V
+[?2004lpip install -q datasets transformers huggingface_hub tiktoken
+pip 24.3.1 from /usr/local/lib/python3.13/site-packages/pip (python 3.13)
+[?2004hroot@1e287e0ce32a:/app# pip install -q datasets transformers huggingface_hub tiktoken
+[?2004lpython3 - << 'PY'
+from datasets import load_dataset
+from huggingface_hub import hf_hub_download
+import os, json, textwrap
+
+# Try to load dataset to inspect structure
+print('Loading dataset info...')
+ds = load_dataset('open-thoughts/OpenThoughts-114k')
+print(ds)
+# Print features of a split (try 'train' or first available)
+first_split = list(ds.keys())[0]
+print('First split:', first_split)
+print('Features:', ds[first_split].features)
+print('Example 0 keys:', ds[first_split][0].keys())
+print('Example 0 (truncated):')
+ex = ds[first_split][0]
+for k,v in ex.items():
+    if isinstance(v, str):
+        print(f'- {k}:', v[:300].replace('\n',' ') + ('...' if len(v)>300 else ''))
+    else:
+        print(f'- {k}:', type(v), v if not isinstance(v, (list, dict)) else str(v)[:300] + ('...' if len(str(v))>300 else ''))
+
+# Try fetching README for guidance
+try:
+    readme_path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='README.md')
+    with open(readme_path, 'r', encoding='utf-8') as f:
+        readme = f.read()
+    print('\nREADME head:')
+    print('\n'.join(readme.splitlines()[:200]))
+except Exception as e:
+    print('README fetch failed:', e)
+PY
+python3 - << 'PY'
+from datasets import load_dataset
+from transformers import AutoTokenizer
+import math
+
+# Load dataset
+ds = load_dataset('open-thoughts/OpenThoughts-114k')
+
+# Determine science domain selection rules
+# Heuristics:
+# - If there is a split named 'science' use it directly.
+# - Else if a 'domain' field exists, filter rows where domain equals 'science' (case-insensitive) or similar variants.
+# - Identify DeepSeek-specific field if present (e.g., 'deepseek_thought', 'deepseek', 'model'=='deepseek', or nested providers),
+#   otherwise default to the main text/thought field indicated by the dataset (e.g., 'thought', 'response', 'content').
+
+available_splits = list(ds.keys())
+science_ds = None
+if 'science' in ds:
+    science_ds = ds['science']
+else:
+    # pick a base split to filter from, prefer 'train' if present
+    base_split_name = 'train' if 'train' in ds else available_splits[0]
+    base = ds[base_split_name]
+    # find a likely domain field
+    domain_field = None
+    for cand in ['domain','category','subject','topic','Domain','Category']:
+        if cand in base.features:
+            domain_field = cand
+            break
+    if domain_field is None:
+        # try to infer from first example keys
+        for k in base.features.keys():
+            if 'domain' in k.lower() or 'category' in k.lower() or 'subject' in k.lower():
+                domain_field = k
+                break
+    if domain_field is None:
+        raise SystemExit('Could not find a domain field or science split in dataset')
+    # filter to science-like values
+    def is_science(x):
+        val = x.get(domain_field)
+        if val is None:
+            return False
+        if isinstance(val, str):
+            return val.strip().lower() in {'science','sci','scientific','natural science','natural-science'}
+        return False
+    science_ds = base.filter(is_science)
+
+print('Science subset size:', len(science_ds))
+
+# Identify DeepSeek-specific content field if present; else choose generic thought/response/content field
+# We will inspect features to choose a text field.
+features = science_ds.features
+text_field = None
+# Candidate fields ordered by likelihood
+candidates = [
+    'deepseek_thought','deepseek','deepseek_content','deepseek_response','deepseek_cot','deepseek_r1','deepseek_output',
+    'thought','cot','chain_of_thought','solution','response','answer','content','text'
+]
+for cand in candidates:
+    if cand in features and str(features[cand].dtype) == 'string':
+        text_field = cand
+        break
+
+# If not found, try to deduce from first example
+if text_field is None and len(science_ds) > 0:
+    ex = science_ds[0]
+    for cand in candidates:
+        if cand in ex and isinstance(ex[cand], str) and len(ex[cand].strip())>0:
+            text_field = cand
+            break
+
+# If still not found, consider nested structures with provider
+provider_field = None
+if text[33mWARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable.It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.[0m[33m
+[0m
+[1m[[0m[34;49mnotice[0m[1;39;49m][0m[39;49m A new release of pip is available: [0m[31;49m24.3.1[0m[39;49m -> [0m[32;49m25.2[0m
+[1m[[0m[34;49mnotice[0m[1;39;49m][0m[39;49m To update, run: [0m[32;49mpip install --upgrade pip[0m
+[?2004hroot@1e287e0ce32a:/app# python3 - << 'PY'
+[?2004l[?2004h> from datasets import load_dataset
+[?2004l[?2004h> from huggingface_hub import hf_hub_download
+[?2004l[?2004h> import os, json, textwrap
+[?2004l[?2004h> 
+[?2004l[?2004h> # Try to load dataset to inspect structure
+[?2004l[?2004h> print('Loading dataset info...')
+[?2004l[?2004h> ds = load_dataset('open-thoughts/OpenThoughts-114k')
+[?2004l[?2004h> print(ds)
+[?2004l[?2004h> # Print features of a split (try 'train' or first available)
+[?2004l[?2004h> first_split = list(ds.keys())[0]
+[?2004l[?2004h> print('First split:', first_split)
+[?2004l[?2004h> print('Features:', ds[first_split].features)
+[?2004l[?2004h> print('Example 0 keys:', ds[first_split][0].keys())
+[?2004l[?2004h> print('Example 0 (truncated):')
+[?2004l[?2004h> ex = ds[first_split][0]
+[?2004l[?2004h> for k,v in ex.items():
+[?2004l[?2004h>     if isinstance(v, str):
+[?2004l[?2004h>         print(f'- {k}:', v[:300].replace('\n',' ') + ('...' if len(v)>300 else ''))
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         print(f'- {k}:', type(v), v if not isinstance(v, (list, dict)) else str(v)[:300] + ('...' if len(str(v))>300 else ''))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Try fetching README for guidance
+[?2004l[?2004h> try:
+[?2004l[?2004h>     readme_path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='README.md')
+[?2004l[?2004h>     with open(readme_path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         readme = f.read()
+[?2004l[?2004h>     print('\nREADME head:')
+[?2004l[?2004h>     print('\n'.join(readme.splitlines()[:200]))
+[?2004l[?2004h> except Exception as e:
+[?2004l[?2004h>     print('README fetch failed:', e)
+[?2004l[?2004h> PY
+[?2004lLoading dataset info...
+README.md: 0.00B [00:00, ?B/s]README.md: 8.96kB [00:00, 22.2MB/s]
+data/train-00000-of-00006.parquet:   0%|                                                                                             | 0.00/250M [00:00<?, ?B/s]data/train-00000-of-00006.parquet:   0%|                                                                                  | 8.13k/250M [00:00<7:18:16, 9.51kB/s]data/train-00000-of-00006.parquet:   0%|▏                                                                                     | 471k/250M [00:00<06:19, 658kB/s]data/train-00000-of-00006.parquet:   3%|██▍                                                                                 | 7.11M/250M [00:05<02:47, 1.45MB/s]data/train-00000-of-00006.parquet:   6%|████▋                                                                               | 13.9M/250M [00:06<01:32, 2.55MB/s]data/train-00000-of-00006.parquet:  11%|█████████▎                                                                          | 27.6M/250M [00:08<00:52, 4.25MB/s]data/train-00000-of-00006.parquet:  17%|█████████████▉                                                                      | 41.5M/250M [00:08<00:28, 7.30MB/s]data/train-00000-of-00006.parquet:  22%|██████████████████▍                                                                 | 54.8M/250M [00:09<00:18, 10.7MB/s]data/train-00000-of-00006.parquet:  22%|██████████████████▍                                                                 | 54.8M/250M [00:19<00:18, 10.7MB/s]data/train-00000-of-00006.parquet:  46%|███████████████████████████████████████▍                                             | 116M/250M [00:20<00:21, 6.16MB/s]data/train-00000-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 250M/250M [00:22<00:00, 17.3MB/s]data/train-00000-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 250M/250M [00:22<00:00, 11.2MB/s]
+data/train-00001-of-00006.parquet:   0%|                                                                                             | 0.00/175M [00:00<?, ?B/s]data/train-00001-of-00006.parquet:  23%|███████████████████▌                                                                | 40.7M/175M [00:12<00:41, 3.24MB/s]data/train-00001-of-00006.parquet:  62%|████████████████████████████████████████████████████▍                                | 108M/175M [00:15<00:08, 8.22MB/s]data/train-00001-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 175M/175M [00:15<00:00, 16.0MB/s]data/train-00001-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 175M/175M [00:15<00:00, 11.2MB/s]
+data/train-00002-of-00006.parquet:   0%|                                                                                             | 0.00/173M [00:00<?, ?B/s]data/train-00002-of-00006.parquet:   0%|                                                                                     | 149k/173M [00:01<32:00, 90.1kB/s]data/train-00002-of-00006.parquet:   1%|▉                                                                                   | 1.94M/173M [00:01<02:09, 1.32MB/s]data/train-00002-of-00006.parquet:   4%|███▏                                                                                | 6.59M/173M [00:02<00:39, 4.23MB/s]data/train-00002-of-00006.parquet:   5%|███▉                                                                                | 8.11M/173M [00:03<00:51, 3.21MB/s]data/train-00002-of-00006.parquet:   7%|██████▏                                                                             | 12.8M/173M [00:06<01:28, 1.81MB/s]data/train-00002-of-00006.parquet:  26%|█████████████████████▊                                                              | 45.0M/173M [00:09<00:20, 6.32MB/s]data/train-00002-of-00006.parquet:  31%|█████████████████████████▊                                                          | 53.2M/173M [00:09<00:15, 7.93MB/s]data/train-00002-of-00006.parquet:  40%|█████████████████████████████████▉                                                  | 70.0M/173M [00:11<00:11, 8.62MB/s]data/train-00002-of-00006.parquet:  64%|██████████████████████████████████████████████████████▎                              | 111M/173M [00:12<00:03, 16.6MB/s]data/train-00002-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 173M/173M [00:15<00:00, 17.3MB/s]data/train-00002-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 173M/173M [00:15<00:00, 11.1MB/s]
+data/train-00003-of-00006.parquet:   0%|                                                                                             | 0.00/174M [00:00<?, ?B/s]data/train-00003-of-00006.parquet:   3%|██▍                                                                                 | 4.99M/174M [00:04<02:24, 1.17MB/s]data/train-00003-of-00006.parquet:   4%|███▋                                                                                | 7.74M/174M [00:04<01:33, 1.79MB/s]data/train-00003-of-00006.parquet:   8%|██████▍                                                                             | 13.4M/174M [00:04<00:40, 3.94MB/s]data/train-00003-of-00006.parquet:  10%|████████                                                                            | 16.8M/174M [00:05<00:33, 4.75MB/s]data/train-00003-of-00006.parquet:  11%|█████████▌                                                                          | 19.8M/174M [00:05<00:26, 5.72MB/s]data/train-00003-of-00006.parquet:  14%|████████████▏                                                                       | 25.2M/174M [00:05<00:16, 9.12MB/s]data/train-00003-of-00006.parquet:  17%|██████████████▎                                                                     | 29.6M/174M [00:06<00:16, 8.94MB/s]data/train-00003-of-00006.parquet:  20%|████████████████▍                                                                   | 34.0M/174M [00:06<00:12, 11.1MB/s]data/train-00003-of-00006.parquet:  27%|██████████████████████▌                                                             | 46.7M/174M [00:06<00:05, 22.5MB/s]data/train-00003-of-00006.parquet:  32%|██████████████████████████▌                                                         | 55.0M/174M [00:07<00:06, 17.2MB/s]data/train-00003-of-00006.parquet:  45%|█████████████████████████████████████▌                                              | 78.0M/174M [00:10<00:10, 9.23MB/s]data/train-00003-of-00006.parquet:  61%|████████████████████████████████████████████████████▎                                | 107M/174M [00:12<00:05, 12.4MB/s]data/train-00003-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 174M/174M [00:15<00:00, 15.6MB/s]data/train-00003-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 174M/174M [00:15<00:00, 11.1MB/s]
+data/train-00004-of-00006.parquet:   0%|                                                                                             | 0.00/154M [00:00<?, ?B/s]data/train-00004-of-00006.parquet:   0%|▎                                                                                     | 505k/154M [00:01<07:47, 328kB/s]data/train-00004-of-00006.parquet:   2%|█▍                                                                                  | 2.69M/154M [00:02<02:04, 1.22MB/s]data/train-00004-of-00006.parquet:   3%|██▌                                                                                 | 4.66M/154M [00:02<01:07, 2.23MB/s]data/train-00004-of-00006.parquet:   4%|███▎                                                                                | 6.10M/154M [00:03<00:59, 2.48MB/s]data/train-00004-of-00006.parquet:   7%|█████▍                                                                              | 10.0M/154M [00:03<00:26, 5.36MB/s]data/train-00004-of-00006.parquet:   8%|███████▏                                                                            | 13.1M/154M [00:03<00:23, 5.94MB/s]data/train-00004-of-00006.parquet:  10%|████████▎                                                                           | 15.2M/154M [00:04<00:25, 5.41MB/s]data/train-00004-of-00006.parquet:  14%|████████████                                                                        | 22.1M/154M [00:04<00:16, 7.87MB/s]data/train-00004-of-00006.parquet:  17%|██████████████▏                                                                     | 26.0M/154M [00:05<00:19, 6.73MB/s]data/train-00004-of-00006.parquet:  20%|█████████████████                                                                   | 31.4M/154M [00:06<00:18, 6.71MB/s]data/train-00004-of-00006.parquet:  24%|████████████████████▌                                                               | 37.7M/154M [00:06<00:14, 8.01MB/s]data/train-00004-of-00006.parquet:  30%|████████████████████████▉                                                           | 45.6M/154M [00:08<00:19, 5.68MB/s]data/train-00004-of-00006.parquet:  37%|███████████████████████████████▎                                                    | 57.3M/154M [00:09<00:12, 7.96MB/s]data/train-00004-of-00006.parquet:  75%|████████████████████████████████████████████████████████████████                     | 116M/154M [00:13<00:03, 12.6MB/s]data/train-00004-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 154M/154M [00:13<00:00, 19.8MB/s]data/train-00004-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 154M/154M [00:13<00:00, 11.1MB/s]
+data/train-00005-of-00006.parquet:   0%|                                                                                             | 0.00/152M [00:00<?, ?B/s]data/train-00005-of-00006.parquet:   0%|                                                                                  | 8.13k/152M [00:00<3:34:48, 11.8kB/s]data/train-00005-of-00006.parquet:   0%|                                                                                      | 139k/152M [00:00<11:13, 226kB/s]data/train-00005-of-00006.parquet:   0%|▏                                                                                     | 242k/152M [00:01<08:00, 317kB/s]data/train-00005-of-00006.parquet:   0%|▍                                                                                     | 757k/152M [00:01<02:44, 921kB/s]data/train-00005-of-00006.parquet:   1%|▉                                                                                   | 1.72M/152M [00:02<02:08, 1.17MB/s]data/train-00005-of-00006.parquet:   2%|█▎                                                                                  | 2.48M/152M [00:02<01:27, 1.70MB/s]data/train-00005-of-00006.parquet:   4%|███▏                                                                                | 5.78M/152M [00:02<00:43, 3.36MB/s]data/train-00005-of-00006.parquet:   5%|████▏                                                                               | 7.65M/152M [00:03<00:40, 3.59MB/s]data/train-00005-of-00006.parquet:   6%|█████▎                                                                              | 9.72M/152M [00:03<00:34, 4.19MB/s]data/train-00005-of-00006.parquet:  10%|████████▍                                                                           | 15.4M/152M [00:04<00:20, 6.60MB/s]data/train-00005-of-00006.parquet:  12%|██████████                                                                          | 18.3M/152M [00:04<00:18, 7.16MB/s]data/train-00005-of-00006.parquet:  20%|████████████████▉                                                                   | 30.7M/152M [00:05<00:12, 9.65MB/s]data/train-00005-of-00006.parquet:  24%|████████████████████                                                                | 36.3M/152M [00:05<00:09, 12.7MB/s]data/train-00005-of-00006.parquet:  27%|███████████████████████                                                             | 41.9M/152M [00:05<00:08, 13.3MB/s]data/train-00005-of-00006.parquet:  63%|████████████████████████████████████████████████████▌                               | 95.4M/152M [00:13<00:07, 7.88MB/s]data/train-00005-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 152M/152M [00:13<00:00, 16.4MB/s]data/train-00005-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 152M/152M [00:13<00:00, 11.0MB/s]
+Generating train split:   0%|                                                                                                 | 0/113957 [00:00<?, ? examples/s]Generating train split:   1%|▋                                                                                   | 1000/113957 [00:00<00:28, 3964.12 examples/s]Generating train split:   3%|██▏                                                                                 | 3000/113957 [00:00<00:16, 6817.72 examples/s]Generating train split:   4%|██▉                                                                                 | 4000/113957 [00:00<00:14, 7651.06 examples/s]Generating train split:   5%|████▍                                                                               | 6000/113957 [00:00<00:12, 8764.99 examples/s]Generating train split:   7%|█████▉                                                                              | 8000/113957 [00:00<00:11, 9516.69 examples/s]Generating train split:   9%|███████▎                                                                           | 10000/113957 [00:01<00:10, 9675.65 examples/s]Generating train split:  10%|████████                                                                           | 11000/113957 [00:01<00:11, 9162.93 examples/s]Generating train split:  11%|█████████▍                                                                         | 13000/113957 [00:01<00:11, 8818.17 examples/s]Generating train split:  12%|██████████▏                                                                        | 14000/113957 [00:01<00:11, 8686.49 examples/s]Generating train split:  13%|██████████▉                                                                        | 15000/113957 [00:01<00:11, 8623.55 examples/s]Generating train split:  14%|███████████▋                                                                       | 16000/113957 [00:01<00:11, 8322.59 examples/s]Generating train split:  15%|████████████▍                                                                      | 17000/113957 [00:02<00:12, 8012.48 examples/s]Generating train split:  18%|██████████████▌                                                                    | 19993/113957 [00:02<00:09, 9483.97 examples/s]Generating train split:  19%|████████████████                                                                   | 21993/113957 [00:02<00:09, 9855.19 examples/s]Generating train split:  21%|█████████████████▎                                                                | 23993/113957 [00:02<00:08, 10934.07 examples/s]Generating train split:  23%|██████████████████▋                                                               | 25993/113957 [00:02<00:08, 10963.63 examples/s]Generating train split:  25%|████████████████████▏                                                             | 27993/113957 [00:02<00:07, 11056.69 examples/s]Generating train split:  26%|█████████████████████▌                                                            | 29993/113957 [00:03<00:07, 11334.50 examples/s]Generating train split:  28%|███████████████████████                                                           | 31993/113957 [00:03<00:07, 10916.89 examples/s]Generating train split:  30%|████████████████████████▍                                                         | 33993/113957 [00:03<00:06, 11426.68 examples/s]Generating train split:  32%|█████████████████████████▉                                                        | 35993/113957 [00:03<00:06, 11139.45 examples/s]Generating train split:  34%|████████████████████████████                                                      | 38986/113957 [00:04<00:07, 10170.83 examples/s]Generating train split:  36%|█████████████████████████████▍                                                    | 40986/113957 [00:04<00:06, 11068.37 examples/s]Generating train split:  38%|██████████████████████████████▉                                                   | 42986/113957 [00:04<00:05, 12384.35 examples/s]Generating train split:  39%|████████████████████████████████▎                                                 | 44986/113957 [00:04<00:05, 12520.27 examples/s]Generating train split:  41%|█████████████████████████████████▊                                                | 46986/113957 [00:04<00:05, 13339.08 examples/s]Generating train split:  43%|███████████████████████████████████▏                                              | 48986/113957 [00:04<00:05, 12812.19 examples/s]Generating train split:  45%|████████████████████████████████████▋                                             | 50986/113957 [00:04<00:04, 13058.67 examples/s]Generating train split:  46%|██████████████████████████████████████▏                                           | 52986/113957 [00:05<00:05, 11940.20 examples/s]Generating train split:  48%|███████████████████████████████████████▌                                          | 54986/113957 [00:05<00:05, 11738.97 examples/s]Generating train split:  51%|█████████████████████████████████████████▋                                        | 57979/113957 [00:05<00:05, 10554.72 examples/s]Generating train split:  53%|███████████████████████████████████████████▏                                      | 59979/113957 [00:05<00:05, 10753.51 examples/s]Generating train split:  54%|████████████████████████████████████████████▌                                     | 61979/113957 [00:05<00:04, 11501.10 examples/s]Generating train split:  56%|██████████████████████████████████████████████                                    | 63979/113957 [00:06<00:04, 12053.35 examples/s]Generating train split:  58%|███████████████████████████████████████████████▍                                  | 65979/113957 [00:06<00:03, 12987.35 examples/s]Generating train split:  60%|████████████████████████████████████████████████▉                                 | 67979/113957 [00:06<00:03, 11976.38 examples/s]Generating train split:  61%|██████████████████████████████████████████████████▎                               | 69979/113957 [00:06<00:03, 11442.49 examples/s]Generating train split:  63%|███████████████████████████████████████████████████▊                              | 71979/113957 [00:06<00:03, 11169.25 examples/s]Generating train split:  65%|█████████████████████████████████████████████████████▏                            | 73979/113957 [00:06<00:03, 11657.89 examples/s]Generating train split:  68%|███████████████████████████████████████████████████████▍                          | 76972/113957 [00:07<00:03, 10457.18 examples/s]Generating train split:  69%|████████████████████████████████████████████████████████▊                         | 78972/113957 [00:07<00:03, 10589.07 examples/s]Generating train split:  71%|██████████████████████████████████████████████████████████▎                       | 80972/113957 [00:07<00:03, 10727.18 examples/s]Generating train split:  73%|███████████████████████████████████████████████████████████▋                      | 82972/113957 [00:07<00:02, 11249.69 examples/s]Generating train split:  75%|█████████████████████████████████████████████████████████████▏                    | 84972/113957 [00:07<00:02, 10731.15 examples/s]Generating train split:  76%|██████████████████████████████████████████████████████████████▌                   | 86972/113957 [00:08<00:02, 11299.80 examples/s]Generating train split:  78%|████████████████████████████████████████████████████████████████                  | 88972/113957 [00:08<00:02, 11333.02 examples/s]Generating train split:  82%|██████████████████████████████████████████████████████████████████▉               | 92972/113957 [00:08<00:01, 15402.41 examples/s]Generating train split:  84%|█████████████████████████████████████████████████████████████████████             | 95965/113957 [00:08<00:01, 15559.35 examples/s]Generating train split:  86%|██████████████████████████████████████████████████████████████████████▍           | 97965/113957 [00:08<00:01, 15642.44 examples/s]Generating train split:  88%|███████████████████████████████████████████████████████████████████████▉          | 99965/113957 [00:08<00:01, 13800.09 examples/s]Generating train split:  89%|████████████████████████████████████████████████████████████████████████▍        | 101965/113957 [00:09<00:01, 11875.42 examples/s]Generating train split:  91%|█████████████████████████████████████████████████████████████████████████▉       | 103965/113957 [00:09<00:00, 10703.24 examples/s]Generating train split:  93%|███████████████████████████████████████████████████████████████████████████▎     | 105965/113957 [00:09<00:00, 10500.14 examples/s]Generating train split:  95%|████████████████████████████████████████████████████████████████████████████▋    | 107965/113957 [00:09<00:00, 10411.88 examples/s]Generating train split:  97%|██████████████████████████████████████████████████████████████████████████████▊  | 110965/113957 [00:10<00:00, 11958.24 examples/s]Generating train split: 100%|█████████████████████████████████████████████████████████████████████████████████| 113957/113957 [00:10<00:00, 14325.26 examples/s]Generating train split: 100%|█████████████████████████████████████████████████████████████████████████████████| 113957/113957 [00:10<00:00, 11230.10 examples/s]
+DatasetDict({
+    train: Dataset({
+        features: ['system', 'conversations'],
+        num_rows: 113957
+    })
+})
+First split: train
+Features: {'system': Value('string'), 'conversations': List({'from': Value('string'), 'value': Value('string')})}
+Example 0 keys: dict_keys(['system', 'conversations'])
+Example 0 (truncated):
+- system: Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the final precise and accurate solutions. This requires engaging in a comprehensive cycle of analysis, summarizing, exploration, reassessment, reflection, backtracing, and it...
+- conversations: <class 'list'> [{'from': 'user', 'value': 'Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply call the function after the definition.The Chef likes to stay in touch with his staff. So, the Chef, the head server, and the sous-...
+
+README head:
+---
+dataset_info:
+- config_name: default
+  features:
+  - name: system
+    dtype: string
+  - name: conversations
+    list:
+    - name: from
+      dtype: string
+    - name: value
+      dtype: string
+  splits:
+  - name: train
+    num_bytes: 2635015668
+    num_examples: 113957
+  download_size: 1078777193
+  dataset_size: 2635015668
+- config_name: metadata
+  features:
+  - name: problem
+    dtype: string
+  - name: deepseek_reasoning
+    dtype: string
+  - name: deepseek_solution
+    dtype: string
+  - name: ground_truth_solution
+    dtype: string
+  - name: domain
+    dtype: string
+  - name: source
+    dtype: string
+  - name: test_cases
+    dtype: string
+  - name: starter_code
+    dtype: string
+  splits:
+  - name: train
+    num_bytes: 5525214077.699433
+    num_examples: 113957
+  download_size: 2469729724
+  dataset_size: 5525214077.699433
+configs:
+- config_name: default
+  data_files:
+  - split: train
+    path: data/train-*
+- config_name: metadata
+  data_files:
+  - split: train
+    path: metadata/train-*
+tags:
+- curator
+- synthetic
+license: apache-2.0
+---
+
+<p align="center">
+    <img src="open_thoughts.png" width="50%">
+</p>
+
+> [!NOTE]
+> We have released a paper for OpenThoughts! See our paper [here](https://arxiv.org/abs/2506.04178).
+
+<a href="https://github.com/bespokelabsai/curator/">
+ <img src="https://huggingface.co/datasets/bespokelabs/Bespoke-Stratos-17k/resolve/main/made_with_curator.png" alt="Made with Curator" width=200px>
+</a>
+
+# Open-Thoughts-114k
+
+## Dataset Description
+
+- **Homepage:** https://www.open-thoughts.ai/
+- **Repository:** https://github.com/open-thoughts/open-thoughts
+- **Point of Contact:** [Open Thoughts Team](contact@open-thoughts.ai)
+
+Open synthetic reasoning dataset with 114k high-quality examples covering math, science, code, and puzzles!
+
+Inspect the content with rich formatting with [Curator Viewer](https://curator.bespokelabs.ai/datasets/1389c194254c4ead96daaf145505c3d1).
+
+### Available Subsets
+
+**default** subset containing ready-to-train data used to finetune the [OpenThinker-7B](https://huggingface.co/open-thoughts/OpenThinker-7B) and [OpenThinker-32B](https://huggingface.co/open-thoughts/OpenThinker-32B) models:
+```
+ds = load_dataset("open-thoughts/OpenThoughts-114k", split="train")
+```
+**metadata** subset containing extra columns used in dataset construction:
+- `problem`
+- `ground_truth_solution`
+- `deepseek_reasoning`
+- `deepseek_solution`
+- `domain`
+- `source`
+- `test_cases` (code only)
+- `starter_code`(code only)
+
+```
+ds = load_dataset("open-thoughts/OpenThoughts-114k", "metadata", split="train")
+```
+
+# OpenThinker Models
+
+The numbers reported in the tables below are evaluated with our open-source tool [Evalchemy](https://github.com/mlfoundations/Evalchemy).
+
+|                             | AIME24   | MATH500 | GPQA-Diamond | LCBv2 Easy  | LCBv2 Medium  | LCBv2 Hard  | LCBv2 All  |
+| --------------------------- | -------- | ------- | ------------ | ----------- | ------------- | ----------- | ---------- |
+| [OpenThinker-32B](https://huggingface.co/open-thoughts/OpenThinker-32B)             | 66       | 90.6    | 61.6         | 95.1        | 70.9          | 26.8        | 68.9       |
+| [OpenThinker-7B](https://huggingface.co/open-thoughts/OpenThinker-7B)              | 31.3     | 83.0    | 42.4         | 75.3        | 28.6          | 6.5         | 39.9       |
+| Bespoke-Stratos-7B          | 22.7     | 79.6    | 38.9         | 71.4        | 25.2          | 0.8         | 35.8       |
+| DeepSeek-R1-Distill-Qwen-7B | 60       | 88.2    | 46.9         | 79.7        | 45.1          | 14.6        | 50.1       |
+| gpt-4o-0513                 | 8.7      | 75.8    | 46.5         | 87.4        | 42.7          | 8.9         | 50.5       |
+| o1-mini                     | 64       | 85.6    | 60           | 92.8        | 74.7          | 39.8        | 72.8       |
+
+We are fully open-source. Our [model weights](https://huggingface.co/open-thoughts), [datasets](https://huggingface.co/open-thoughts), [data generation code](https://github.com/open-thoughts/open-thoughts), [evaluation code](https://github.com/mlfoundations/Evalchemy), and [training code](https://github.com/hiyouga/LLaMA-Factory) are all publicly available. 
+
+|  | Open Weights | Open Data | Open Code | 
+|--|--------------|-----------| --------- |
+|OpenThinker-32B|✅|[✅](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k)|[✅](https://github.com/open-thoughts/open-thoughts) |
+|OpenThinker-7B|✅|[✅](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k)|[✅](https://github.com/open-thoughts/open-thoughts) |
+|Bespoke-Stratos-7B|✅|[✅](https://huggingface.co/datasets/bespokelabs/Bespoke-Stratos-17k)|[✅](https://github.com/bespokelabsai/curator/tree/main/examples/bespoke-stratos-data-generation)|
+|DeepSeek-R1-Distill models|✅|❌|❌|
+|OpenAI/Gemini|❌|❌|❌|❌|
+
+We are actively working towards improving the dataset, so please stay tuned!
+
+# Data Curation Recipe
+
+Code
+- [BAAI/TACO](https://huggingface.co/datasets/BAAI/TACO)
+- [codeparrot/apps](https://huggingface.co/datasets/codeparrot/apps)
+- [deepmind/code_contests](https://huggingface.co/datasets/deepmind/code_contests)
+- [MatrixStudio/Codeforces-Python-Submissions](https://huggingface.co/datasets/MatrixStudio/Codeforces-Python-Submissions)
+
+Math
+- [AI-MO/NuminaMath-CoT](https://huggingface.co/datasets/AI-MO/NuminaMath-CoT)
+
+Science
+- [camel-ai/chemistry](https://huggingface.co/datasets/camel-ai/chemistry)
+- [camel-ai/biology](https://huggingface.co/datasets/camel-ai/biology)
+- [camel-ai/physics](https://huggingface.co/datasets/camel-ai/physics)
+
+Puzzle
+- [INK-USC/riddle_sense](https://huggingface.co/datasets/INK-USC/riddle_sense)
+
+Using a curated mix of the datasets above, we generate reasoning traces from DeepSeek-R1 and verify correctness to construct the final dataset.
+
+![diagram](diagram.png)
+
+The full code for the data generation pipeline is publicly available [in our github repo](https://github.com/open-thoughts/open-thoughts).
+
+
+# Links
+- 📝 [OpenThoughts Paper](https://arxiv.org/abs/2506.04178)
+- 📊 [OpenThinker-32B Blog Post](https://www.open-thoughts.ai/blog/scale)
+- 📊 [Measuing Reasoning with Evalchemy Blog Post](https://www.open-thoughts.ai/blog/measure)
+- 📊 [Open Thoughts Launch Blog Post](https://www.open-thoughts.ai/blog/launch)
+- 💻 [Open Thoughts GitHub Repository](https://github.com/open-thoughts/open-thoughts)
+- 🧠 [OpenThoughts-114k dataset](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k) - this dataset.
+- 🤖 [OpenThinker-32B model](https://huggingface.co/open-thoughts/OpenThinker-32B)
+- 🤖 [OpenThinker-7B model](https://huggingface.co/open-thoughts/OpenThinker-7B)
+- 📊 [Bespoke-Stratos Blog Post](https://www.bespokelabs.ai/blog/bespoke-stratos-the-unreasonable-effectiveness-of-reasoning-distillation)
+- 🧠 [Bespoke-Stratos-17k dataset](https://huggingface.co/datasets/bespokelabs/Bespoke-Stratos-17k)
+- 🤖 [Bespoke-Stratos-32B model](https://huggingface.co/bespokelabs/Bespoke-Stratos-32B)
+- 🤖 [Bespoke-Stratos-7B model](https://huggingface.co/bespokelabs/Bespoke-Stratos-7B)
+- 💻 [Curator Viewer](https://curator.bespokelabs.ai/datasets/1389c194254c4ead96daaf145505c3d1)
+
+## Visualization
+Inspect the content with rich formatting with [Curator Viewer](https://curator.bespokelabs.ai/datasets/1389c194254c4ead96daaf145505c3d1)
+
+All 114k examples, clustered by semantic similarity, can be explored in [Nomic Atlas](https://atlas.nomic.ai/data/nomic/openthoughts-114k/map). 
+
+<a href="https://atlas.nomic.ai/data/nomic/openthoughts-114k/map">
+  <img src="https://cdn-uploads.huggingface.co/production/uploads/630bfb6b86b8b9904c35f4d1/d7TjezV6R3OnIDlEVL1Rl.png" alt="Nomic Atlas Open-Thoughts-114k Map" width="35%"/>
+</a>
+
+# Citation
+```
+@misc{guha2025openthoughtsdatarecipesreasoning,
+  title={OpenThoughts: Data Recipes for Reasoning Models}, 
+  author={Etash Guha and Ryan Marten and Sedrick Keh and Negin Raoof and Georgios Smyrnis and Hritik Bansal and Marianna Nezhurina and Jean Mercat and Trung Vu and Zayne Sprague and Ashima Suvarna and Benjamin Feuer and Liangyu Chen and Zaid Khan and Eric Frankel and Sachin Grover and Caroline Choi and Niklas Muennighoff and Shiye Su and Wanjia Zhao and John Yang and Shreyas Pimpalgaonkar and Kartik Sharma and Charlie Cheng-Jie Ji and Yichuan Deng and Sarah Pratt and Vivek Ramanujan and Jon Saad-Falcon and Jeffrey Li and Achal Dave and Alon Albalak and Kushal Arora and Blake Wulfe and Chinmay Hegde and Greg Durrett and Sewoong Oh and Mohit Bansal and Saadia Gabriel and Aditya Grover and Kai-Wei Chang and Vaishaal Shankar and Aaron Gokaslan and Mike A. Merrill and Tatsunori Hashimoto and Yejin Choi and Jenia Jitsev and Reinhard Heckel and Maheswaran Sathiamoorthy and Alexandros G. Dimakis and Ludwig Schmidt},
+  year={2025},
+  eprint={2506.04178},
+  archivePrefix={arXiv},
+  primaryClass={cs.LG},
+  url={https://arxiv.org/abs/2506.04178}, 
+}
+```
+[?2004hroot@1e287e0ce32a:/app# python3 - << 'PY'
+[?2004l[?2004h> from datasets import load_dataset
+[?2004l[?2004h> from transformers import AutoTokenizer
+[?2004l[?2004h> import math
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load dataset
+[?2004l[?2004h> ds = load_dataset('open-thoughts/OpenThoughts-114k')
+[?2004l[?2004h> 
+[?2004l[?2004h> # Determine science domain selection rules
+[?2004l[?2004h> # Heuristics:
+[?2004l[?2004h> # - If there is a split named 'science' use it directly.
+[?2004l[?2004h> # - Else if a 'domain' field exists, filter rows where domain equals 'science' (case-insensitive) or similar variants.
+[?2004l[?2004h> # - Identify DeepSeek-specific field if present (e.g., 'deepseek_thought', 'deepseek', 'model'=='deepseek', or nested providers),
+[?2004l[?2004h> #   otherwise default to the main text/thought field indicated by the dataset (e.g., 'thought', 'response', 'content').
+[?2004l[?2004h> 
+[?2004l[?2004h> available_splits = list(ds.keys())
+[?2004l[?2004h> science_ds = None
+[?2004l[?2004h> if 'science' in ds:
+[?2004l[?2004h>     science_ds = ds['science']
+[?2004l[?2004h> else:
+[?2004l[?2004h>     # pick a base split to filter from, prefer 'train' if present
+[?2004l[?2004h>     base_split_name = 'train' if 'train' in ds else available_splits[0]
+[?2004l[?2004h>     base = ds[base_split_name]
+[?2004l[?2004h>     # find a likely domain field
+[?2004l[?2004h>     domain_field = None
+[?2004l[?2004h>     for cand in ['domain','category','subject','topic','Domain','Category']:
+[?2004l[?2004h>         if cand in base.features:
+[?2004l[?2004h>             domain_field = cand
+[?2004l[?2004h>             break
+[?2004l[?2004h>     if domain_field is None:
+[?2004l[?2004h>         # try to infer from first example keys
+[?2004l[?2004h>         for k in base.features.keys():
+[?2004l[?2004h>             if 'domain' in k.lower() or 'category' in k.lower() or 'subject' in k.lower():
+[?2004l[?2004h>                 domain_field = k
+[?2004l[?2004h>                 break
+[?2004l[?2004h>     if domain_field is None:
+[?2004l[?2004h>         raise SystemExit('Could not find a domain field or science split in dataset')
+[?2004l[?2004h>     # filter to science-like values
+[?2004l[?2004h>     def is_science(x):
+[?2004l[?2004h>         val = x.get(domain_field)
+[?2004l[?2004h>         if val is None:
+[?2004l[?2004h>             return False
+[?2004l[?2004h>         if isinstance(val, str):
+[?2004l[?2004h>             return val.strip().lower() in {'science','sci','scientific','natural science','natural-science'}
+[?2004l[?2004h>         return False
+[?2004l[?2004h>     science_ds = base.filter(is_science)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('Science subset size:', len(science_ds))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Identify DeepSeek-specific content field if present; else choose generic thought/response/content field
+[?2004l[?2004h> # We will inspect features to choose a text field.
+[?2004l[?2004h> features = science_ds.features
+[?2004l[?2004h> text_field = None
+[?2004l[?2004h> # Candidate fields ordered by likelihood
+[?2004l[?2004h> candidates = [
+[?2004l[?2004h>     'deepseek_thought','deepseek','deepseek_content','deepseek_response','deepseek_cot','deepseek_r1','deepseek_output',
+[?2004l[?2004h>     'thought','cot','chain_of_thought','solution','response','answer','content','text'
+[?2004l[?2004h> ]
+[?2004l[?2004h> for cand in candidates:
+[?2004l[?2004h>     if cand in features and str(features[cand].dtype) == 'string':
+[?2004l[?2004h>         text_field = cand
+[?2004l[?2004h>         break
+[?2004l[?2004h> 
+[?2004l[?2004h> # If not found, try to deduce from first example
+[?2004l[?2004h> if text_field is None and len(science_ds) > 0:
+[?2004l[?2004h>     ex = science_ds[0]
+[?2004l[?2004h>     for cand in candidates:
+[?2004l[?2004h>         if cand in ex and isinstance(ex[cand], str) and len(ex[cand].strip())>0:
+[?2004l[?2004h>             text_field = cand
+[?2004l[?2004h>             break
+[?2004l[?2004h> 
+[?2004l[?2004h> # If still not found, consider nested structures with provider
+[?2004l[?2004h> provider_field = None
+[?2004l[?2004h> if text_field is None:
+[?2004l[?2004h>     # Look for a list/dict that may contain multiple providers
+[?2004l[?2004h>     ex = science_ds[0] if len(science_ds)>0 else {}
+[?2004l[?2004h>     for k,v in ex.items():
+[?2004l[?2004h>         if isinstance(v, list) and v and isinstance(v[0], dict):
+[?2004l[?2004h>             # try to find dicts with 'provider' or 'model' and 'text'
+[?2004l[?2004h>             for item in v:
+[?2004l[?2004h>                 keys = set(item.keys())
+[?2004l[?2004h>                 if any(s in keys for s in ['provider','model','source']) and any(t in keys for t in ['text','content','thought','response']):
+[?2004l[?2004h>                     provider_field = (k,'text' if 'text' in keys else ('content' if 'content' in keys else ('thought' if 'thought' in keys else 'response')))
+[?2004l[?2004h>                     break
+[?2004l[?2004h>         if provider_field:
+[?2004l[?2004h>             break
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build an iterator over DeepSeek content if provider_field set
+[?2004l[?2004h> def iter_texts():
+[?2004l[?2004h>     if len(science_ds) == 0:
+[?2004l[?2004h>         return
+[?2004l[?2004h>     if text_field is not None:
+[?2004l[?2004h>         for ex in science_ds:
+[?2004l[?2004h>             txt = ex.get(text_field)
+[?2004l[?2004h>             if isinstance(txt, str) and txt:
+[?2004l[?2004h>                 yield txt
+[?2004l[?2004h>     elif provider_field is not None:
+[?2004l[?2004h>         list_key, text_key = provider_field
+[?2004l[?2004h>         for ex in science_ds:
+[?2004l[?2004h>             items = ex.get(list_key) or []
+[?2004l[?2004h>             # Prefer items where provider indicates deepseek
+[?2004l[?2004h>             for it in items:
+[?2004l[?2004h>                 prov = (it.get('provider') or it.get('model') or it.get('source') or '')
+[?2004l[?2004h>                 if isinstance(prov, str) and 'deepseek' in prov.lower():
+[?2004l[?2004h>                     txt = it.get(text_key)
+[?2004l[?2004h>                     if isinstance(txt, str) and txt:
+[?2004l[?2004h>                         yield txt
+[?2004l[?2004h>         # If nothing yielded, fallback to all texts in that list
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         raise SystemExit('Could not identify a suitable text field to tokenize')
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load tokenizer
+[?2004l[?2004h> tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Accumulate token count
+[?2004l[?2004h> total = 0
+[?2004l[?2004h> batch = []
+[?2004l[?2004h> BATCH_SIZE = 64
+[?2004l[?2004h> for txt in iter_texts():
+[?2004l[?2004h>     batch.append(txt)
+[?2004l[?2004h>     if len(batch) >= BATCH_SIZE:
+[?2004l[?2004h>         enc = tokenizer(batch, add_special_tokens=False)
+[?2004l[?2004h>         # enc['input_ids'] is a list of lists
+[?2004l[?2004h>         total += sum(len(ids) for ids in enc['input_ids'])
+[?2004l[?2004h>         batch = []
+[?2004l[?2004h> if batch:
+[?2004l[?2004h>     enc = tokenizer(batch, add_special_tokens=False)
+[?2004l[?2004h>     total += sum(len(ids) for ids in enc['input_ids'])
+[?2004l[?2004h> 
+[?2004l[?2004h> print('TOTAL_TOKENS:', total)
+[?2004l[?2004h> with open('/app/answer.txt','w') as f:
+[?2004l[?2004h>     f.write(str(total))
+[?2004l[?2004h> print('WROTE /app/answer.txt')
+[?2004l[?2004h> PY
+[?2004lNone of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+Could not find a domain field or science split in dataset
+[?2004hroot@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+[?2004lwc: /app/answer.txt: No such file or directory
+[?2004hroot@1e287e0ce32a:/app# python3 - << 'PY'
+[?2004l[?2004h> from datasets import load_dataset
+[?2004l[?2004h> from transformers import AutoTokenizer
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load tokenizer
+[?2004l[?2004h> tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Stream dataset to avoid full download wait
+[?2004l[?2004h> stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> def find_domain_field(ex):
+[?2004l[?2004h>     for k in ex.keys():
+[?2004l[?2004h>         kl = k.lower()
+[?2004l[?2004h>         if 'domain' in kl or 'category' in kl or 'subject' in kl or 'topic' in kl:
+[?2004l[?2004h>             return k
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> def is_science_domain(val):
+[?2004l[?2004h>     if val is None:
+[?2004l[?2004h>         return False
+[?2004l[?2004h>     if isinstance(val, str):
+[?2004l[?2004h>         v = val.strip().lower()
+[?2004l[?2004h>         return (v == 'science') or v.startswith('science') or v in {'sci','scientific','natural science','natural-science','general science'}
+[?2004l[?2004h>     return False
+[?2004l[?2004h> 
+[?2004l[?2004h> def extract_deepseek_texts(ex):
+[?2004l[?2004h>     texts = []
+[?2004l[?2004h>     # direct string fields indicating deepseek
+[?2004l[?2004h>     for k,v in ex.items():
+[?2004l[?2004h>         if isinstance(v, str) and 'deepseek' in k.lower():
+[?2004l[?2004h>             s = v.strip()
+[?2004l[?2004h>             if s:
+[?2004l[?2004h>                 texts.append(s)
+[?2004l[?2004h>     # dict keyed by model name or containing provider/model/source
+[?2004l[?2004h>     for k,v in ex.items():
+[?2004l[?2004h>         if isinstance(v, dict):
+[?2004l[?2004h>             # dict of multiple models
+[?2004l[?2004h>             for dk,dv in v.items():
+[?2004l[?2004h>                 if isinstance(dv, str) and 'deepseek' in str(dk).lower():
+[?2004l[?2004h>                     s = dv.strip()
+[?2004l[?2004h>                     if s:
+[?2004l[?2004h>                         texts.append(s)
+[?2004l[?2004h>                 elif isinstance(dv, dict):
+[?2004l[?2004h>                     prov = (dv.get('provider') or dv.get('model') or dv.get('source') or '')
+[?2004l[?2004h>                     if isinstance(prov, str) and 'deepseek' in prov.lower():
+[?2004l[?2004h>                         for tk in ['text','content','thought','response','output','cot','rationale']:
+[?2004l[?2004h>                             tv = dv.get(tk)
+[?2004l[?2004h>                             if isinstance(tv, str):
+[?2004l[?2004h>                                 s = tv.strip()
+[?2004l[?2004h>                                 if s:
+[?2004l[?2004h>                                     texts.append(s)
+[?2004l[?2004h>             # single dict with provider
+[?2004l[?2004h>             prov = (v.get('provider') or v.get('model') or v.get('source'))
+[?2004l[?2004h>             if isinstance(prov, str) and 'deepseek' in prov.lower():
+[?2004l[?2004h>                 for tk in ['text','content','thought','response','output','cot','rationale']:
+[?2004l[?2004h>                     tv = v.get(tk)
+[?2004l[?2004h>                     if isinstance(tv, str):
+[?2004l[?2004h>                         s = tv.strip()
+[?2004l[?2004h>                         if s:
+[?2004l[?2004h>                             texts.append(s)
+[?2004l[?2004h>     # list of dicts/items with provider
+[?2004l[?2004h>     for k,v in ex.items():
+[?2004l[?2004h>         if isinstance(v, list):
+[?2004l[?2004h>             for item in v:
+[?2004l[?2004h>                 if isinstance(item, dict):
+[?2004l[?2004h>                     prov = (item.get('provider') or item.get('model') or item.get('source') or '')
+[?2004l[?2004h>                     if isinstance(prov, str) and 'deepseek' in prov.lower():
+[?2004l[?2004h>                         for tk in ['text','content','thought','response','output','cot','rationale']:
+[?2004l[?2004h>                             tv = item.get(tk)
+[?2004l[?2004h>                             if isinstance(tv, str):
+[?2004l[?2004h>                                 s = tv.strip()
+[?2004l[?2004h>                                 if s:
+[?2004l[?2004h>                                     texts.append(s)
+[?2004l[?2004h>                     else:
+[?2004l[?2004h>                         # fields named with deepseek
+[?2004l[?2004h>                         for tk, tv in item.items():
+[?2004l[?2004h>                             if isinstance(tv, str) and 'deepseek' in tk.lower():
+[?2004l[?2004h>                                 s = tv.strip()
+[?2004l[?2004h>                                 if s:
+[?2004l[?2004h>                                     texts.append(s)
+[?2004l[?2004h>     return texts
+[?2004l[?2004h> 
+[?2004l[?2004h> # Iterate and compute token count
+[?2004l[?2004h> itr = iter(stream)
+[?2004l[?2004h> try:
+[?2004l[?2004h>     first = next(itr)
+[?2004l[?2004h> except StopIteration:
+[?2004l[?2004h>     total = 0
+[?2004l[?2004h>     with open('/app/answer.txt','w') as f:
+[?2004l[?2004h>         f.write('0')
+[?2004l[?2004h>     print('TOTAL', 0)
+[?2004l[?2004h>     raise SystemExit()
+[?2004l[?2004h> 
+[?2004l[?2004h> domain_field = find_domain_field(first)
+[?2004l[?2004h> 
+[?2004l[?2004h> total = 0
+[?2004l[?2004h> batch = []
+[?2004l[?2004h> BATCH = 64
+[?2004l[?2004h> 
+[?2004l[?2004h> # process first example
+[?2004l[?2004h> if is_science_domain(first.get(domain_field) if domain_field else None):
+[?2004l[?2004h>     batch.extend(extract_deepseek_texts(first))
+[?2004l[?2004h> 
+[?2004l[?2004h> for ex in itr:
+[?2004l[?2004h>     domval = ex.get(domain_field) if domain_field else None
+[?2004l[?2004h>     if is_science_domain(domval):
+[?2004l[?2004h>         texts = extract_deepseek_texts(ex)
+[?2004l[?2004h>         if texts:
+[?2004l[?2004h>             batch.extend(texts)
+[?2004l[?2004h>     if len(batch) >= BATCH:
+[?2004l[?2004h>         enc = tokenizer(batch, add_special_tokens=False)
+[?2004l[?2004h>         total += sum(len(ids) for ids in enc['input_ids'])
+[?2004l[?2004h>         batch = []
+[?2004l[?2004h> 
+[?2004l[?2004h> if batch:
+[?2004l[?2004h>     enc = tokenizer(batch, add_special_tokens=False)
+[?2004l[?2004h>     total += sum(len(ids) for ids in enc['input_ids'])
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/app/answer.txt','w') as f:
+[?2004l[?2004h>     f.write(str(total))
+[?2004l[?2004h> print('TOTAL', total)
+[?2004l[?2004h> PY
+[?2004lNone of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+tokenizer_config.json: 0.00B [00:00, ?B/s]tokenizer_config.json: 7.30kB [00:00, 25.2MB/s]
+vocab.json: 0.00B [00:00, ?B/s]vocab.json: 2.78MB [00:00, 30.0MB/s]
+merges.txt: 0.00B [00:00, ?B/s]merges.txt: 1.67MB [00:00, 27.5MB/s]
+tokenizer.json: 0.00B [00:00, ?B/s]tokenizer.json: 4.23MB [00:00, 40.3MB/s]tokenizer.json: 7.03MB [00:00, 36.9MB/s]
+ls -l /app/answer.txt
+wc -c /app/answer.txt && echo && cat /app/answer.txt
+ls -l /app/answer.txt
+wc -c /app/answer.txt && echo && cat /app/answer.txt
+ls -l /app/answer.txt
+wc -c /app/answer.txt && echo && cat /app/answer.txt
+TOTAL 0
+[?2004hroot@1e287e0ce32a:/app# ls -l /app/answer.txt
+[?2004l-rw-r--r-- 1 root root 1 Oct 15 06:36 /app/answer.txt
+[?2004hroot@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+[?2004l1 /app/answer.txt
+
+0[?2004hroot@1e287e0ce32a:/app# ls -l /app/answer.txt
+[?2004l-rw-r--r-- 1 root root 1 Oct 15 06:36 /app/answer.txt
+[?2004hroot@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+[?2004l1 /app/answer.txt
+
+0[?2004hroot@1e287e0ce32a:/app# ls -l /app/answer.txt
+[?2004l-rw-r--r-- 1 root root 1 Oct 15 06:36 /app/answer.txt
+[?2004hroot@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+[?2004l1 /app/answer.txt
+
+0[?2004hroot@1e287e0ce32a:/app# ls -l /app/answer.txt
+[?2004l-rw-r--r-- 1 root root 1 Oct 15 06:36 /app/answer.txt
+[?2004hroot@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+[?2004l1 /app/answer.txt
+
+0[?2004hroot@1e287e0ce32a:/app# python3 - << 'PY'
+[?2004l   for tk in TEXT_KEYS:
+                            tv = dv.get(tk)
+                            if isinstance(tv, str) and tv.strip():
+                                texts.append(tv.strip())
+            # Single-level dict with provider
+            prov = (v.get('provider') or v.get('model') or v.get('source'))
+            if isinstance(prov, str) and 'deepseek' in prov.lower():
+                for tk in TEXT_KEYS:
+                    tv = v.get(tk)
+                    if isinstance(tv, str) and tv.strip():
+                        texts.append(tv.strip())
+    # 3) Lists of dicts/items
+    for k, v in ex.items():
+        if isinstance(v, list):
+            for item in v:
+                if isinstance(item, dict):
+                    prov = (item.get('provider') or item.get('model') or item.get('source') or '')
+                    if isinstance(prov, str) and 'deepseek' in prov.lower():
+                        for tk in TEXT_KEYS:
+                            tv = item.get(tk)
+                            if isinstance(tv, str) and tv.strip():
+                                texts.append(tv.strip())
+                    else:
+                        # Fields within dict named with deepseek
+                        for tk, tv in item.items():
+                            if isinstance(tv, str) and 'deepseek' in tk.lower() and tv.strip():
+                                texts.append(tv.strip())
+    return texts
+
+# Initialize iterator and domain getter
+itr = iter(stream)
+try:
+    first = next(itr)
+except StopIteration:
+    total = 0
+    with open('/app/answer.txt', 'w') as f:
+        f.write('0')
+    print('TOTAL', 0)
+    raise SystemExit()
+
+domain_get = make_domain_getter(first)
+
+# Counting loop
+BATCH = 64
+batch = []
+TOTAL = 0
+
+# Process first example
+if is_science(domain_get(first)):
+    batch.extend(extract_deepseek_texts(first))
+
+for ex in itr:
+    dom = domain_get(ex)
+    if is_science(dom):
+        texts = extract_deepseek_texts(ex)
+        if texts:
+            batch.extend(texts)
+    if len(batch) >= BATCH:
+        enc = tokenizer[?2004h> from datasets import load_dataset
+[?2004l[?2004h> from transformers import AutoTokenizer
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load tokenizer
+[?2004l[?2004h> print('Loading tokenizer...')
+[?2004l[?2004h> tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('Opening dataset stream...')
+[?2004l[?2004h> stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Determine domain getter (top-level or one-level nested)
+[?2004l[?2004h> def make_domain_getter(example):
+[?2004l[?2004h>     # Top-level search
+[?2004l[?2004h>     for k in example.keys():
+[?2004l[?2004h>         if 'domain' in k.lower():
+[?2004l[?2004h>             return lambda ex, kk=k: ex.get(kk)
+[?2004l[?2004h>     # One-level nested dict search
+[?2004l[?2004h>     for k,v in example.items():
+[?2004l[?2004h>         if isinstance(v, dict):
+[?2004l[?2004h>             for dk in v.keys():
+[?2004l[?2004h>                 if 'domain' in dk.lower():
+[?2004l[?2004h>                     return lambda ex, kk=k, dd=dk: (ex.get(kk) or {}).get(dd)
+[?2004l[?2004h>     return lambda ex: None
+[?2004l[?2004h> 
+[?2004l[?2004h> # Science domain check
+[?2004l[?2004h> def is_science(val):
+[?2004l[?2004h>     if not isinstance(val, str):
+[?2004l[?2004h>         return False
+[?2004l[?2004h>     v = val.strip().lower()
+[?2004l[?2004h>     return ('science' in v) or (v in {'sci','scientific','natural science','natural-science'})
+[?2004l[?2004h> 
+[?2004l[?2004h> # Extract DeepSeek texts from an example
+[?2004l[?2004h> TEXT_KEYS = ['text','content','thought','response','output','cot','rationale','answer']
+[?2004l[?2004h> 
+[?2004l[?2004h> def extract_deepseek_texts(ex):
+[?2004l[?2004h>     texts = []
+[?2004l[?2004h>     # 1) Direct fields with 'deepseek' in key
+[?2004l[?2004h>     for k, v in ex.items():
+[?2004l[?2004h>         if isinstance(v, str) and 'deepseek' in k.lower():
+[?2004l[?2004h>             s = v.strip()
+[?2004l[?2004h>             if s:
+[?2004l[?2004h>                 texts.append(s)
+[?2004l[?2004h>     # 2) Dict values
+[?2004l[?2004h>     for k, v in ex.items():
+[?2004l[?2004h>         if isinstance(v, dict):
+[?2004l[?2004h>             # Dict where keys may be model names
+[?2004l[?2004h>             for dk, dv in v.items():
+[?2004l[?2004h>                 if isinstance(dv, str) and 'deepseek' in str(dk).lower():
+[?2004l[?2004h>                     s = dv.strip()
+[?2004l[?2004h>                     if s:
+[?2004l[?2004h>                         texts.append(s)
+[?2004l[?2004h>                 elif isinstance(dv, dict):
+[?2004l[?2004h>                     prov = (dv.get('provider') or dv.get('model') or dv.get('source') or '')
+[?2004l[?2004h>                     if isinstance(prov, str) and 'deepseek' in prov.lower():
+[?2004l[?2004h>                         for tk in TEXT_KEYS:
+[?2004l[?2004h>                             tv = dv.get(tk)
+[?2004l[?2004h>                             if isinstance(tv, str) and tv.strip():
+[?2004l[?2004h>                                 texts.append(tv.strip())
+[?2004l[?2004h>             # Single-level dict with provider
+[?2004l[?2004h>             prov = (v.get('provider') or v.get('model') or v.get('source'))
+[?2004l[?2004h>             if isinstance(prov, str) and 'deepseek' in prov.lower():
+[?2004l[?2004h>                 for tk in TEXT_KEYS:
+[?2004l[?2004h>                     tv = v.get(tk)
+[?2004l[?2004h>                     if isinstance(tv, str) and tv.strip():
+[?2004l[?2004h>                         texts.append(tv.strip())
+[?2004l[?2004h>     # 3) Lists of dicts/items
+[?2004l[?2004h>     for k, v in ex.items():
+[?2004l[?2004h>         if isinstance(v, list):
+[?2004l[?2004h>             for item in v:
+[?2004l[?2004h>                 if isinstance(item, dict):
+[?2004l[?2004h>                     prov = (item.get('provider') or item.get('model') or item.get('source') or '')
+[?2004l[?2004h>                     if isinstance(prov, str) and 'deepseek' in prov.lower():
+[?2004l[?2004h>                         for tk in TEXT_KEYS:
+[?2004l[?2004h>                             tv = item.get(tk)
+[?2004l[?2004h>                             if isinstance(tv, str) and tv.strip():
+[?2004l[?2004h>                                 texts.append(tv.strip())
+[?2004l[?2004h>                     else:
+[?2004l[?2004h>                         # Fields within dict named with deepseek
+[?2004l[?2004h>                         for tk, tv in item.items():
+[?2004l[?2004h>                             if isinstance(tv, str) and 'deepseek' in tk.lower() and tv.strip():
+[?2004l[?2004h>                                 texts.append(tv.strip())
+[?2004l[?2004h>     return texts
+[?2004l[?2004h> 
+[?2004l[?2004h> # Initialize iterator and domain getter
+[?2004l[?2004h> itr = iter(stream)
+[?2004l[?2004h> try:
+[?2004l[?2004h>     first = next(itr)
+[?2004l[?2004h> except StopIteration:
+[?2004l[?2004h>     total = 0
+[?2004l[?2004h>     with open('/app/answer.txt', 'w') as f:
+[?2004l[?2004h>         f.write('0')
+[?2004l[?2004h>     print('TOTAL', 0)
+[?2004l[?2004h>     raise SystemExit()
+[?2004l[?2004h> 
+[?2004l[?2004h> domain_get = make_domain_getter(first)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Counting loop
+[?2004l[?2004h> BATCH = 64
+[?2004l[?2004h> batch = []
+[?2004l[?2004h> TOTAL = 0
+[?2004l[?2004h> 
+[?2004l[?2004h> # Process first example
+[?2004l[?2004h> if is_science(domain_get(first)):
+[?2004l[?2004h>     batch.extend(extract_deepseek_texts(first))
+[?2004l[?2004h> 
+[?2004l[?2004h> for ex in itr:
+[?2004l[?2004h>     dom = domain_get(ex)
+[?2004l[?2004h>     if is_science(dom):
+[?2004l[?2004h>         texts = extract_deepseek_texts(ex)
+[?2004l[?2004h>         if texts:
+[?2004l[?2004h>             batch.extend(texts)
+[?2004l[?2004h>     if len(batch) >= BATCH:
+[?2004l[?2004h>         enc = tokenizer(batch, add_special_tokens=False)
+[?2004l[?2004h>         TOTAL += sum(len(ids) for ids in enc['input_ids'])
+[?2004l[?2004h>         batch = []
+[?2004l[?2004h> 
+[?2004l[?2004h> # Flush remaining
+[?2004l[?2004h> if batch:
+[?2004l[?2004h>     enc = tokenizer(batch, add_special_tokens=False)
+[?2004l[?2004h>     TOTAL += sum(len(ids) for ids in enc['input_ids'])
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/app/answer.txt', 'w') as f:
+[?2004l[?2004h>     f.write(str(TOTAL))
+[?2004l[?2004h> print('TOTAL', TOTAL)
+[?2004l[?2004h> PY
+[?2004lNone of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+Loading tokenizer...
+Opening dataset stream...
+wc -c /app/answer.txt && echo && cat /app/answer.txt
+python3 - << 'PY'
+from huggingface_hub import hf_hub_download
+from datasets import load_dataset_builder, load_dataset
+from transformers import AutoTokenizer
+import json
+
+print('Downloading README...')
+try:
+    readme_path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='README.md')
+    with open(readme_path, 'r', encoding='utf-8') as f:
+        readme = f.read()
+    print('\nREADME preview (first 150 lines):')
+    print('\n'.join(readme.splitlines()[:150]))
+except Exception as e:
+    print('Failed to fetch README:', e)
+
+print('\nLoading dataset builder info...')
+try:
+    builder = load_dataset_builder('open-thoughts/OpenThoughts-114k')
+    info = builder.info
+    print('Splits available:', [s.name for s in info.splits] if info.splits else 'None')
+    print('Features (if known):', info.features)
+except Exception as e:
+    print('Failed to load builder:', e)
+
+# Decide split to use
+split_name = 'science'
+try:
+    # Try streaming the science split directly
+    stream = load_dataset('open-thoughts/OpenThoughts-114k', split=split_name, streaming=True)
+    use_science_split = True
+    print('Using split:', split_name)
+except Exception:
+    # Fallback to train split and filter by domain
+    stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+    use_science_split = False
+    print('Using split: train (will filter by science domain)')
+
+# Inspect a few examples to infer schema
+def preview_examples(stream_iter, n=5):
+    out = []
+    for i, ex in enumerate(stream_iter):
+        out.append({k: (v if isinstance(v, (str,int,float)) else type(v).__name__) for k,v in ex.items()})
+        if i+1 >= n:
+            break
+    return out
+
+itr = iter(stream)
+preview = []
+first = None
+try:
+    first = next(itr)
+    preview = [ {k: (v if isinstance(v,(str,int,float)) else type(v).__name__) for k,v in first.items()} ]
+except StopIteration:
+    first = None
+
+if first is not None:
+    for i, ex in enumerate(itr):
+        preview.append({k: (v if isinstance(v,(str,int,float)) else type(v).__name__) for k,v in ex.items()})
+        if i >= 3:
+            break
+print('Example schema preview:', preview)
+
+# Determine domain accessor based on README guidance + observed keys
+domain_key = None
+nested_domain = None
+if first is not None:
+    for k in first.keys():
+        if 'domain' in k.lower():
+            domain_key = k
+            break
+    if domain_key is None:
+        # search one-level nested dicts
+        for k, v in first.items():
+            if isinstance(v, dict):
+                for dk in v.keys():
+                    if 'domain' in dk.lower():
+                        nested_domain = (k, dk)
+                        break
+                if nested_domain:
+                    break
+
+def get_domain(ex):
+    if domain_key:
+        return ex.get(domain_key)
+    if nested_domain:
+        parent, child = nested_domain
+        sub = ex.get(parent) or {}
+        return sub.get(child)
+    return None
+
+# Identify DeepSeek text extraction strategy
+text_fields_priority = ['cot','chain_of_thought','thought','rationale','reasoning','output','response','content','answer','text']
+
+def extract_deepseek_texts(ex):
+    texts = []
+    # Direct model/provider indicators
+    # Search top-level dicts/lists for entries with model/provider/source containing 'deepseek'
+    for k, v in ex.items():
+        if isinstance(v, dict):
+            # If dict maps model_name -> text or dict
+            for mk, mv in v.items():
+                mk_s = str(mk).lower()
+                if 'deepseek' in mk_s:
+                    if isinstance(mv, str):
+                        if mv.strip():
+                            texts.append(mv.strip())
+                    elif isinstance(mv, dict):
+                        for tk in text_fields_priority:
+                            tv = mv.get(tk)
+                            if isinstance(tv, str) and tv.strip():
+                                texts.append(tv.strip())
+                elif isinstance(mv, dict):
+     TOTAL 0
+[?2004hroot@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+[?2004l1 /app/answer.txt
+
+0[?2004hroot@1e287e0ce32a:/app# python3 - << 'PY'
+[?2004l[?2004h> from huggingface_hub import hf_hub_download
+[?2004l[?2004h> from datasets import load_dataset_builder, load_dataset
+[?2004l[?2004h> from transformers import AutoTokenizer
+[?2004l[?2004h> import json
+[?2004l[?2004h> 
+[?2004l[?2004h> print('Downloading README...')
+[?2004l[?2004h> try:
+[?2004l[?2004h>     readme_path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='README.md')
+[?2004l[?2004h>     with open(readme_path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         readme = f.read()
+[?2004l[?2004h>     print('\nREADME preview (first 150 lines):')
+[?2004l[?2004h>     print('\n'.join(readme.splitlines()[:150]))
+[?2004l[?2004h> except Exception as e:
+[?2004l[?2004h>     print('Failed to fetch README:', e)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('\nLoading dataset builder info...')
+[?2004l[?2004h> try:
+[?2004l[?2004h>     builder = load_dataset_builder('open-thoughts/OpenThoughts-114k')
+[?2004l[?2004h>     info = builder.info
+[?2004l[?2004h>     print('Splits available:', [s.name for s in info.splits] if info.splits else 'None')
+[?2004l[?2004h>     print('Features (if known):', info.features)
+[?2004l[?2004h> except Exception as e:
+[?2004l[?2004h>     print('Failed to load builder:', e)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Decide split to use
+[?2004l[?2004h> split_name = 'science'
+[?2004l[?2004h> try:
+[?2004l[?2004h>     # Try streaming the science split directly
+[?2004l[?2004h>     stream = load_dataset('open-thoughts/OpenThoughts-114k', split=split_name, streaming=True)
+[?2004l[?2004h>     use_science_split = True
+[?2004l[?2004h>     print('Using split:', split_name)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     # Fallback to train split and filter by domain
+[?2004l[?2004h>     stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+[?2004l[?2004h>     use_science_split = False
+[?2004l[?2004h>     print('Using split: train (will filter by science domain)')
+[?2004l[?2004h> 
+[?2004l[?2004h> # Inspect a few examples to infer schema
+[?2004l[?2004h> def preview_examples(stream_iter, n=5):
+[?2004l[?2004h>     out = []
+[?2004l[?2004h>     for i, ex in enumerate(stream_iter):
+[?2004l[?2004h>         out.append({k: (v if isinstance(v, (str,int,float)) else type(v).__name__) for k,v in ex.items()})
+[?2004l[?2004h>         if i+1 >= n:
+[?2004l[?2004h>             break
+[?2004l[?2004h>     return out
+[?2004l[?2004h> 
+[?2004l[?2004h> itr = iter(stream)
+[?2004l[?2004h> preview = []
+[?2004l[?2004h> first = None
+[?2004l[?2004h> try:
+[?2004l[?2004h>     first = next(itr)
+[?2004l[?2004h>     preview = [ {k: (v if isinstance(v,(str,int,float)) else type(v).__name__) for k,v in first.items()} ]
+[?2004l[?2004h> except StopIteration:
+[?2004l[?2004h>     first = None
+[?2004l[?2004h> 
+[?2004l[?2004h> if first is not None:
+[?2004l[?2004h>     for i, ex in enumerate(itr):
+[?2004l[?2004h>         preview.append({k: (v if isinstance(v,(str,int,float)) else type(v).__name__) for k,v in ex.items()})
+[?2004l[?2004h>         if i >= 3:
+[?2004l[?2004h>             break
+[?2004l[?2004h> print('Example schema preview:', preview)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Determine domain accessor based on README guidance + observed keys
+[?2004l[?2004h> domain_key = None
+[?2004l[?2004h> nested_domain = None
+[?2004l[?2004h> if first is not None:
+[?2004l[?2004h>     for k in first.keys():
+[?2004l[?2004h>         if 'domain' in k.lower():
+[?2004l[?2004h>             domain_key = k
+[?2004l[?2004h>             break
+[?2004l[?2004h>     if domain_key is None:
+[?2004l[?2004h>         # search one-level nested dicts
+[?2004l[?2004h>         for k, v in first.items():
+[?2004l[?2004h>             if isinstance(v, dict):
+[?2004l[?2004h>                 for dk in v.keys():
+[?2004l[?2004h>                     if 'domain' in dk.lower():
+[?2004l[?2004h>                         nested_domain = (k, dk)
+[?2004l[?2004h>                         break
+[?2004l[?2004h>                 if nested_domain:
+[?2004l[?2004h>                     break
+[?2004l[?2004h> 
+[?2004lr[?2004h> def get_domain(ex):
+[?2004l[?2004h>     if domain_key:
+[?2004l[?2004h>         return ex.get(domain_key)
+[?2004l[?2004h>     if nested_domain:
+[?2004l[?2004h>         parent, child = nested_domain
+[?2004l[?2004h>         sub = ex.get(parent) or {}
+[?2004l[?2004h>         return sub.get(child)
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> # Identify DeepSeek text extraction strategy
+[?2004l[?2004h> text_fields_priority = ['cot','chain_of_thought','thought','rationale','reasoning','output','response','content','answer','text']
+[?2004l[?2004h> 
+[?2004l[?2004h> def extract_deepseek_texts(ex):
+[?2004l[?2004h>     texts = []
+[?2004l[?2004h>     # Direct model/provider indicators
+[?2004l[?2004h>     # Search top-level dicts/lists for entries with model/provider/source containing 'deepseek'
+[?2004l[?2004h>     for k, v in ex.items():
+[?2004l[?2004h>         if isinstance(v, dict):
+[?2004l[?2004h>             # If dict maps model_name -> text or dict
+[?2004l[?2004h>             for mk, mv in v.items():
+[?2004l[?2004h>                 mk_s = str(mk).lower()
+[?2004l[?2004h>                 if 'deepseek' in mk_s:
+[?2004l[?2004h>                     if isinstance(mv, str):
+[?2004l[?2004h>                         if mv.strip():
+[?2004l[?2004h>                             texts.append(mv.strip())
+[?2004l[?2004h>                     elif isinstance(mv, dict):
+[?2004l[?2004h>                         for tk in text_fields_priority:
+[?2004l[?2004h>                             tv = mv.get(tk)
+[?2004l[?2004h>                             if isinstance(tv, str) and tv.strip():
+[?2004l[?2004h>                                 texts.append(tv.strip())
+[?2004l[?2004h>                 elif isinstance(mv, dict):
+[?2004l[?2004h>                     prov = (mv.get('provider') or mv.get('model') or mv.get('source') or '')
+[?2004l[?2004h>                     if isinstance(prov, str) and 'deepseek' in prov.lower():
+[?2004l[?2004h>                         for tk in text_fields_priority:
+[?2004l[?2004h>                             tv = mv.get(tk)
+[?2004l[?2004h>                             if isinstance(tv, str) and tv.strip():
+[?2004l[?2004h>                                 texts.append(tv.strip())
+[?2004l[?2004h>             # Single dict with provider/model
+[?2004l[?2004h>             prov = (v.get('provider') or v.get('model') or v.get('source'))
+[?2004l[?2004h>             if isinstance(prov, str) and 'deepseek' in prov.lower():
+[?2004l[?2004h>                 for tk in text_fields_priority:
+[?2004l[?2004h>                     tv = v.get(tk)
+[?2004l[?2004h>                     if isinstance(tv, str) and tv.strip():
+[?2004l[?2004h>                         texts.append(tv.strip())
+[?2004l[?2004h>         elif isinstance(v, list):
+[?2004l[?2004h>             for item in v:
+[?2004l[?2004h>                 if isinstance(item, dict):
+[?2004l[?2004h>                     prov = (item.get('provider') or item.get('model') or item.get('source') or '')
+[?2004l[?2004h>                     if isinstance(prov, str) and 'deepseek' in prov.lower():
+[?2004l[?2004h>                         for tk in text_fields_priority:
+[?2004l[?2004h>                             tv = item.get(tk)
+[?2004l[?2004h>                             if isinstance(tv, str) and tv.strip():
+[?2004l[?2004h>                                 texts.append(tv.strip())
+[?2004l[?2004h>                     else:
+[?2004l[?2004h>                         for tk, tv in item.items():
+[?2004l[?2004h>                             if isinstance(tv, str) and 'deepseek' in tk.lower() and tv.strip():
+[?2004l[?2004h>                                 texts.append(tv.strip())
+[?2004l[?2004h>         elif isinstance(v, str) and 'deepseek' in k.lower():
+[?2004l[?2004h>             if v.strip():
+[?2004l[?2004h>                 texts.append(v.strip())
+[?2004l[?2004h>     return texts
+[?2004l[?2004h> 
+[?2004l[?2004h> # Now perform counting with tokenizer
+[?2004l[?2004h> print('Loading tokenizer...')
+[?2004l[?2004h> tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Re-open stream for full iteration
+[?2004l[?2004h> try:
+[?2004l[?2004h>     if use_science_split:
+[?2004l[?2004h>         data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='science', streaming=True)
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> BATCH = 128
+[?2004l[?2004h> batch = []
+[?2004l[?2004h> TOTAL = 0
+[?2004l[?2004h> count_examples = 0
+[?2004l[?2004h> for ex in data_stream:
+[?2004l[?2004h>     dom = get_domain(ex)
+[?2004l[?2004h>     if use_science_split or (isinstance(dom, str) and 'science' in dom.lower()):
+[?2004l[?2004h>         texts = extract_deepseek_texts(ex)
+[?2004l[?2004h>         if texts:
+[?2004l[?2004h>             batch.extend(texts)
+[?2004l[?2004h>         count_examples += 1
+[?2004l[?2004h>         if len(batch) >= BATCH:
+[?2004l[?2004h>             enc = tokenizer(batch, add_special_tokens=False)
+[?2004l[?2004h>             TOTAL += sum(len(ids) for ids in enc['input_ids'])
+[?2004l[?2004h>             batch = []
+[?2004l[?2004h> 
+[?2004l[?2004h> if batch:
+[?2004l[?2004h>     enc = tokenizer(batch, add_special_tokens=False)
+[?2004l[?2004h>     TOTAL += sum(len(ids) for ids in enc['input_ids'])
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/app/answer.txt','w') as f:
+[?2004l[?2004h>     f.write(str(TOTAL))
+[?2004l[?2004h> print('Science examples processed:', count_examples)
+[?2004l[?2004h> print('TOTAL_DEEPSEEK_TOKENS:', TOTAL)
+[?2004l[?2004h> PY
+[?2004lNone of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+Downloading README...
+
+README preview (first 150 lines):
+---
+dataset_info:
+- config_name: default
+  features:
+  - name: system
+    dtype: string
+  - name: conversations
+    list:
+    - name: from
+      dtype: string
+    - name: value
+      dtype: string
+  splits:
+  - name: train
+    num_bytes: 2635015668
+    num_examples: 113957
+  download_size: 1078777193
+  dataset_size: 2635015668
+- config_name: metadata
+  features:
+  - name: problem
+    dtype: string
+  - name: deepseek_reasoning
+    dtype: string
+  - name: deepseek_solution
+    dtype: string
+  - name: ground_truth_solution
+    dtype: string
+  - name: domain
+    dtype: string
+  - name: source
+    dtype: string
+  - name: test_cases
+    dtype: string
+  - name: starter_code
+    dtype: string
+  splits:
+  - name: train
+    num_bytes: 5525214077.699433
+    num_examples: 113957
+  download_size: 2469729724
+  dataset_size: 5525214077.699433
+configs:
+- config_name: default
+  data_files:
+  - split: train
+    path: data/train-*
+- config_name: metadata
+  data_files:
+  - split: train
+    path: metadata/train-*
+tags:
+- curator
+- synthetic
+license: apache-2.0
+---
+
+<p align="center">
+    <img src="open_thoughts.png" width="50%">
+</p>
+
+> [!NOTE]
+> We have released a paper for OpenThoughts! See our paper [here](https://arxiv.org/abs/2506.04178).
+
+<a href="https://github.com/bespokelabsai/curator/">
+ <img src="https://huggingface.co/datasets/bespokelabs/Bespoke-Stratos-17k/resolve/main/made_with_curator.png" alt="Made with Curator" width=200px>
+</a>
+
+# Open-Thoughts-114k
+
+## Dataset Description
+
+- **Homepage:** https://www.open-thoughts.ai/
+- **Repository:** https://github.com/open-thoughts/open-thoughts
+- **Point of Contact:** [Open Thoughts Team](contact@open-thoughts.ai)
+
+Open synthetic reasoning dataset with 114k high-quality examples covering math, science, code, and puzzles!
+
+Inspect the content with rich formatting with [Curator Viewer](https://curator.bespokelabs.ai/datasets/1389c194254c4ead96daaf145505c3d1).
+
+### Available Subsets
+
+**default** subset containing ready-to-train data used to finetune the [OpenThinker-7B](https://huggingface.co/open-thoughts/OpenThinker-7B) and [OpenThinker-32B](https://huggingface.co/open-thoughts/OpenThinker-32B) models:
+```
+ds = load_dataset("open-thoughts/OpenThoughts-114k", split="train")
+```
+**metadata** subset containing extra columns used in dataset construction:
+- `problem`
+- `ground_truth_solution`
+- `deepseek_reasoning`
+- `deepseek_solution`
+- `domain`
+- `source`
+- `test_cases` (code only)
+- `starter_code`(code only)
+
+```
+ds = load_dataset("open-thoughts/OpenThoughts-114k", "metadata", split="train")
+```
+
+# OpenThinker Models
+
+The numbers reported in the tables below are evaluated with our open-source tool [Evalchemy](https://github.com/mlfoundations/Evalchemy).
+
+|                             | AIME24   | MATH500 | GPQA-Diamond | LCBv2 Easy  | LCBv2 Medium  | LCBv2 Hard  | LCBv2 All  |
+| --------------------------- | -------- | ------- | ------------ | ----------- | ------------- | ----------- | ---------- |
+| [OpenThinker-32B](https://huggingface.co/open-thoughts/OpenThinker-32B)             | 66       | 90.6    | 61.6         | 95.1        | 70.9          | 26.8        | 68.9       |
+| [OpenThinker-7B](https://huggingface.co/open-thoughts/OpenThinker-7B)              | 31.3     | 83.0    | 42.4         | 75.3        | 28.6          | 6.5         | 39.9       |
+| Bespoke-Stratos-7B          | 22.7     | 79.6    | 38.9         | 71.4        | 25.2          | 0.8         | 35.8       |
+| DeepSeek-R1-Distill-Qwen-7B | 60       | 88.2    | 46.9         | 79.7        | 45.1          | 14.6        | 50.1       |
+| gpt-4o-0513                 | 8.7      | 75.8    | 46.5         | 87.4        | 42.7          | 8.9         | 50.5       |
+| o1-mini                     | 64       | 85.6    | 60           | 92.8        | 74.7          | 39.8        | 72.8       |
+
+We are fully open-source. Our [model weights](https://huggingface.co/open-thoughts), [datasets](https://huggingface.co/open-thoughts), [data generation code](https://github.com/open-thoughts/open-thoughts), [evaluation code](https://github.com/mlfoundations/Evalchemy), and [training code](https://github.com/hiyouga/LLaMA-Factory) are all publicly available. 
+
+|  | Open Weights | Open Data | Open Code | 
+|--|--------------|-----------| --------- |
+|OpenThinker-32B|✅|[✅](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k)|[✅](https://github.com/open-thoughts/open-thoughts) |
+|OpenThinker-7B|✅|[✅](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k)|[✅](https://github.com/open-thoughts/open-thoughts) |
+|Bespoke-Stratos-7B|✅|[✅](https://huggingface.co/datasets/bespokelabs/Bespoke-Stratos-17k)|[✅](https://github.com/bespokelabsai/curator/tree/main/examples/bespoke-stratos-data-generation)|
+|DeepSeek-R1-Distill models|✅|❌|❌|
+|OpenAI/Gemini|❌|❌|❌|❌|
+
+We are actively working towards improving the dataset, so please stay tuned!
+
+# Data Curation Recipe
+
+Code
+- [BAAI/TACO](https://huggingface.co/datasets/BAAI/TACO)
+- [codeparrot/apps](https://huggingface.co/datasets/codeparrot/apps)
+- [deepmind/code_contests](https://huggingface.co/datasets/deepmind/code_contests)
+- [MatrixStudio/Codeforces-Python-Submissions](https://huggingface.co/datasets/MatrixStudio/Codeforces-Python-Submissions)
+
+Math
+- [AI-MO/NuminaMath-CoT](https://huggingface.co/datasets/AI-MO/NuminaMath-CoT)
+
+Science
+- [camel-ai/chemistry](https://huggingface.co/datasets/camel-ai/chemistry)
+- [camel-ai/biology](https://huggingface.co/datasets/camel-ai/biology)
+- [camel-ai/physics](https://huggingface.co/datasets/camel-ai/physics)
+
+Puzzle
+- [INK-USC/riddle_sense](https://huggingface.co/datasets/INK-USC/riddle_sense)
+
+Using a curated mix of the datasets above, we generate reasoning traces from DeepSeek-R1 and verify correctness to construct the final dataset.
+
+![diagram](diagram.png)
+
+The full code for the data generation pipeline is publicly available [in our github repo](https://github.com/open-thoughts/open-thoughts).
+
+
+Loading dataset builder info...
+Failed to load builder: 'str' object has no attribute 'name'
+Using split: train (will filter by science domain)
+Example schema preview: [{'system': "Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the final precise and accurate solutions. This requires engaging in a comprehensive cycle of analysis, summarizing, exploration, reassessment, reflection, backtracing, and iteration to develop well-considered thinking process. Please structure your response into two main sections: Thought and Solution. In the Thought section, detail your reasoning process using the specified format: <|begin_of_thought|> {thought with steps separated with '\\n\\n'} <|end_of_thought|> Each step should include detailed considerations such as analisying questions, summarizing relevant findings, brainstorming new ideas, verifying the accuracy of the current steps, refining any errors, and revisiting previous steps. In the Solution section, based on various attempts, explorations, and reflections from the Thought section, systematically present the final solution that you deem correct. The solution should remain a logical, accurate, concise expression style and detail necessary step needed to reach the conclusion, formatted as follows: <|begin_of_solution|> {final formatted, precise, and clear solution} <|end_of_solution|> Now, try to solve the following question through the above guidelines:", 'conversations': 'list'}, {'system': "Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the final precise and accurate solutions. This requires engaging in a comprehensive cycle of analysis, summarizing, exploration, reassessment, reflection, backtracing, and iteration to develop well-considered thinking process. Please structure your response into two main sections: Thought and Solution. In the Thought section, detail your reasoning process using the specified format: <|begin_of_thought|> {thought with steps separated with '\\n\\n'} <|end_of_thought|> Each step should include detailed considerations such as analisying questions, summarizing relevant findings, brainstorming new ideas, verifying the accuracy of the current steps, refining any errors, and revisiting previous steps. In the Solution section, based on various attempts, explorations, and reflections from the Thought section, systematically present the final solution that you deem correct. The solution should remain a logical, accurate, concise expression style and detail necessary step needed to reach the conclusion, formatted as follows: <|begin_of_solution|> {final formatted, precise, and clear solution} <|end_of_solution|> Now, try to solve the following question through the above guidelines:", 'conversations': 'list'}, {'system': "Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the final precise and accurate solutions. This requires engaging in a comprehensive cycle of analysis, summarizing, exploration, reassessment, reflection, backtracing, and iteration to develop well-considered thinking process. Please structure your response into two main sections: Thought and Solution. In the Thought section, detail your reasoning process using the specified format: <|begin_of_thought|> {thought with steps separated with '\\n\\n'} <|end_of_thought|> Each step should include detailed considerations such as analisying questions, summarizing relevant findings, brainstorming new ideas, verifying the accuracy of the current steps, refining any errors, and revisiting previous steps. In the Solution section, based on various attempts, explorations, and reflections from the Thought section, systematically present the final solution that you deem correct. The solution should remain a logical, accurate, concise expression style and detail necessary step needed to reach the conclusion, formatted as follows: <|begin_of_solution|> {final formatted, precise, and clear solution} <|end_of_solution|> Now, try to solve the following question through the above guidelines:", 'conversations': 'list'}, {'system': "Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the final precise and accurate solutions. This requires engaging in a comprehensive cycle of analysis, summarizing, exploration, reassessment, reflection, backtracing, and iteration to develop well-considered thinking process. Please structure your response into two main sections: Thought and Solution. In the Thought section, detail your reasoning process using the specified format: <|begin_of_thought|> {thought with steps separated with '\\n\\n'} <|end_of_thought|> Each step should include detailed considerations such as analisying questions, summarizing relevant findings, brainstorming new ideas, verifying the accuracy of the current steps, refining any errors, and revisiting previous steps. In the Solution section, based on various attempts, explorations, and reflections from the Thought section, systematically present the final solution that you deem correct. The solution should remain a logical, accurate, concise expression style and detail necessary step needed to reach the conclusion, formatted as follows: <|begin_of_solution|> {final formatted, precise, and clear solution} <|end_of_solution|> Now, try to solve the following question through the above guidelines:", 'conversations': 'list'}, {'system': "Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the final precise and accurate solutions. This requires engaging in a comprehensive cycle of analysis, summarizing, exploration, reassessment, reflection, backtracing, and iteration to develop well-considered thinking process. Please structure your response into two main sections: Thought and Solution. In the Thought section, detail your reasoning process using the specified format: <|begin_of_thought|> {thought with steps separated with '\\n\\n'} <|end_of_thought|> Each step should include detailed considerations such as analisying questions, summarizing relevant findings, brainstorming new ideas, verifying the accuracy of the current steps, refining any errors, and revisiting previous steps. In the Solution section, based on various attempts, explorations, and reflections from the Thought section, systematically present the final solution that you deem correct. The solution should remain a logical, accurate, concise expression style and detail necessary step needed to reach the conclusion, formatted as follows: <|begin_of_solution|> {final formatted, precise, and clear solution} <|end_of_solution|> Now, try to solve the following question through the above guidelines:", 'conversations': 'list'}]
+Loading tokenizer...
+wc -c /app/answer.txt && echo && cat /app/answer.txt
+python3 - << 'PY'
+from huggingface_hub import hf_hub_download
+from datasets import load_dataset_builder
+import re
+
+print('Fetching README...')
+path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='README.md')
+text = open(path, 'r', encoding='utf-8').read()
+# Show lines mentioning domain/science/deepseek
+lines = text.splitlines()
+keys = ['domain','science','DeepSeek','deepseek','provider','model','conversations']
+for i, line in enumerate(lines):
+    if any(k.lower() in line.lower() for k in keys):
+        print(f'{i+1}:', line)
+
+print('\nBuilder info:')
+try:
+    builder = load_dataset_builder('open-thoughts/OpenThoughts-114k')
+    info = builder.info
+    print('Splits:', [s.name for s in info.splits] if info.splits else [])
+    print('Features:', info.features)
+except Exception as e:
+    print('Builder error:', e)
+PY
+python3 - << 'PY'
+from datasets import load_dataset
+import json
+
+stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+itr = iter(stream)
+try:
+    ex = next(itr)
+except StopIteration:
+    print('Empty dataset')
+    raise SystemExit()
+
+# Print top-level keys and types
+print('Top-level keys:', list(ex.keys()))
+for k,v in ex.items():
+    t = type(v).__name__
+    if isinstance(v, (str,int,float)):
+        print(f'- {k}: {t} sample:', str(v)[:200].replace('\n',' '))
+    else:
+        print(f'- {k}: {t}')
+
+# Try common domain locations
+domain = None
+if 'domain' in ex:
+    domain = ex['domain']
+elif 'meta' in ex and isinstance(ex['meta'], dict):
+    domain = ex['meta'].get('domain')
+print('domain guess:', domain)
+
+# Inspect conversations if present
+conv = ex.get('conversations')
+if isinstance(conv, list):
+    print('conversations length:', len(conv))
+    for i, item in enumerate(conv[:5]):
+        print(f'conv[{i}] keys:', list(item.keys()))
+        # sample fields
+        for fld in ['role','content','text','model','provider','source']:
+            if fld in item:
+                val = item[fld]
+                if isinstance(val, str):
+                    print(f'  {fld}:', val[:200].replace('\n',' '))
+                else:
+                    print(f'  {fld}:', type(val).__name__)
+PY
+python3 - << 'PY'
+from datasets import load_dataset
+from transformers import AutoTokenizer
+
+# Load tokenizer
+tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+
+# Stream data
+stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+
+# Determine domain accessor and deepseek extraction based on observed schema
+first = next(iter(stream))
+
+def get_domain(ex):
+    if 'domain' in ex and isinstance(ex['domain'], str):
+        return ex['domain']
+    if 'meta' in ex and isinstance(ex['meta'], dict):
+        val = ex['meta'].get('domain')
+        if isinstance(val, str):
+            return val
+    return None
+
+TEXT_KEYS = ['content','text','thought','cot','rationale','response','output','answer']
+
+def extract_deepseek_texts(ex):
+    texts = []
+    # Conversations list with possible model/provider
+    conv = ex.get('conversations')
+    if isinstance(conv, list):
+        for item in conv:
+            prov = None
+            for fld in ['model','provider','source']:
+                val = item.get(fld)
+                if isinstance(val, str):
+                    prov = val
+                    break
+            if isinstance(prov, str) and 'deepseek' in prov.lower():
+                for tk in TEXT_KEYS:
+                    tv = item.get(tk)
+                    if isinstance(tv, str) and tv.strip():
+                        texts.append(tv.strip())
+            # If key names include deepseek
+            for k, v in item.items():
+                if isinstance(v, str) and 'deepseek' in k.lower() and v.strip():
+                    texts.append(v.strip())
+    # Top-level dicts keyed by model names or provider
+    for k,v in ex.items():
+        if isinstance(v, dict):
+            prov = (v.get('provider') or v.get('model') or v.get('source'))
+         Science examples processed: 0
+TOTAL_DEEPSEEK_TOKENS: 0
+Exception ignored in: <generator object Parquet._generate_tables at 0x7d39544129f0>
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/datasets/packaged_modules/parquet/parquet.py", line 182, in _generate_tables
+AttributeError: 'NoneType' object has no attribute 'ArrowInvalid'
+[?2004hroot@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+[?2004l1 /app/answer.txt
+
+0[?2004hroot@1e287e0ce32a:/app# python3 - << 'PY'
+[?2004l[?2004h> from huggingface_hub import hf_hub_download
+[?2004l[?2004h> from datasets import load_dataset_builder
+[?2004l[?2004h> import re
+[?2004l[?2004h> 
+[?2004l[?2004h> print('Fetching README...')
+[?2004l[?2004h> path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='README.md')
+[?2004l[?2004h> text = open(path, 'r', encoding='utf-8').read()
+[?2004l[?2004h> # Show lines mentioning domain/science/deepseek
+[?2004l[?2004h> lines = text.splitlines()
+[?2004l[?2004h> keys = ['domain','science','DeepSeek','deepseek','provider','model','conversations']
+[?2004l[?2004h> for i, line in enumerate(lines):
+[?2004l[?2004h>     if any(k.lower() in line.lower() for k in keys):
+[?2004l[?2004h>         print(f'{i+1}:', line)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('\nBuilder info:')
+[?2004l[?2004h> try:
+[?2004l[?2004h>     builder = load_dataset_builder('open-thoughts/OpenThoughts-114k')
+[?2004l[?2004h>     info = builder.info
+[?2004l[?2004h>     print('Splits:', [s.name for s in info.splits] if info.splits else [])
+[?2004l[?2004h>     print('Features:', info.features)
+[?2004l[?2004h> except Exception as e:
+[?2004l[?2004h>     print('Builder error:', e)
+[?2004l[?2004h> PY
+[?2004lFetching README...
+7:   - name: conversations
+23:   - name: deepseek_reasoning
+25:   - name: deepseek_solution
+29:   - name: domain
+77: Open synthetic reasoning dataset with 114k high-quality examples covering math, science, code, and puzzles!
+83: **default** subset containing ready-to-train data used to finetune the [OpenThinker-7B](https://huggingface.co/open-thoughts/OpenThinker-7B) and [OpenThinker-32B](https://huggingface.co/open-thoughts/OpenThinker-32B) models:
+90: - `deepseek_reasoning`
+91: - `deepseek_solution`
+92: - `domain`
+101: # OpenThinker Models
+110: | DeepSeek-R1-Distill-Qwen-7B | 60       | 88.2    | 46.9         | 79.7        | 45.1          | 14.6        | 50.1       |
+114: We are fully open-source. Our [model weights](https://huggingface.co/open-thoughts), [datasets](https://huggingface.co/open-thoughts), [data generation code](https://github.com/open-thoughts/open-thoughts), [evaluation code](https://github.com/mlfoundations/Evalchemy), and [training code](https://github.com/hiyouga/LLaMA-Factory) are all publicly available. 
+121: |DeepSeek-R1-Distill models|✅|❌|❌|
+137: Science
+145: Using a curated mix of the datasets above, we generate reasoning traces from DeepSeek-R1 and verify correctness to construct the final dataset.
+159: - 🤖 [OpenThinker-32B model](https://huggingface.co/open-thoughts/OpenThinker-32B)
+160: - 🤖 [OpenThinker-7B model](https://huggingface.co/open-thoughts/OpenThinker-7B)
+163: - 🤖 [Bespoke-Stratos-32B model](https://huggingface.co/bespokelabs/Bespoke-Stratos-32B)
+164: - 🤖 [Bespoke-Stratos-7B model](https://huggingface.co/bespokelabs/Bespoke-Stratos-7B)
+179:   title={OpenThoughts: Data Recipes for Reasoning Models}, 
+
+Builder info:
+Builder error: 'str' object has no attribute 'name'
+[?2004hroot@1e287e0ce32a:/app# python3 - << 'PY'
+[?2004l[?2004h> from datasets import load_dataset
+[?2004l[?2004h> import json
+[?2004l[?2004h> 
+[?2004l[?2004h> stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+[?2004l[?2004h> itr = iter(stream)
+[?2004l[?2004h> try:
+[?2004l[?2004h>     ex = next(itr)
+[?2004l[?2004h> except StopIteration:
+[?2004l[?2004h>     print('Empty dataset')
+[?2004l[?2004h>     raise SystemExit()
+[?2004l[?2004h> 
+[?2004l[?2004h> # Print top-level keys and types
+[?2004l[?2004h> print('Top-level keys:', list(ex.keys()))
+[?2004l[?2004h> for k,v in ex.items():
+[?2004l[?2004h>     t = type(v).__name__
+[?2004l[?2004h>     if isinstance(v, (str,int,float)):
+[?2004l[?2004h>         print(f'- {k}: {t} sample:', str(v)[:200].replace('\n',' '))
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         print(f'- {k}: {t}')
+[?2004l[?2004h> 
+[?2004l[?2004h> # Try common domain locations
+[?2004l[?2004h> domain = None
+[?2004l[?2004h> if 'domain' in ex:
+[?2004l[?2004h>     domain = ex['domain']
+[?2004l[?2004h> elif 'meta' in ex and isinstance(ex['meta'], dict):
+[?2004l[?2004h>     domain = ex['meta'].get('domain')
+[?2004l[?2004h> print('domain guess:', domain)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Inspect conversations if present
+[?2004l[?2004h> conv = ex.get('conversations')
+[?2004l[?2004h> if isinstance(conv, list):
+[?2004l[?2004h>     print('conversations length:', len(conv))
+[?2004l[?2004h>     for i, item in enumerate(conv[:5]):
+[?2004l[?2004h>         print(f'conv[{i}] keys:', list(item.keys()))
+[?2004l[?2004h>         # sample fields
+[?2004l[?2004h>         for fld in ['role','content','text','model','provider','source']:
+[?2004l[?2004h>             if fld in item:
+[?2004l[?2004h>                 val = item[fld]
+[?2004l[?2004h>                 if isinstance(val, str):
+[?2004l[?2004h>                     print(f'  {fld}:', val[:200].replace('\n',' '))
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     print(f'  {fld}:', type(val).__name__)
+[?2004l[?2004h> PY
+[?2004lTop-level keys: ['system', 'conversations']
+- system: str sample: Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the final precise and accurate solutions. This requires engaging in a comp
+- conversations: list
+domain guess: None
+conversations length: 2
+conv[0] keys: ['from', 'value']
+conv[1] keys: ['from', 'value']
+Fatal Python error: PyGILState_Release: thread state 0x733294002ad0 must be current when releasing
+Python runtime state: finalizing (tstate=0x0000733303b6da70)
+
+Thread 0x00007333033b0b80 (most recent call first):
+  <no Python frame>
+
+Extension modules: numpy._core._multiarray_umath, numpy.linalg._umath_linalg, pyarrow.lib, numpy.random._common, numpy.random.bit_generator, numpy.random._bounded_integers, numpy.random._pcg64, numpy.random._mt19937, numpy.random._generator, numpy.random._philox, numpy.random._sfc64, numpy.random.mtrand, pandas._libs.tslibs.ccalendar, pandas._libs.tslibs.np_datetime, pandas._libs.tslibs.dtypes, pandas._libs.tslibs.base, pandas._libs.tslibs.nattype, pandas._libs.tslibs.timezones, pandas._libs.tslibs.fields, pandas._libs.tslibs.timedeltas, pandas._libs.tslibs.tzconversion, pandas._libs.tslibs.timestamps, pandas._libs.properties, pandas._libs.tslibs.offsets, pandas._libs.tslibs.strptime, pandas._libs.tslibs.parsing, pandas._libs.tslibs.conversion, pandas._libs.tslibs.period, pandas._libs.tslibs.vectorized, pandas._libs.ops_dispatch, pandas._libs.missing, pandas._libs.hashtable, pandas._libs.algos, pandas._libs.interval, pandas._libs.lib, pyarrow._compute, pandas._libs.ops, pandas._libs.hashing, pandas._libs.arrays, pandas._libs.tslib, pandas._libs.sparse, pandas._libs.internals, pandas._libs.indexing, pandas._libs.index, pandas._libs.writers, pandas._libs.join, pandas._libs.window.aggregations, pandas._libs.window.indexers, pandas._libs.reshape, pandas._libs.groupby, pandas._libs.json, pandas._libs.parsers, pandas._libs.testing, charset_normalizer.md, requests.packages.charset_normalizer.md, requests.packages.chardet.md, yaml._yaml, pyarrow._parquet, pyarrow._fs, pyarrow._azurefs, pyarrow._hdfs, pyarrow._gcsfs, pyarrow._s3fs, multidict._multidict, yarl._quoting_c, propcache._helpers_c, aiohttp._http_writer, aiohttp._http_parser, aiohttp._websocket.mask, aiohttp._websocket.reader_c, frozenlist._frozenlist, xxhash._xxhash, pyarrow._acero, pyarrow._csv, pyarrow._json, pyarrow._substrait, pyarrow._dataset, pyarrow._dataset_orc, pyarrow._parquet_encryption, pyarrow._dataset_parquet_encryption, pyarrow._dataset_parquet (total: 81)
+Aborted (core dumped)
+[?2004hroot@1e287e0ce32a:/app# python3 - << 'PY'
+[?2004l[?2004h> from datasets import load_dataset
+[?2004l[?2004h> from transformers import AutoTokenizer
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load tokenizer
+[?2004l[?2004h> tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Stream data
+[?2004l[?2004h> stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Determine domain accessor and deepseek extraction based on observed schema
+[?2004l[?2004h> first = next(iter(stream))
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_domain(ex):
+[?2004l[?2004h>     if 'domain' in ex and isinstance(ex['domain'], str):
+[?2004l[?2004h>         return ex['domain']
+[?2004l[?2004h>     if 'meta' in ex and isinstance(ex['meta'], dict):
+[?2004l[?2004h>         val = ex['meta'].get('domain')
+[?2004l[?2004h>         if isinstance(val, str):
+[?2004l[?2004h>             return val
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> TEXT_KEYS = ['content','text','thought','cot','rationale','response','output','answer']
+[?2004l[?2004h> 
+[?2004l[?2004h> def extract_deepseek_texts(ex):
+[?2004l[?2004h>     texts = []
+[?2004l[?2004h>     # Conversations list with possible model/provider
+[?2004l[?2004h>     conv = ex.get('conversations')
+[?2004l[?2004h>     if isinstance(conv, list):
+[?2004l[?2004h>         for item in conv:
+[?2004l[?2004h>             prov = None
+[?2004l[?2004h>             for fld in ['model','provider','source']:
+[?2004l[?2004h>                 val = item.get(fld)
+[?2004l[?2004h>                 if isinstance(val, str):
+[?2004l[?2004h>                     prov = val
+[?2004l[?2004h>                     break
+[?2004l[?2004h>             if isinstance(prov, str) and 'deepseek' in prov.lower():
+[?2004l[?2004h>                 for tk in TEXT_KEYS:
+[?2004l[?2004h>                     tv = item.get(tk)
+[?2004l[?2004h>                     if isinstance(tv, str) and tv.strip():
+[?2004l[?2004h>                         texts.append(tv.strip())
+[?2004l[?2004h>             # If key names include deepseek
+[?2004l[?2004h>             for k, v in item.items():
+[?2004l[?2004h>                 if isinstance(v, str) and 'deepseek' in k.lower() and v.strip():
+[?2004l[?2004h>                     texts.append(v.strip())
+[?2004l[?2004h>     # Top-level dicts keyed by model names or provider
+[?2004l[?2004h>     for k,v in ex.items():
+[?2004l[?2004h>         if isinstance(v, dict):
+[?2004l[?2004h>             prov = (v.get('provider') or v.get('model') or v.get('source'))
+[?2004l[?2004h>             if isinstance(prov, str) and 'deepseek' in prov.lower():
+[?2004l[?2004h>                 for tk in TEXT_KEYS:
+[?2004l[?2004h>                     tv = v.get(tk)
+[?2004l[?2004h>                     if isinstance(tv, str) and tv.strip():
+[?2004l[?2004h>                         texts.append(tv.strip())
+[?2004l[?2004h>             # dict mapping model_name -> value
+[?2004l[?2004h>             for mk, mv in v.items():
+[?2004l[?2004h>                 if isinstance(mv, str) and 'deepseek' in str(mk).lower() and mv.strip():
+[?2004l[?2004h>                     texts.append(mv.strip())
+[?2004l[?2004h>                 elif isinstance(mv, dict):
+[?2004l[?2004h>                     prov2 = (mv.get('provider') or mv.get('model') or mv.get('source') or '')
+[?2004l[?2004h>                     if isinstance(prov2, str) and 'deepseek' in prov2.lower():
+[?2004l[?2004h>                         for tk in TEXT_KEYS:
+[?2004l[?2004h>                             tv = mv.get(tk)
+[?2004l[?2004h>                             if isinstance(tv, str) and tv.strip():
+[?2004l[?2004h>                                 texts.append(tv.strip())
+[?2004l[?2004h>     # Direct fields named with deepseek
+[?2004l[?2004h>     for k,v in ex.items():
+[?2004l[?2004h>         if isinstance(v, str) and 'deepseek' in k.lower() and v.strip():
+[?2004l[?2004h>             texts.append(v.strip())
+[?2004l[?2004h>     return texts
+[?2004l[?2004h> 
+[?2004l[?2004h> # Counting
+[?2004l[?2004h> BATCH = 64
+[?2004l[?2004h> TOTAL = 0
+[?2004l[?2004h> batch = []
+[?2004l[?2004h> 
+[?2004l[?2004h> # Re-open stream for full iteration
+[?2004l[?2004h> data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+[?2004l[?2004h> for ex in data_stream:
+[?2004l[?2004h>     dom = get_domain(ex)
+[?2004l[?2004h>     if isinstance(dom, str) and 'science' in dom.lower():
+[?2004l[?2004h>         texts = extract_deepseek_texts(ex)
+[?2004l[?2004h>         if texts:
+[?2004l[?2004h>             batch.extend(texts)
+[?2004l[?2004h>         if len(batch) >= BATCH:
+[?2004l[?2004h>             enc = tokenizer(batch, add_special_tokens=False)
+[?2004l[?2004h>             TOTAL += sum(len(ids) for ids in enc['input_ids'])
+[?2004l[?2004h>             batch = []
+[?2004l[?2004h> 
+[?2004l[?2004h> if batch:
+[?2004l[?2004h>     enc = tokenizer(batch, add_special_tokens=False)
+[?2004l[?2004h>     TOTAL += sum(len(ids) for ids in enc['input_ids'])
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/app/answer.txt','w') as f:
+[?2004l[?2004h>     f.write(str(TOTAL))
+[?2004l[?2004h> print('TOTAL_DEEPSEEK_TOKENS_SCIENCE:', TOTAL)
+[?2004l[?2004h> PY
+[?2004lNone of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+wc -c /app/answer.txt && echo && cat /app/answer.txt
+python3 - << 'PY'
+from huggingface_hub import HfApi, hf_hub_download
+import json
+api = HfApi()
+files = api.list_repo_files('open-thoughts/OpenThoughts-114k', repo_type='dataset')
+print('Total files:', len(files))
+print('Sample data files mentioning science:')
+for f in files:
+    if 'science' in f.lower():
+        print(' -', f)
+# Try to get dataset infos
+try:
+    info_path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='dataset_infos.json')
+    info = json.load(open(info_path,'r'))
+    print('dataset_infos keys:', list(info.keys()))
+    # Print splits for default config
+    default_cfg = next(iter(info.keys()))
+    splits = info[default_cfg].get('splits',{})
+    print('Splits listed:', list(splits.keys()))
+except Exception as e:
+    print('Failed to fetch dataset_infos.json:', e)
+PY
+python3 - << 'PY'
+from datasets import load_dataset
+# Try streaming science split and preview
+try:
+    stream = load_dataset('open-thoughts/OpenThoughts-114k', split='science', streaming=True)
+    use_science = True
+    print('Streaming split: science')
+except Exception as e:
+    stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+    use_science = False
+    print('Streaming split: train (fallback). Error:', e)
+
+itr = iter(stream)
+preview = []
+for i in range(5):
+    try:
+        ex = next(itr)
+    except StopIteration:
+        break
+    keys = list(ex.keys())
+    preview.append(keys)
+    # Show nested keys in conversations if present
+    conv = ex.get('conversations')
+    if isinstance(conv, list) and conv:
+        print('conversations sample keys:', [list(conv[0].keys())])
+    # Show possible domain fields
+    for k in keys:
+        if 'domain' in k.lower():
+            print('Found domain field:', k, 'value:', ex.get(k))
+    # Show any provider/model/source in top-level
+    for k in keys:
+        val = ex.get(k)
+        if isinstance(val, dict):
+            for kk in ['provider','model','source']:
+                if kk in val:
+                    print('Top-level dict has', kk, ':', val.get(kk))
+print('Preview keys:', preview)
+PY
+python3 - << 'PY'
+from datasets import load_dataset
+from transformers import AutoTokenizer
+
+# Load tokenizer
+tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+
+# Prefer science split; fallback to train with domain filter
+try:
+    data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='science', streaming=True)
+    use_science = True
+except Exception:
+    data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+    use_science = False
+
+TEXT_KEYS = ['content','text','thought','cot','rationale','response','output','answer']
+
+# Attempt to detect domain key from the first element for fallback filtering
+domain_key = None
+nested_domain = None
+try:
+    first = next(iter(data_stream))
+    # We need to re-open the stream after peeking
+    data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split=('science' if use_science else 'train'), streaming=True)
+    for k in first.keys():
+        if 'domain' in k.lower():
+            domain_key = k
+            break
+    if domain_key is None:
+        for k,v in first.items():
+            if isinstance(v, dict):
+                for dk in v.keys():
+                    if 'domain' in dk.lower():
+                        nested_domain = (k, dk)
+                        break
+                if nested_domain:
+                    break
+except Exception:
+    pass
+
+def get_domain(ex):
+    if domain_key and isinstance(ex.get(domain_key), str):
+        return ex.get(domain_key)
+    if nested_domain:
+        parent, child = nested_domain
+        sub = ex.get(parent) or {}
+        val = sub.get(child)
+        if isinstance(val, str):
+            return val
+    return None
+
+# DeepSeek text extraction
+def extract_deepseek_texts(ex):
+    texts = []
+    # Conversations
+    conv = ex.get('conversations')
+    if isinstance(conv, list):
+        for item in conv:
+         TOTAL_DEEPSEEK_TOKENS_SCIENCE: 0
+[?2004hroot@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+[?2004l1 /app/answer.txt
+
+0[?2004hroot@1e287e0ce32a:/app# python3 - << 'PY'
+[?2004l[?2004h> from huggingface_hub import HfApi, hf_hub_download
+[?2004l[?2004h> import json
+[?2004l[?2004h> api = HfApi()
+[?2004l[?2004h> files = api.list_repo_files('open-thoughts/OpenThoughts-114k', repo_type='dataset')
+[?2004l[?2004h> print('Total files:', len(files))
+[?2004l[?2004h> print('Sample data files mentioning science:')
+[?2004l[?2004h> for f in files:
+[?2004l[?2004h>     if 'science' in f.lower():
+[?2004l[?2004h>         print(' -', f)
+[?2004l[?2004h> # Try to get dataset infos
+[?2004l[?2004h> try:
+[?2004l[?2004h>     info_path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='dataset_infos.json')
+[?2004l[?2004h>     info = json.load(open(info_path,'r'))
+[?2004l[?2004h>     print('dataset_infos keys:', list(info.keys()))
+[?2004l[?2004h>     # Print splits for default config
+[?2004l[?2004h>     default_cfg = next(iter(info.keys()))
+[?2004l[?2004h>     splits = info[default_cfg].get('splits',{})
+[?2004l[?2004h>     print('Splits listed:', list(splits.keys()))
+[?2004l[?2004h> except Exception as e:
+[?2004l[?2004h>     print('Failed to fetch dataset_infos.json:', e)
+[?2004l[?2004h> PY
+[?2004lTotal files: 23
+Sample data files mentioning science:
+Failed to fetch dataset_infos.json: 404 Client Error. (Request ID: Root=1-68ef42bd-1e7bf3aa79592e7f7c512376;9e4d3d62-543c-4dc6-a39a-fae37b0c1961)
+
+Entry Not Found for url: https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k/resolve/main/dataset_infos.json.
+[?2004hroot@1e287e0ce32a:/app# python3 - << 'PY'
+[?2004l[?2004h> from datasets import load_dataset
+[?2004l[?2004h> # Try streaming science split and preview
+[?2004l[?2004h> try:
+[?2004l[?2004h>     stream = load_dataset('open-thoughts/OpenThoughts-114k', split='science', streaming=True)
+[?2004l[?2004h>     use_science = True
+[?2004l[?2004h>     print('Streaming split: science')
+[?2004l[?2004h> except Exception as e:
+[?2004l[?2004h>     stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+[?2004l[?2004h>     use_science = False
+[?2004l[?2004h>     print('Streaming split: train (fallback). Error:', e)
+[?2004l[?2004h> 
+[?2004l[?2004h> itr = iter(stream)
+[?2004l[?2004h> preview = []
+[?2004l[?2004h> for i in range(5):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         ex = next(itr)
+[?2004l[?2004h>     except StopIteration:
+[?2004l[?2004h>         break
+[?2004l[?2004h>     keys = list(ex.keys())
+[?2004l[?2004h>     preview.append(keys)
+[?2004l[?2004h>     # Show nested keys in conversations if present
+[?2004l[?2004h>     conv = ex.get('conversations')
+[?2004l[?2004h>     if isinstance(conv, list) and conv:
+[?2004l[?2004h>         print('conversations sample keys:', [list(conv[0].keys())])
+[?2004l[?2004h>     # Show possible domain fields
+[?2004l[?2004h>     for k in keys:
+[?2004l[?2004h>         if 'domain' in k.lower():
+[?2004l[?2004h>             print('Found domain field:', k, 'value:', ex.get(k))
+[?2004l[?2004h>     # Show any provider/model/source in top-level
+[?2004l[?2004h>     for k in keys:
+[?2004l[?2004h>         val = ex.get(k)
+[?2004l[?2004h>         if isinstance(val, dict):
+[?2004l[?2004h>             for kk in ['provider','model','source']:
+[?2004l[?2004h>                 if kk in val:
+[?2004l[?2004h>                     print('Top-level dict has', kk, ':', val.get(kk))
+[?2004l[?2004h> print('Preview keys:', preview)
+[?2004l[?2004h> PY
+[?2004lStreaming split: train (fallback). Error: Bad split: science. Available splits: ['train']
+conversations sample keys: [['from', 'value']]
+conversations sample keys: [['from', 'value']]
+conversations sample keys: [['from', 'value']]
+conversations sample keys: [['from', 'value']]
+conversations sample keys: [['from', 'value']]
+Preview keys: [['system', 'conversations'], ['system', 'conversations'], ['system', 'conversations'], ['system', 'conversations'], ['system', 'conversations']]
+Fatal Python error: PyGILState_Release: thread state 0x7619bc002ad0 must be current when releasing
+Python runtime state: finalizing (tstate=0x0000761a2cf04a70)
+
+Thread 0x0000761a2c747b80 (most recent call first):
+  <no Python frame>
+Aborted (core dumped)
+[?2004hroot@1e287e0ce32a:/app# python3 - << 'PY'
+[?2004l[?2004h> from datasets import load_dataset
+[?2004l[?2004h> from transformers import AutoTokenizer
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load tokenizer
+[?2004l[?2004h> tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prefer science split; fallback to train with domain filter
+[?2004l[?2004h> try:
+[?2004l[?2004h>     data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='science', streaming=True)
+[?2004l[?2004h>     use_science = True
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+[?2004l[?2004h>     use_science = False
+[?2004l[?2004h> 
+[?2004l[?2004h> TEXT_KEYS = ['content','text','thought','cot','rationale','response','output','answer']
+[?2004l[?2004h> 
+[?2004l[?2004h> # Attempt to detect domain key from the first element for fallback filtering
+[?2004l[?2004h> domain_key = None
+[?2004l[?2004h> nested_domain = None
+[?2004l[?2004h> try:
+[?2004l[?2004h>     first = next(iter(data_stream))
+[?2004l[?2004h>     # We need to re-open the stream after peeking
+[?2004l[?2004h>     data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split=('science' if use_science else 'train'), streaming=True)
+[?2004l[?2004h>     for k in first.keys():
+[?2004l[?2004h>         if 'domain' in k.lower():
+[?2004l[?2004h>             domain_key = k
+[?2004l[?2004h>             break
+[?2004l[?2004h>     if domain_key is None:
+[?2004l[?2004h>         for k,v in first.items():
+[?2004l[?2004h>             if isinstance(v, dict):
+[?2004l[?2004h>                 for dk in v.keys():
+[?2004l[?2004h>                     if 'domain' in dk.lower():
+[?2004l[?2004h>                         nested_domain = (k, dk)
+[?2004l[?2004h>                         break
+[?2004l[?2004h>                 if nested_domain:
+[?2004l[?2004h>                     break
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     pass
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_domain(ex):
+[?2004l[?2004h>     if domain_key and isinstance(ex.get(domain_key), str):
+[?2004l[?2004h>         return ex.get(domain_key)
+[?2004l[?2004h>     if nested_domain:
+[?2004l[?2004h>         parent, child = nested_domain
+[?2004l[?2004h>         sub = ex.get(parent) or {}
+[?2004l[?2004h>         val = sub.get(child)
+[?2004l[?2004h>         if isinstance(val, str):
+[?2004l[?2004h>             return val
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> # DeepSeek text extraction
+[?2004l[?2004h> def extract_deepseek_texts(ex):
+[?2004l[?2004h>     texts = []
+[?2004l[?2004h>     # Conversations
+[?2004l[?2004h>     conv = ex.get('conversations')
+[?2004l[?2004h>     if isinstance(conv, list):
+[?2004l[?2004h>         for item in conv:
+[?2004l[?2004h>             prov = None
+[?2004l[?2004h>             for fld in ['model','provider','source']:
+[?2004l[?2004h>                 val = item.get(fld)
+[?2004l[?2004h>                 if isinstance(val, str):
+[?2004l[?2004h>                     prov = val
+[?2004l[?2004h>                     break
+[?2004l[?2004h>             if isinstance(prov, str) and 'deepseek' in prov.lower():
+[?2004l[?2004h>                 for tk in TEXT_KEYS:
+[?2004l[?2004h>                     tv = item.get(tk)
+[?2004l[?2004h>                     if isinstance(tv, str) and tv.strip():
+[?2004l[?2004h>                         texts.append(tv.strip())
+[?2004l[?2004h>             for k, v in item.items():
+[?2004l[?2004h>                 if isinstance(v, str) and 'deepseek' in k.lower() and v.strip():
+[?2004l[?2004h>                     texts.append(v.strip())
+[?2004l[?2004h>     # Top-level dicts
+[?2004l[?2004h>     for k, v in ex.items():
+[?2004l[?2004h>         if isinstance(v, dict):
+[?2004l[?2004h>             prov = (v.get('provider') or v.get('model') or v.get('source'))
+[?2004l[?2004h>             if isinstance(prov, str) and 'deepseek' in prov.lower():
+[?2004l[?2004h>                 for tk in TEXT_KEYS:
+[?2004l[?2004h>                     tv = v.get(tk)
+[?2004l[?2004h>                     if isinstance(tv, str) and tv.strip():
+[?2004l[?2004h>                         texts.append(tv.strip())
+[?2004l[?2004h>             for mk, mv in v.items():
+[?2004l[?2004h>                 if isinstance(mv, str) and 'deepseek' in str(mk).lower() and mv.strip():
+[?2004l[?2004h>                     texts.append(mv.strip())
+[?2004l[?2004h>                 elif isinstance(mv, dict):
+[?2004l[?2004h>                     prov2 = (mv.get('provider') or mv.get('model') or mv.get('source') or '')
+[?2004l[?2004h>                     if isinstance(prov2, str) and 'deepseek' in prov2.lower():
+[?2004l[?2004h>                         for tk in TEXT_KEYS:
+[?2004l[?2004h>                             tv = mv.get(tk)
+[?2004l[?2004h>                             if isinstance(tv, str) and tv.strip():
+[?2004l[?2004h>                                 texts.append(tv.strip())
+[?2004l[?2004h>     # Direct fields named with deepseek
+[?2004l[?2004h>     for k, v in ex.items():
+[?2004l[?2004h>         if isinstance(v, str) and 'deepseek' in k.lower() and v.strip():
+[?2004l[?2004h>             texts.append(v.strip())
+[?2004l[?2004h>     return texts
+[?2004l[?2004h> 
+[?2004l[?2004h> # Counting loop
+[?2004l[?2004h> TOTAL = 0
+[?2004l[?2004h> batch = []
+[?2004l[?2004h> BATCH = 128
+[?2004l[?2004h> 
+[?2004l[?2004h> for ex in data_stream:
+[?2004l[?2004h>     if use_science:
+[?2004l[?2004h>         eligible = True
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         dom = get_domain(ex)
+[?2004l[?2004h>         eligible = isinstance(dom, str) and 'science' in dom.lower()
+[?2004l[?2004h>     if eligible:
+[?2004l[?2004h>         texts = extract_deepseek_texts(ex)
+[?2004l[?2004h>         if texts:
+[?2004l[?2004h>             batch.extend(texts)
+[?2004l[?2004h>         if len(batch) >= BATCH:
+[?2004l[?2004h>             enc = tokenizer(batch, add_special_tokens=False)
+[?2004l[?2004h>             TOTAL += sum(len(ids) for ids in enc['input_ids'])
+[?2004l[?2004h>             batch = []
+[?2004l[?2004h> 
+[?2004l[?2004h> if batch:
+[?2004l[?2004h>     enc = tokenizer(batch, add_special_tokens=False)
+[?2004l[?2004h>     TOTAL += sum(len(ids) for ids in enc['input_ids'])
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/app/answer.txt','w') as f:
+[?2004l[?2004h>     f.write(str(TOTAL))
+[?2004l[?2004h> print('TOTAL_DEEPSEEK_TOKENS_SCIENCE:', TOTAL)
+[?2004l[?2004h> PY
+[?2004lNone of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+wc -c /app/answer.txt && echo && cat /app/answer.txt

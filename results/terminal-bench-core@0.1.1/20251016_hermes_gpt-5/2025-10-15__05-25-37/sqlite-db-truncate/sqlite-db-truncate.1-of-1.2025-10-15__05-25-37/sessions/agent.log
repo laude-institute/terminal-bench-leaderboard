@@ -1,0 +1,129 @@
+[?2004hroot@a91f111db1e2:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@a91f111db1e2:/app# clear
+[?2004l[H[J[3J[?2004hroot@a91f111db1e2:/app# ls -la /app
+[?2004ltotal 12
+drwxr-xr-x 1 root root 4096 Oct 15 06:57 [0m[01;34m.[0m
+drwxr-xr-x 1 root root 4096 Oct 15 06:57 [01;34m..[0m
+-rw-rw-r-- 1 root root 4096 Oct  8 15:44 trunc.db
+[?2004hroot@a91f111db1e2:/app# file /app/trunc.db
+[?2004lbash: file: command not found
+[?2004hroot@a91f111db1e2:/app# sqlite3 --version
+[?2004lbash: sqlite3: command not found
+[?2004hroot@a91f111db1e2:/app# sqlite3 /app/trunc.db 'PRAGMA integrity_check;'
+[?2004lbash: sqlite3: command not found
+[?2004hroot@a91f111db1e2:/app# sqlite3 /app/trunc.db '.tables'
+[?2004lbash: sqlite3: command not found
+[?2004hroot@a91f111db1e2:/app# sqlite3 /app/trunc.db '.recover' > /app/recovered.sql
+[?2004lbash: sqlite3: command not found
+[?2004hroot@a91f111db1e2:/app# ls -la /app/recovered.sql
+[?2004l-rw-r--r-- 1 root root 0 Oct 15 06:58 /app/recovered.sql
+[?2004hroot@a91f111db1e2:/app# sqlite3 /app/recovered.db < /app/recovered.sql
+[?2004lbash: sqlite3: command not found
+[?2004hroot@a91f111db1e2:/app# sqlite3 /app/recovered.db "SELECT name, sql FROM sqlite_master WHERE type='table';"
+[?2004lbash: sqlite3: command not found
+[?2004hroot@a91f111db1e2:/app# sqlite3 /app/recovered.db "SELECT name FROM sqlite_master WHERE type='table';"
+[?2004lbash: sqlite3: command not found
+[?2004hroot@a91f111db1e2:/app# sqlite3 /app/recovered.db "SELECT name FROM sqlite_master WHERE type='table';" | while read -r t; do sqlite3 /app/recovered.db "PRAGMA table_info('"$t"');" | awk -F'|' -v tbl="$t" '$2=="word"||$2=="value"{print tbl"|"$2}'; done > /app/tables_columns.txt
+[?2004lbash: sqlite3: command not found
+[?2004hroot@a91f111db1e2:/app# cat /app/tables_columns.txt
+[?2004l[?2004hroot@a91f111db1e2:/app# awk -F'|' '{print $1}' /app/tables_columns.txt | sort -u > /app/candidate_tables.txt
+[?2004l[?2004hroot@a91f111db1e2:/app# cat /app/candidate_tables.txt
+[?2004l[?2004hroot@a91f111db1e2:/app# printf "import sqlite3, json\nconn=sqlite3.connect('/app/recovered.db')\ncur=conn.cursor()\n# discover candidate tables\ncur.execute(\"SELECT name FROM sqlite_master WHERE type='table'\")\ntables=[r[0] for r in cur.fetchall()]\nresults=[]\nfor t in tables:\n    try:\n        cur.execute(f'PRAGMA table_info({t})')\n        cols=[r[1] for r in cur.fetchall()]\n        if 'word' in cols and 'value' in cols:\n            cur.execute(f'SELECT word, value FROM {t}')\n            for w,v in cur.fetchall():\n                # ensure types\n                if w is None: continue\n                try:\n                    v_out = int(v)\n                except Exception:\n                    try:\n                        v_out = float(v)
+[?2004l[?2004h>                     except Exception:
+[?2004l[?2004h>                         continue\n                results.append({'word': str(w), 'value': v_out})\n    except Exception as e:\n        pass\nprint(json.dumps(results))\n" > /app/extract_pairs.py
+[?2004l[?2004hroot@a91f111db1e2:/app# python3 /app/extract_pairs.py > /app/recover.json
+[?2004l[?2004hroot@a91f111db1e2:/app# ls -la /app/recover.json
+[?2004l-rw-r--r-- 1 root root 3 Oct 15 06:58 /app/recover.json
+[?2004hroot@a91f111db1e2:/app# head -c 500 /app/recover.json
+[?2004l[]
+[?2004hroot@a91f111db1e2:/app# python3 -c "import sqlite3;import sys;\ntry:\n conn=sqlite3.connect('/app/trunc.db'); cur=conn.cursor(); cur.execute('PRAGMA integrity_check'); print(cur.fetchall());\nexcept Exception as e:\n print('ERROR:', e)" 
+[?2004l  File "<string>", line 1
+    import sqlite3;import sys;\ntry:\n conn=sqlite3.connect('/app/trunc.db'); cur=conn.cursor(); cur.execute('PRAGMA integrity_check'); print(cur.fetchall());\nexcept Exception as e:\n print('ERROR:', e)
+                               ^
+SyntaxError: unexpected character after line continuation character
+[?2004hroot@a91f111db1e2:/app# apt-get update
+[?2004l0% [Working]            Get:1 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+0% [Waiting for headers] [1 InRelease 5484 B/126 kB 4%]                                                       Get:2 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]
+0% [2 InRelease 6932 B/256 kB 3%] [1 InRelease 14.2 kB/126 kB 11%]                                                                  0% [2 InRelease 134 kB/256 kB 53%]0% [2 InRelease 201 kB/256 kB 79%]                                  0% [Waiting for headers]                        Get:3 http://security.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1141 kB]
+0% [Waiting for headers] [3 Packages 1207 B/1141 kB 0%]0% [Waiting for headers] [3 Packages 41.8 kB/1141 kB 4%]                                                        Get:4 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+0% [4 InRelease 2588 B/126 kB 2%] [3 Packages 64.9 kB/1141 kB 6%]                                                                 0% [3 Packages 124 kB/1141 kB 11%]0% [Waiting for headers] [3 Packages 223 kB/1141 kB 20%]                                                        Get:5 http://archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+0% [5 InRelease 2588 B/126 kB 2%] [3 Packages 273 kB/1141 kB 24%]                                                                 0% [3 Packages 401 kB/1141 kB 35%]15% [Waiting for headers] [3 Packages 702 kB/1141 kB 62%]                                                         Get:6 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages [19.3 MB]
+16% [6 Packages 2653 B/19.3 MB 0%] [3 Packages 829 kB/1141 kB 73%]                                                                  17% [6 Packages 181 kB/19.3 MB 1%]17% [3 Packages store 0 B] [6 Packages 184 kB/19.3 MB 1%]                                                         18% [6 Packages 388 kB/19.3 MB 2%] [Waiting for headers]                                                        Get:7 http://security.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [2512 kB]
+18% [6 Packages 489 kB/19.3 MB 3%] [7 Packages 4103 B/2512 kB 0%]27% [6 Packages 1969 kB/19.3 MB 10%] [7 Packages 2189 kB/2512 kB 87%]                                                                     28% [6 Packages 2033 kB/19.3 MB 11%] [Waiting for headers]                                                          Get:8 http://security.ubuntu.com/ubuntu noble-security/main amd64 Packages [1531 kB]
+28% [6 Packages 2033 kB/19.3 MB 11%] [8 Packages 21.2 kB/1531 kB 1%]28% [7 Packages store 0 B] [6 Packages 2033 kB/19.3 MB 11%] [8 Packages 21.2 kB/1531 kB 1%]                                                                                           32% [6 Packages 2790 kB/19.3 MB 14%] [8 Packages 871 kB/1531 kB 57%]                                                                    39% [6 Packages 5084 kB/19.3 MB 26%] [Waiting for headers]                                                          Get:9 http://security.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [34.6 kB]
+39% [6 Packages 5104 kB/19.3 MB 26%] [9 Packages 22.5 kB/34.6 kB 65%]39% [8 Packages store 0 B] [6 Packages 5127 kB/19.3 MB 27%] [9 Packages 22.5 kB/34.6 kB 65%]                                                                                            39% [8 Packages store 0 B] [6 Packages 5145 kB/19.3 MB 27%]                                                           40% [6 Packages 5436 kB/19.3 MB 28%]40% [9 Packages store 0 B] [6 Packages 5436 kB/19.3 MB 28%]                                                           41% [6 Packages 5460 kB/19.3 MB 28%]54% [6 Packages 10.8 MB/19.3 MB 56%]66% [6 Packages 16.3 MB/19.3 MB 84%]                                    74% [Waiting for headers]                         Get:10 http://archive.ubuntu.com/ubuntu noble/main amd64 Packages [1808 kB]
+74% [10 Packages 32.2 kB/1808 kB 2%]74% [6 Packages store 0 B] [10 Packages 32.2 kB/1808 kB 2%]                                                           78% [6 Packages store 0 B] [Waiting for headers]                                                Get:11 http://archive.ubuntu.com/ubuntu noble/multiverse amd64 Packages [331 kB]
+78% [6 Packages store 0 B] [11 Packages 16.6 kB/331 kB 5%]                                                          79% [6 Packages store 0 B] [Waiting for headers]                                                Get:12 http://archive.ubuntu.com/ubuntu noble/restricted amd64 Packages [117 kB]
+79% [6 Packages store 0 B] [12 Packages 6777 B/117 kB 6%]                                                         79% [6 Packages store 0 B] [Waiting for headers]                                                Get:13 http://archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [2644 kB]
+79% [6 Packages store 0 B] [13 Packages 6594 B/2644 kB 0%]                                                          85% [6 Packages store 0 B] [Waiting for headers]                                                Get:14 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1897 kB]
+85% [6 Packages store 0 B] [14 Packages 14.0 kB/1897 kB 1%]                                                           90% [6 Packages store 0 B] [Waiting for headers]                                                Get:15 http://archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [38.9 kB]
+90% [6 Packages store 0 B] [15 Packages 14.8 kB/38.9 kB 38%]                                                            90% [6 Packages store 0 B] [Waiting for headers]                                                Get:16 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1928 kB]
+90% [6 Packages store 0 B] [16 Packages 6905 B/1928 kB 0%]                                                          94% [6 Packages store 0 B] [Waiting for headers]                                                Get:17 http://archive.ubuntu.com/ubuntu noble-backports/main amd64 Packages [49.4 kB]
+94% [6 Packages store 0 B] [17 Packages 15.9 kB/49.4 kB 32%]                                                            94% [6 Packages store 0 B] [Waiting for headers]                                                Get:18 http://archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [33.9 kB]
+94% [6 Packages store 0 B] [18 Packages 6799 B/33.9 kB 20%]                                                           94% [6 Packages store 0 B]                          95% [Working]95% [10 Packages store 0 B]                           96% [Working]96% [11 Packages store 0 B]                           96% [Working]96% [12 Packages store 0 B]                           97% [Working]97% [13 Packages store 0 B]                           97% [Working]97% [14 Packages store 0 B]                           98% [Working]98% [15 Packages store 0 B]                           98% [Working]98% [16 Packages store 0 B]                           99% [Working]99% [17 Packages store 0 B]                           99% [Working]99% [18 Packages store 0 B]                           100% [Working]              Fetched 34.0 MB in 5s (7278 kB/s)
+Reading package lists... 0%Reading package lists... 0%Reading package lists... 0%Reading package lists... 5%Reading package lists... 5%Reading package lists... 58%Reading package lists... 58%Reading package lists... 58%Reading package lists... 58%Reading package lists... 59%Reading package lists... 59%Reading package lists... 65%Reading package lists... 65%Reading package lists... 70%Reading package lists... 72%Reading package lists... 72%Reading package lists... 81%Reading package lists... 81%Reading package lists... 81%Reading package lists... 81%Reading package lists... 82%Reading package lists... 82%Reading package lists... 82%Reading package lists... 82%Reading package lists... 87%Reading package lists... 87%Reading package lists... 91%Reading package lists... 91%Reading package lists... 99%Reading package lists... 99%Reading package lists... 99%Reading package lists... 99%Reading package lists... Done
+[?2004hroot@a91f111db1e2:/app# apt-get install -y sqlite3
+[?2004lReading package lists... 0%Reading package lists... 0%Reading package lists... 0%Reading package lists... 5%Reading package lists... 5%Reading package lists... 58%Reading package lists... 58%Reading package lists... 58%Reading package lists... 58%Reading package lists... 59%Reading package lists... 59%Reading package lists... 65%Reading package lists... 65%Reading package lists... 72%Reading package lists... 72%Reading package lists... 72%Reading package lists... 81%Reading package lists... 81%Reading package lists... 81%Reading package lists... 81%Reading package lists... 82%Reading package lists... 82%Reading package lists... 82%Reading package lists... 82%Reading package lists... 87%Reading package lists... 87%Reading package lists... 91%Reading package lists... 91%Reading package lists... 99%Reading package lists... 99%Reading package lists... 99%Reading package lists... 99%Reading package lists... Done
+Building dependency tree... 0%Building dependency tree... 0%Building dependency tree... 50%Building dependency tree... 50%Building dependency tree... Done
+Reading state information... 0% Reading state information... 4%Reading state information... Done
+The following additional packages will be installed:
+  libsqlite3-0
+Suggested packages:
+  sqlite3-doc
+The following NEW packages will be installed:
+  sqlite3
+The following packages will be upgraded:
+  libsqlite3-0
+1 upgraded, 1 newly installed, 0 to remove and 32 not upgraded.
+Need to get 845 kB of archives.
+After this operation, 584 kB of additional disk space will be used.
+0% [Working]            Get:1 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libsqlite3-0 amd64 3.45.1-1ubuntu2.5 [701 kB]
+0% [1 libsqlite3-0 2604 B/701 kB 0%]                                    76% [Working]             Get:2 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 sqlite3 amd64 3.45.1-1ubuntu2.5 [144 kB]
+77% [2 sqlite3 4052 B/144 kB 3%]                                100% [Working]              Fetched 845 kB in 0s (2359 kB/s)
+debconf: delaying package configuration, since apt-utils is not installed
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 6337 files and directories currently installed.)
+Preparing to unpack .../libsqlite3-0_3.45.1-1ubuntu2.5_amd64.deb ...
+Unpacking libsqlite3-0:amd64 (3.45.1-1ubuntu2.5) over (3.45.1-1ubuntu2.3) ...
+Selecting previously unselected package sqlite3.
+Preparing to unpack .../sqlite3_3.45.1-1ubuntu2.5_amd64.deb ...
+Unpacking sqlite3 (3.45.1-1ubuntu2.5) ...
+Setting up libsqlite3-0:amd64 (3.45.1-1ubuntu2.5) ...
+Setting up sqlite3 (3.45.1-1ubuntu2.5) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.4) ...
+[?2004hroot@a91f111db1e2:/app# sqlite3 --version
+[?2004l3.45.1 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257ccalt1 (64-bit)
+[?2004hroot@a91f111db1e2:/app# sqlite3 /app/trunc.db '.recover' > /app/recovered.sql
+[?2004lsql error: file is not a database (26)
+[?2004hroot@a91f111db1e2:/app# ls -la /app/recovered.sql
+[?2004l-rw-r--r-- 1 root root 36 Oct 15 06:59 /app/recovered.sql
+[?2004hroot@a91f111db1e2:/app# sqlite3 /app/recovered.db < /app/recovered.sql
+[?2004l[?2004hroot@a91f111db1e2:/app# sqlite3 /app/recovered.db "SELECT name FROM sqlite_master WHERE type='table';"
+[?2004l[?2004hroot@a91f111db1e2:/app# printf "import sqlite3, json, os\ntry:\n    db_path = '/app/recovered.db' if (os.path.exists('/app/recovered.db') and os.path.getsize('/app/recovered.db')>0) else '/app/trunc.db'\n    conn = sqlite3.connect(db_path)\n    cur = conn.cursor()\n    cur.execute(\"SELECT name FROM sqlite_master WHERE type='table'\")\n    tables = [r[0] for r in cur.fetchall()]\n    results = []\n    for t in tables:\n        try:\n            cur.execute(f\"PRAGMA table_info({t})\")\n            cols = [r[1] for r in cur.fetchall()]\n            if 'word' in cols and 'value' in cols:\n                cur.execute(f\"SELECT word, value FROM {t}\")\n                for w,v in cur.fetchall():\n                    if w is None:\n                        continue\n                    v_out = None\n                    try:\n                        v_out = int(v)\n                    except Exception:\n                        try:\n                            v_out = float(v)\n                        except Exception:\n                            continue\n                    results.append({'word': str(w), 'value': v_out})\n        except Exception:\n            pass\n    print(json.dumps(results))\nexcept Exception as e:\n    print('[]')\n" > /app/extract_pairs.py
+[?2004l[?2004hroot@a91f111db1e2:/app# python3 /app/extract_pairs.py > /app/recover.json
+[?2004l[?2004hroot@a91f111db1e2:/app# ls -la /app/recover.json
+[?2004l-rw-r--r-- 1 root root 3 Oct 15 07:00 /app/recover.json
+[?2004hroot@a91f111db1e2:/app# head -c 500 /app/recover.json
+[?2004l[]
+[?2004hroot@a91f111db1e2:/app# hexdump -C /app/trunc.db | head -n 30
+[?2004lbash: hexdump: command not found
+[?2004hroot@a91f111db1e2:/app# strings -a /app/trunc.db | head -n 50
+[?2004lbash: strings: command not found
+[?2004hroot@a91f111db1e2:/app# strings -a /app/trunc.db | grep -n -E 'testword|word|value|CREATE TABLE' || true
+[?2004lbash: strings: command not found
+[?2004hroot@a91f111db1e2:/app# printf "import re, json\nfrom pathlib import Path\n# Read raw bytes\np = Path('/app/trunc.db')\nb = p.read_bytes()\n# Decode to latin1 to preserve byte values in a 1:1 mapping\ns = b.decode('latin1', errors='ignore')\n# Find words matching expected pattern\nword_pat = re.compile(r'(testword[0-9A-Za-z_]+)')\nnum_pat = re.compile(r'(-?\d+)')\nresults = []\nseen = set()\nfor m in word_pat.finditer(s):\n    w = m.group(1)\n    idx = m.end()\n    # search forward window for numbers\n    fwd = s[idx:idx+128]\n    nums = list(num_pat.finditer(fwd))\n    chosen = None\n    if nums:\n        # pick the first number in forward window\n        chosen = nums[0].group(1)\n    else:\n        # search backward window if no forward number\n        back = s[max(0, m.start()-128):m.start()]\n        nums_back = list(num_pat.finditer(back))\n        if nums_back:\n            chosen = nums_back[-1].group(1)\n    if chosen is None:\n        continue\n    try:\n        val = int(chosen)\n    except Exception:\n        try:\n            val = float(chosen)\n        except Exception:\n            continue\n    if w not in seen:\n        results.append({'word': w, 'value': val})\n        seen.add(w)\nprint(json.dumps(results))\n" > /app/extract_from_bytes.py
+[?2004l[?2004hroot@a91f111db1e2:/app# python3 /app/extract_from_bytes.py > /app/recover.json
+[?2004l[?2004hroot@a91f111db1e2:/app# ls -la /app/recover.json
+[?2004l-rw-r--r-- 1 root root 365 Oct 15 07:01 /app/recover.json
+[?2004hroot@a91f111db1e2:/app# head -c 500 /app/recover.json
+[?2004l[{"word": "testword09", "value": 8}, {"word": "testword08", "value": 7}, {"word": "testword07c", "value": 6}, {"word": "testword06K", "value": 52}, {"word": "testword052", "value": 4}, {"word": "testword04", "value": 3}, {"word": "testword03", "value": 2}, {"word": "testword02", "value": 1}, {"word": "testword01", "value": 0}, {"word": "testword00", "value": 1}]
+[?2004hroot@a91f111db1e2:/app# ls -la /app/recover.json
+[?2004l-rw-r--r-- 1 root root 365 Oct 15 07:01 /app/recover.json
+[?2004hroot@a91f111db1e2:/app# head -n 50 /app/recover.json
+[?2004l[{"word": "testword09", "value": 8}, {"word": "testword08", "value": 7}, {"word": "testword07c", "value": 6}, {"word": "testword06K", "value": 52}, {"word": "testword052", "value": 4}, {"word": "testword04", "value": 3}, {"word": "testword03", "value": 2}, {"word": "testword02", "value": 1}, {"word": "testword01", "value": 0}, {"word": "testword00", "value": 1}]
+[?2004hroot@a91f111db1e2:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@a91f111db1e2:/app# 

@@ -1,0 +1,76 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'apt-get update\n'
+'apt-get install -y openssh-server git nginx openssl\n'
+'mkdir -p /var/run/sshd\n'
+"sed -ri 's/^#?PasswordAuthentication\\s+.*/PasswordAuthentication yes/' /etc/ssh/sshd_config\n"
+"sed -ri 's/^#?UsePAM\\s+.*/UsePAM yes/' /etc/ssh/sshd_config\n"
+'service ssh restart\n'
+'useradd -m -s /usr/bin/git-shell git\n'
+"echo 'git:password' | chpasswd\n"
+'mkdir -p /git\n'
+'chown -R git:git /git\n'
+"su - git -c 'git init --bare /git/project'\n"
+'printf \'#!/bin/sh\\nset -e\\numask 002\\nif git rev-parse --quiet --verify refs/heads/main >/dev/null; then\\n  echo "Deploying main to /var/www/html"\\n  mkdir -p /var/www/html\\n  git --work-tree=/var/www/html checkout -f main\\nfi\\nif git rev-parse --quiet --verify refs/heads/dev >/dev/null; then\\n  echo "Deploying dev to /var/www/html/dev"\\n  mkdir -p /var/www/html/dev\\n  git --work-tree=/var/www/html/dev checkout -f dev\\nfi\\n\' > /git/project/hooks/post-receive\n'
+'chmod +x /git/project/hooks/post-receive\n'
+'mkdir -p /var/www/html/dev\n'
+'chown -R git:git /var/www/html\n'
+'mkdir -p /etc/nginx/ssl\n'
+'openssl req -x509 -nodes -newkey rsa:2048 -days 365 -subj "/CN=localhost" -keyout /etc/nginx/ssl/selfsigned.key -out /etc/nginx/ssl/selfsigned.crt\n'
+"printf 'server {\\n    listen 8443 ssl;\\n    server_name localhost;\\n    ssl_certificate /etc/nginx/ssl/selfsigned.crt;\\n    ssl_certificate_key /etc/nginx/ssl/selfsigned.key;\\n\\n    root /var/www/html;\\n    index index.html;\\n\\n    location / {\\n        try_files $uri $uri/ =404;\\n    }\\n}\\n' > /etc/nginx/sites-available/git_deploy\n"
+'ln -sf /etc/nginx/sites-available/git_deploy /etc/nginx/sites-enabled/git_deploy\n'
+'rm -f /etc/nginx/sites-enabled/default\n'
+'nginx -t\n'
+'service nginx restart\n'
+'git init --bare /git/project\n'
+'chown -R git:git /git/project\n'
+'printf \'#!/bin/sh\\nset -e\\nREPO="$(pwd)"\\ndeploy_branch() {\\n  branch="$1"\\n  dest="$2"\\n  if git --git-dir="$REPO" rev-parse --quiet --verify "refs/heads/$branch" >/dev/null; then\\n    mkdir -p "$dest"\\n    echo "Deploying $branch to $dest"\\n    git --git-dir="$REPO" --work-tree="$dest" checkout -f "$branch" -- .\\n  fi\\n}\\ndeploy_branch main /var/www/html\\ndeploy_branch dev /var/www/html/dev\\n\' > /git/project/hooks/post-receive\n'
+'chmod +x /git/project/hooks/post-receive\n'
+'mkdir -p /var/www/html /var/www/html/dev\n'
+'chown -R git:git /var/www/html\n'
+'apt-get install -y sshpass\n'
+'rm -rf /tmp/site && mkdir -p /tmp/site && cd /tmp/site\n'
+'git init -b main\n'
+"printf '<!doctype html>\\n<html><body><h1>Main branch</h1></body></html>\\n' > index.html\n"
+'git add index.html && git commit -m "Add main index"\n'
+"export GIT_SSH_COMMAND='sshpass -p password ssh -o StrictHostKeyChecking=no'\n"
+'git remote add origin ssh://git@localhost/git/project\n'
+'git push -u origin main\n'
+'git checkout -b dev\n'
+"mkdir -p dev && printf '<!doctype html>\\n<html><body><h1>Dev branch</h1></body></html>\\n' > dev/index.html\n"
+'git add dev/index.html && git commit -m "Add dev index"\n'
+'git push -u origin dev\n'
+'curl -sk https://localhost:8443/index.html | head -n 1\n'
+'curl -sk https://localhost:8443/dev/index.html | head -n 1\n'
+'cd /tmp/site\n'
+'git config user.email "ci@example.com"\n'
+'git config user.name "CI User"\n'
+'git add -A\n'
+'git commit -m "Add main index"\n'
+'git remote set-url origin git@localhost:/git/project\n'
+"export GIT_SSH_COMMAND='sshpass -p password ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'\n"
+'git push -u origin main\n'
+'sleep 1\n'
+'curl -sk https://localhost:8443/index.html | head -n 1\n'
+'git checkout -B dev main\n'
+'rm -rf dev\n'
+"printf '<!doctype html>\\n<html><body><h1>Dev branch</h1></body></html>\\n' > index.html\n"
+'git add -A\n'
+'git commit -m "Add dev index"\n'
+'git push -u origin dev\n'
+'sleep 1\n'
+'curl -sk https://localhost:8443/dev/index.html | head -n 1\n'
+'cd /tmp/site\n'
+'git checkout -B main\n'
+"printf '<!doctype html>\\n<html><body><h1>Main branch</h1></body></html>\\n' > index.html\n"
+'git add -A\n'
+'git commit -m "Add main index"\n'
+"export GIT_SSH_COMMAND='sshpass -p password ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'\n"
+'git push -u origin main\n'
+'sleep 1\n'
+'curl -sk https://localhost:8443/index.html | head -n 1\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

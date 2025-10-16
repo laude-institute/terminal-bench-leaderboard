@@ -1,0 +1,147 @@
+root@a91f111db1e2:/app# ls -la /app
+total 12
+drwxr-xr-x 1 root root 4096 Oct 15 06:57 .
+drwxr-xr-x 1 root root 4096 Oct 15 06:57 ..
+-rw-rw-r-- 1 root root 4096 Oct  8 15:44 trunc.db
+root@a91f111db1e2:/app# file /app/trunc.db
+bash: file: command not found
+root@a91f111db1e2:/app# sqlite3 --version
+bash: sqlite3: command not found
+root@a91f111db1e2:/app# sqlite3 /app/trunc.db 'PRAGMA integrity_check;'
+bash: sqlite3: command not found
+root@a91f111db1e2:/app# sqlite3 /app/trunc.db '.tables'
+bash: sqlite3: command not found
+root@a91f111db1e2:/app# sqlite3 /app/trunc.db '.recover' > /app/recovered.sql
+bash: sqlite3: command not found
+root@a91f111db1e2:/app# ls -la /app/recovered.sql
+-rw-r--r-- 1 root root 0 Oct 15 06:58 /app/recovered.sql
+root@a91f111db1e2:/app# sqlite3 /app/recovered.db < /app/recovered.sql
+bash: sqlite3: command not found
+root@a91f111db1e2:/app# sqlite3 /app/recovered.db "SELECT name, sql FROM sqlite_master WHERE type='table';"
+bash: sqlite3: command not found
+root@a91f111db1e2:/app# sqlite3 /app/recovered.db "SELECT name FROM sqlite_master WHERE type='table';"
+bash: sqlite3: command not found
+root@a91f111db1e2:/app# sqlite3 /app/recovered.db "SELECT name FROM sqlite_master WHERE type='table';" | while read -r t; do sqlite3 /app/recovered.db "PRAGMA t
+able_info('"$t"');" | awk -F'|' -v tbl="$t" '$2=="word"||$2=="value"{print tbl"|"$2}'; done > /app/tables_columns.txt
+bash: sqlite3: command not found
+root@a91f111db1e2:/app# cat /app/tables_columns.txt
+root@a91f111db1e2:/app# awk -F'|' '{print $1}' /app/tables_columns.txt | sort -u > /app/candidate_tables.txt
+root@a91f111db1e2:/app# cat /app/candidate_tables.txt
+root@a91f111db1e2:/app# printf "import sqlite3, json\nconn=sqlite3.connect('/app/recovered.db')\ncur=conn.cursor()\n# discover candidate tables\ncur.execute(\"S
+ELECT name FROM sqlite_master WHERE type='table'\")\ntables=[r[0] for r in cur.fetchall()]\nresults=[]\nfor t in tables:\n    try:\n        cur.execute(f'PRAGMA
+ table_info({t})')\n        cols=[r[1] for r in cur.fetchall()]\n        if 'word' in cols and 'value' in cols:\n            cur.execute(f'SELECT word, value FR
+OM {t}')\n            for w,v in cur.fetchall():\n                # ensure types\n                if w is None: continue\n                try:\n
+    v_out = int(v)\n                except Exception:\n                    try:\n                        v_out = float(v)
+>                     except Exception:
+>                         continue\n                results.append({'word': str(w), 'value': v_out})\n    except Exception as e:\n        pass\nprint(json.dumps
+(results))\n" > /app/extract_pairs.py
+root@a91f111db1e2:/app# python3 /app/extract_pairs.py > /app/recover.json
+root@a91f111db1e2:/app# ls -la /app/recover.json
+-rw-r--r-- 1 root root 3 Oct 15 06:58 /app/recover.json
+root@a91f111db1e2:/app# head -c 500 /app/recover.json
+[]
+root@a91f111db1e2:/app# python3 -c "import sqlite3;import sys;\ntry:\n conn=sqlite3.connect('/app/trunc.db'); cur=conn.cursor(); cur.execute('PRAGMA integrity_c
+heck'); print(cur.fetchall());\nexcept Exception as e:\n print('ERROR:', e)"
+  File "<string>", line 1
+    import sqlite3;import sys;\ntry:\n conn=sqlite3.connect('/app/trunc.db'); cur=conn.cursor(); cur.execute('PRAGMA integrity_check'); print(cur.fetchall());\n
+except Exception as e:\n print('ERROR:', e)
+                               ^
+SyntaxError: unexpected character after line continuation character
+root@a91f111db1e2:/app# apt-get update
+Get:1 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Get:2 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]
+Get:3 http://security.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1141 kB]
+Get:4 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+Get:5 http://archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+Get:6 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages [19.3 MB]
+Get:7 http://security.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [2512 kB]
+Get:8 http://security.ubuntu.com/ubuntu noble-security/main amd64 Packages [1531 kB]
+Get:9 http://security.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [34.6 kB]
+Get:10 http://archive.ubuntu.com/ubuntu noble/main amd64 Packages [1808 kB]
+Get:11 http://archive.ubuntu.com/ubuntu noble/multiverse amd64 Packages [331 kB]
+Get:12 http://archive.ubuntu.com/ubuntu noble/restricted amd64 Packages [117 kB]
+Get:13 http://archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [2644 kB]
+Get:14 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1897 kB]
+Get:15 http://archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [38.9 kB]
+Get:16 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1928 kB]
+Get:17 http://archive.ubuntu.com/ubuntu noble-backports/main amd64 Packages [49.4 kB]
+Get:18 http://archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [33.9 kB]
+Fetched 34.0 MB in 5s (7278 kB/s)
+Reading package lists... Done
+root@a91f111db1e2:/app# apt-get install -y sqlite3
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  libsqlite3-0
+Suggested packages:
+  sqlite3-doc
+The following NEW packages will be installed:
+  sqlite3
+The following packages will be upgraded:
+  libsqlite3-0
+1 upgraded, 1 newly installed, 0 to remove and 32 not upgraded.
+Need to get 845 kB of archives.
+After this operation, 584 kB of additional disk space will be used.
+Get:1 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libsqlite3-0 amd64 3.45.1-1ubuntu2.5 [701 kB]
+Get:2 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 sqlite3 amd64 3.45.1-1ubuntu2.5 [144 kB]
+Fetched 845 kB in 0s (2359 kB/s)
+debconf: delaying package configuration, since apt-utils is not installed
+(Reading database ... 6337 files and directories currently installed.)
+Preparing to unpack .../libsqlite3-0_3.45.1-1ubuntu2.5_amd64.deb ...
+Unpacking libsqlite3-0:amd64 (3.45.1-1ubuntu2.5) over (3.45.1-1ubuntu2.3) ...
+Selecting previously unselected package sqlite3.
+Preparing to unpack .../sqlite3_3.45.1-1ubuntu2.5_amd64.deb ...
+Unpacking sqlite3 (3.45.1-1ubuntu2.5) ...
+Setting up libsqlite3-0:amd64 (3.45.1-1ubuntu2.5) ...
+Setting up sqlite3 (3.45.1-1ubuntu2.5) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.4) ...
+root@a91f111db1e2:/app# sqlite3 --version
+3.45.1 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257ccalt1 (64-bit)
+root@a91f111db1e2:/app# sqlite3 /app/trunc.db '.recover' > /app/recovered.sql
+sql error: file is not a database (26)
+root@a91f111db1e2:/app# ls -la /app/recovered.sql
+-rw-r--r-- 1 root root 36 Oct 15 06:59 /app/recovered.sql
+root@a91f111db1e2:/app# sqlite3 /app/recovered.db < /app/recovered.sql
+root@a91f111db1e2:/app# sqlite3 /app/recovered.db "SELECT name FROM sqlite_master WHERE type='table';"
+root@a91f111db1e2:/app# printf "import sqlite3, json, os\ntry:\n    db_path = '/app/recovered.db' if (os.path.exists('/app/recovered.db') and os.path.getsize('/
+app/recovered.db')>0) else '/app/trunc.db'\n    conn = sqlite3.connect(db_path)\n    cur = conn.cursor()\n    cur.execute(\"SELECT name FROM sqlite_master WHERE
+ type='table'\")\n    tables = [r[0] for r in cur.fetchall()]\n    results = []\n    for t in tables:\n        try:\n            cur.execute(f\"PRAGMA table_inf
+o({t})\")\n            cols = [r[1] for r in cur.fetchall()]\n            if 'word' in cols and 'value' in cols:\n                cur.execute(f\"SELECT word, va
+lue FROM {t}\")\n                for w,v in cur.fetchall():\n                    if w is None:\n                        continue\n                    v_out = No
+ne\n                    try:\n                        v_out = int(v)\n                    except Exception:\n                        try:\n
+       v_out = float(v)\n                        except Exception:\n                            continue\n                    results.append({'word': str(w), 'v
+alue': v_out})\n        except Exception:\n            pass\n    print(json.dumps(results))\nexcept Exception as e:\n    print('[]')\n" > /app/extract_pairs.py
+root@a91f111db1e2:/app# python3 /app/extract_pairs.py > /app/recover.json
+root@a91f111db1e2:/app# ls -la /app/recover.json
+-rw-r--r-- 1 root root 3 Oct 15 07:00 /app/recover.json
+root@a91f111db1e2:/app# head -c 500 /app/recover.json
+[]
+root@a91f111db1e2:/app# hexdump -C /app/trunc.db | head -n 30
+bash: hexdump: command not found
+root@a91f111db1e2:/app# strings -a /app/trunc.db | head -n 50
+bash: strings: command not found
+root@a91f111db1e2:/app# strings -a /app/trunc.db | grep -n -E 'testword|word|value|CREATE TABLE' || true
+bash: strings: command not found
+root@a91f111db1e2:/app# printf "import re, json\nfrom pathlib import Path\n# Read raw bytes\np = Path('/app/trunc.db')\nb = p.read_bytes()\n# Decode to latin1 t
+o preserve byte values in a 1:1 mapping\ns = b.decode('latin1', errors='ignore')\n# Find words matching expected pattern\nword_pat = re.compile(r'(testword[0-9A
+-Za-z_]+)')\nnum_pat = re.compile(r'(-?\d+)')\nresults = []\nseen = set()\nfor m in word_pat.finditer(s):\n    w = m.group(1)\n    idx = m.end()\n    # search f
+orward window for numbers\n    fwd = s[idx:idx+128]\n    nums = list(num_pat.finditer(fwd))\n    chosen = None\n    if nums:\n        # pick the first number in
+ forward window\n        chosen = nums[0].group(1)\n    else:\n        # search backward window if no forward number\n        back = s[max(0, m.start()-128):m.s
+tart()]\n        nums_back = list(num_pat.finditer(back))\n        if nums_back:\n            chosen = nums_back[-1].group(1)\n    if chosen is None:\n        c
+ontinue\n    try:\n        val = int(chosen)\n    except Exception:\n        try:\n            val = float(chosen)\n        except Exception:\n            conti
+nue\n    if w not in seen:\n        results.append({'word': w, 'value': val})\n        seen.add(w)\nprint(json.dumps(results))\n" > /app/extract_from_bytes.py
+root@a91f111db1e2:/app# python3 /app/extract_from_bytes.py > /app/recover.json
+root@a91f111db1e2:/app# ls -la /app/recover.json
+-rw-r--r-- 1 root root 365 Oct 15 07:01 /app/recover.json
+root@a91f111db1e2:/app# head -c 500 /app/recover.json
+[{"word": "testword09", "value": 8}, {"word": "testword08", "value": 7}, {"word": "testword07c", "value": 6}, {"word": "testword06K", "value": 52}, {"word": "te
+stword052", "value": 4}, {"word": "testword04", "value": 3}, {"word": "testword03", "value": 2}, {"word": "testword02", "value": 1}, {"word": "testword01", "val
+ue": 0}, {"word": "testword00", "value": 1}]
+root@a91f111db1e2:/app# ls -la /app/recover.json
+-rw-r--r-- 1 root root 365 Oct 15 07:01 /app/recover.json
+root@a91f111db1e2:/app# head -n 50 /app/recover.json
+[{"word": "testword09", "value": 8}, {"word": "testword08", "value": 7}, {"word": "testword07c", "value": 6}, {"word": "testword06K", "value": 52}, {"word": "te
+stword052", "value": 4}, {"word": "testword04", "value": 3}, {"word": "testword03", "value": 2}, {"word": "testword02", "value": 1}, {"word": "testword01", "val
+ue": 0}, {"word": "testword00", "value": 1}]
+root@a91f111db1e2:/app#

@@ -1,0 +1,234 @@
+[?2004hroot@1fc4103ece3e:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@1fc4103ece3e:/app# clear
+[?2004l[H[J[3J[?2004hroot@1fc4103ece3e:/app# ls -la
+[?2004ltotal 12
+drwxr-xr-x 1 root root 4096 Oct 14 12:07 .
+drwxr-xr-x 1 root root 4096 Oct 14 12:07 ..
+drwxr-xr-x 2 root root 4096 Oct  8 15:44 src
+[?2004hroot@1fc4103ece3e:/app# python --version
+[?2004lPython 3.8.20
+[?2004hroot@1fc4103ece3e:/app# python -c "import sys; print(sys.version)"
+[?2004l3.8.20 (default, Sep 27 2024, 06:05:23) 
+[GCC 12.2.0]
+[?2004hroot@1fc4103ece3e:/app# python -c "import importlib, json; import pkgutil; print('pip available:', importlib.util.find_spec('pip') is not None)"
+[?2004lpip available: True
+[?2004hroot@1fc4103ece3e:/app# python -c "import pandas as pd; print(pd.__version__)" 2>/dev/null
+[?2004l1.3.0
+[?2004hroot@1fc4103ece3e:/app# pip --version
+[?2004lpip show pandas || true
+pip 23.0.1 from /usr/local/lib/python3.8/site-packages/pip (python 3.8)
+[?2004hroot@1fc4103ece3e:/app# pip show pandas || true
+[?2004lgrep -E "requirements|pyproject|Pipfile|poetry" -R . -n || true
+ls -la src || true
+Name: pandas
+Version: 1.3.0
+Summary: Powerful data structures for data analysis, time series, and statistics
+Home-page: https://pandas.pydata.org
+Author: The Pandas Development Team
+Author-email: pandas-dev@python.org
+License: BSD-3-Clause
+Location: /usr/local/lib/python3.8/site-packages
+Requires: numpy, python-dateutil, pytz
+Required-by: 
+[?2004hroot@1fc4103ece3e:/app# grep -E "requirements|pyproject|Pipfile|poetry" -R . -n || true
+[?2004l[?2004hroot@1fc4103ece3e:/app# ls -la src || true
+[?2004ltotal 20
+drwxr-xr-x 2 root root 4096 Oct  8 15:44 .
+drwxr-xr-x 1 root root 4096 Oct 14 12:07 ..
+-rw-rw-r-- 1 root root   76 Oct  8 15:44 __init__.py
+-rw-rw-r-- 1 root root 1368 Oct  8 15:44 data_loader.py
+-rw-rw-r-- 1 root root 2688 Oct  8 15:44 data_processor.py
+[?2004hroot@1fc4103ece3e:/app# sed -n '1,200p' src/data_processor.py 2>/dev/null || sed -n '1,200p' src/data_processor/__init__.py 2>/dev/null || true
+[?2004lfrom typing import Any, Dict, Tuple
+
+import numpy as np  # type: ignore
+import pandas as pd  # type: ignore
+
+from .data_loader import load_sample_transactions
+
+
+def load_and_process_data(filepath) -> pd.DataFrame:
+    """Load CSV data with optimized dtypes using Arrow and handle mixed date formats.
+
+    Args:
+        filepath: Path to the CSV file containing transaction data
+
+    Returns:
+        DataFrame with properly typed columns using Arrow backend
+    """
+    # This requires pandas >= 2.0.0 for date_format and dtype_backend
+    pd.options.mode.copy_on_write = True
+
+    df = pd.read_csv(
+        filepath,
+        dtype_backend="pyarrow",
+        date_format="mixed",
+    )
+
+    # Convert date columns using the new mixed format parser
+    date_cols = ["transaction_date", "processing_date"]
+    for col in date_cols:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], format="mixed")
+
+    return df
+
+
+def process_transactions(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Process transaction data using pandas 2.0 features.
+
+    Args:
+        df: Input DataFrame with transaction data
+
+    Returns:
+        Tuple containing:
+        - Summary DataFrame with transaction statistics
+        - Dictionary with metadata about boolean columns
+    """
+    # Get boolean columns using pyarrow dtypes
+    bool_cols = df.select_dtypes(include=["boolean[pyarrow]"]).columns.tolist()
+
+    # Calculate summary statistics
+    # Using Copy-on-Write, this won't create unnecessary copies
+    summary = pd.DataFrame(
+        {
+            "amount": [df["amount"].sum(), df["amount"].mean()],
+            "approval_rate": [df[bool_cols[0]].mean() if bool_cols else np.nan] * 2,
+        },
+        index=["sum", "mean"],
+    )
+
+    return summary, {"bool_columns": bool_cols}
+
+
+def analyze_customer_segments(df: pd.DataFrame) -> Tuple[pd.DataFrame, list]:
+    """Analyze customer segments with advanced pandas 2.0 features.
+
+    Args:
+        df: Input DataFrame with transaction data
+
+    Returns:
+        Tuple containing:
+        - DataFrame with segment statistics
+        - List of boolean column names
+    """
+
+    bool_cols = [col for col in df.columns if str(df[col].dtype) == "bool[pyarrow]"]
+
+    # Group by customer segment and calculate statistics
+    # Copy-on-Write ensures efficient operations
+    stats = df.groupby("segment").agg(
+        {
+            "amount": ["sum", "mean"],
+            "category": lambda x: x.mode()[0] if not x.empty else None,
+            **{col: "mean" for col in bool_cols},
+        }
+    )
+    return stats, bool_cols
+
+
+if __name__ == "__main__":
+    df = load_sample_transactions()
+    print(df.head())
+[?2004hroot@1fc4103ece3e:/app# pip install --no-cache-dir -U "pandas>=2.1"
+[?2004l[31mERROR: Ignored the following versions that require a different python version: 2.1.0 Requires-Python >=3.9; 2.1.0rc0 Requires-Python >=3.9; 2.1.1 Requires-Python >=3.9; 2.1.2 Requires-Python >=3.9; 2.1.3 Requires-Python >=3.9; 2.1.4 Requires-Python >=3.9; 2.2.0 Requires-Python >=3.9; 2.2.0rc0 Requires-Python >=3.9; 2.2.1 Requires-Python >=3.9; 2.2.2 Requires-Python >=3.9; 2.2.3 Requires-Python >=3.9; 2.3.0 Requires-Python >=3.9; 2.3.1 Requires-Python >=3.9; 2.3.2 Requires-Python >=3.9; 2.3.3 Requires-Python >=3.9[0m[31m
+[0m[31mERROR: Could not find a version that satisfies the requirement pandas>=2.1 (from versions: 0.1, 0.2, 0.3.0, 0.4.0, 0.4.1, 0.4.2, 0.4.3, 0.5.0, 0.6.0, 0.6.1, 0.7.0, 0.7.1, 0.7.2, 0.7.3, 0.8.0, 0.8.1, 0.9.0, 0.9.1, 0.10.0, 0.10.1, 0.11.0, 0.12.0, 0.13.0, 0.13.1, 0.14.0, 0.14.1, 0.15.0, 0.15.1, 0.15.2, 0.16.0, 0.16.1, 0.16.2, 0.17.0, 0.17.1, 0.18.0, 0.18.1, 0.19.0, 0.19.1, 0.19.2, 0.20.0, 0.20.1, 0.20.2, 0.20.3, 0.21.0, 0.21.1, 0.22.0, 0.23.0, 0.23.1, 0.23.2, 0.23.3, 0.23.4, 0.24.0, 0.24.1, 0.24.2, 0.25.0, 0.25.1, 0.25.2, 0.25.3, 1.0.0, 1.0.1, 1.0.2, 1.0.3, 1.0.4, 1.0.5, 1.1.0, 1.1.1, 1.1.2, 1.1.3, 1.1.4, 1.1.5, 1.2.0, 1.2.1, 1.2.2, 1.2.3, 1.2.4, 1.2.5, 1.3.0, 1.3.1, 1.3.2, 1.3.3, 1.3.4, 1.3.5, 1.4.0rc0, 1.4.0, 1.4.1, 1.4.2, 1.4.3, 1.4.4, 1.5.0rc0, 1.5.0, 1.5.1, 1.5.2, 1.5.3, 2.0.0rc0, 2.0.0rc1, 2.0.0, 2.0.1, 2.0.2, 2.0.3)[0m[31m
+[0m[31mERROR: No matching distribution found for pandas>=2.1[0m[31m
+[0m
+[1m[[0m[34;49mnotice[0m[1;39;49m][0m[39;49m A new release of pip is available: [0m[31;49m23.0.1[0m[39;49m -> [0m[32;49m25.0.1[0m
+[1m[[0m[34;49mnotice[0m[1;39;49m][0m[39;49m To update, run: [0m[32;49mpip install --upgrade pip[0m
+[?2004hroot@1fc4103ece3e:/app# python -c "import pandas as pd; print('pandas version:', pd.__version__)"
+[?2004lpandas version: 1.3.0
+[?2004hroot@1fc4103ece3e:/app# python -c "import sys, json; import pkgutil; print('pyarrow installed:', pkgutil.find_loader('pyarrow') is not None)"
+[?2004lpyarrow installed: True
+[?2004hroot@1fc4103ece3e:/app# grep -R "dtype_backend\s*=\s*['\"]pyarrow['\"]" -n src || true
+[?2004lsrc/data_processor.py:23:        dtype_backend="pyarrow",
+src/data_loader.py:28:        dtype_backend="pyarrow",
+[?2004hroot@1fc4103ece3e:/app# pip install --no-cache-dir "pyarrow>=12" || true
+[?2004lCollecting pyarrow>=12
+  Downloading pyarrow-17.0.0-cp38-cp38-manylinux_2_28_x86_64.whl (40.0 MB)
+[?25l     [38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.0/40.0 MB[0m [31m?[0m eta [36m-:--:--[0m[2K     [38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.1/40.0 MB[0m [31m3.8 MB/s[0m eta [36m0:00:11[0m[2K     [38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.5/40.0 MB[0m [31m7.5 MB/s[0m eta [36m0:00:06[0m[2K     [38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.8/40.0 MB[0m [31m7.4 MB/s[0m eta [36m0:00:06[0m[2K     [38;5;204m━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m1.4/40.0 MB[0m [31m9.7 MB/s[0m eta [36m0:00:04[0m[2K     [38;5;204m━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m1.8/40.0 MB[0m [31m10.1 MB/s[0m eta [36m0:00:04[0m[2K     [38;5;204m━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m2.3/40.0 MB[0m [31m10.4 MB/s[0m eta [36m0:00:04[0m[2K     [38;5;204m━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m2.7/40.0 MB[0m [31m10.6 MB/s[0m eta [36m0:00:04[0m[2K     [38;5;204m━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m3.1/40.0 MB[0m [31m10.7 MB/s[0m eta [36m0:00:04[0m[2K     [38;5;204m━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m3.6/40.0 MB[0m [31m10.9 MB/s[0m eta [36m0:00:04[0m[2K     [38;5;204m━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m4.0/40.0 MB[0m [31m10.9 MB/s[0m eta [36m0:00:04[0m[2K     [38;5;204m━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m4.5/40.0 MB[0m [31m11.0 MB/s[0m eta [36m0:00:04[0m[2K     [38;5;204m━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m4.9/40.0 MB[0m [31m11.1 MB/s[0m eta [36m0:00:04[0m[2K     [38;5;204m━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m5.4/40.0 MB[0m [31m11.1 MB/s[0m eta [36m0:00:04[0m[2K     [38;5;204m━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m5.8/40.0 MB[0m [31m11.2 MB/s[0m eta [36m0:00:04[0m[2K     [38;5;204m━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m6.2/40.0 MB[0m [31m11.2 MB/s[0m eta [36m0:00:04[0m[2K     [38;5;204m━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m6.7/40.0 MB[0m [31m11.2 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m7.1/40.0 MB[0m [31m11.3 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m7.6/40.0 MB[0m [31m11.3 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m8.0/40.0 MB[0m [31m11.3 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m8.5/40.0 MB[0m [31m11.3 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m8.9/40.0 MB[0m [31m11.4 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m9.3/40.0 MB[0m [31m11.4 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m9.8/40.0 MB[0m [31m11.4 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m10.2/40.0 MB[0m [31m11.4 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m10.6/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m11.1/40.0 MB[0m [31m12.0 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m11.6/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m12.0/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m12.6/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m13.0/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m13.4/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m13.9/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m14.3/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m14.5/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m15.2/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m15.7/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━[0m [32m16.1/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━[0m [32m16.5/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━[0m [32m17.0/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━[0m [32m17.4/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━[0m [32m17.9/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━[0m [32m18.3/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━[0m [32m18.8/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━[0m [32m19.2/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━[0m [32m19.7/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━[0m [32m20.1/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━[0m [32m20.6/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━[0m [32m21.0/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━[0m [32m21.4/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━[0m [32m21.9/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━[0m [32m22.3/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━[0m [32m22.8/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━[0m [32m23.2/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━[0m [32m23.7/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━[0m [32m24.1/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━[0m [32m24.5/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━[0m [32m25.0/40.0 MB[0m [31m11.9 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━[0m [32m25.4/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━[0m [32m25.9/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━[0m [32m26.3/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━[0m [32m26.8/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━[0m [32m27.2/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━[0m [32m27.7/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━[0m [32m28.1/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━[0m [32m28.5/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━[0m [32m29.0/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━[0m [32m29.4/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━[0m [32m29.9/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━[0m [32m30.3/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━[0m [32m30.8/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━[0m [32m31.2/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━[0m [32m31.7/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━[0m [32m32.1/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━[0m [32m32.6/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━[0m [32m33.0/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━[0m [32m33.4/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━[0m [32m33.9/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━[0m [32m34.3/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━[0m [32m34.8/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━[0m [32m35.2/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━[0m [32m35.7/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━[0m [32m36.1/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━[0m [32m36.5/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━[0m [32m37.0/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━[0m [32m37.4/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━[0m [32m37.9/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━[0m [32m38.3/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━[0m [32m38.8/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m [32m39.2/40.0 MB[0m [31m11.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m [32m39.6/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;107m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m40.0/40.0 MB[0m [31m11.8 MB/s[0m eta [36m0:00:00[0m
+[?25hRequirement already satisfied: numpy>=1.16.6 in /usr/local/lib/python3.8/site-packages (from pyarrow>=12) (1.21.0)
+Installing collected packages: pyarrow
+  Attempting uninstall: pyarrow
+    Found existing installation: pyarrow 6.0.0
+    Uninstalling pyarrow-6.0.0:
+      Successfully uninstalled pyarrow-6.0.0
+Successfully installed pyarrow-17.0.0
+[33mWARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv[0m[33m
+[0m
+[1m[[0m[34;49mnotice[0m[1;39;49m][0m[39;49m A new release of pip is available: [0m[31;49m23.0.1[0m[39;49m -> [0m[32;49m25.0.1[0m
+[1m[[0m[34;49mnotice[0m[1;39;49m][0m[39;49m To update, run: [0m[32;49mpip install --upgrade pip[0m
+[?2004hroot@1fc4103ece3e:/app# python -m src.data_processor
+[?2004l   id  name  value  valid
+0   1  John   10.5   True
+1   2  Jane   20.3  False
+2   3   NaN   30.1    NaN
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/local/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/app/src/data_processor.py", line 90, in <module>
+    df = load_sample_transactions()
+  File "/app/src/data_loader.py", line 26, in load_sample_transactions
+    df = pd.read_csv(
+  File "/usr/local/lib/python3.8/site-packages/pandas/util/_decorators.py", line 311, in wrapper
+    return func(*args, **kwargs)
+TypeError: read_csv() got an unexpected keyword argument 'dtype_backend'
+[?2004hroot@1fc4103ece3e:/app# pip install --no-cache-dir "pandas>=2.0,<2.1"
+[?2004lCollecting pandas<2.1,>=2.0
+  Downloading pandas-2.0.3-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (12.4 MB)
+[?25l     [38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.0/12.4 MB[0m [31m?[0m eta [36m-:--:--[0m[2K     [38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.2/12.4 MB[0m [31m5.0 MB/s[0m eta [36m0:00:03[0m[2K     [38;5;204m━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.6/12.4 MB[0m [31m8.2 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.8/12.4 MB[0m [31m8.2 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m1.4/12.4 MB[0m [31m10.1 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m1.9/12.4 MB[0m [31m10.5 MB/s[0m eta [36m0:00:02[0m[2K     [38;5;204m━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m2.3/12.4 MB[0m [31m10.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m2.7/12.4 MB[0m [31m10.8 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m3.2/12.4 MB[0m [31m10.9 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m3.6/12.4 MB[0m [31m11.0 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m4.1/12.4 MB[0m [31m11.1 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m4.5/12.4 MB[0m [31m11.2 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━━[0m [32m5.0/12.4 MB[0m [31m11.2 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━━━[0m [32m5.4/12.4 MB[0m [31m11.3 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━━[0m [32m5.9/12.4 MB[0m [31m11.3 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━━━━[0m [32m6.3/12.4 MB[0m [31m11.3 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━━━━[0m [32m6.7/12.4 MB[0m [31m11.3 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━━━━[0m [32m7.2/12.4 MB[0m [31m11.4 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━━━━[0m [32m7.6/12.4 MB[0m [31m11.4 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━━━━[0m [32m8.1/12.4 MB[0m [31m11.4 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━━━[0m [32m8.5/12.4 MB[0m [31m11.4 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━━━━━[0m [32m9.0/12.4 MB[0m [31m11.4 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━━━[0m [32m9.2/12.4 MB[0m [31m11.2 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━━━━[0m [32m9.9/12.4 MB[0m [31m11.5 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━━━━[0m [32m10.3/12.4 MB[0m [31m11.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━━━━[0m [32m10.8/12.4 MB[0m [31m11.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m[38;5;237m━━━[0m [32m11.2/12.4 MB[0m [31m11.9 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;204m╸[0m[38;5;237m━━[0m [32m11.7/12.4 MB[0m [31m11.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;204m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m[38;5;237m╺[0m [32m12.1/12.4 MB[0m [31m11.7 MB/s[0m eta [36m0:00:01[0m[2K     [38;5;107m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m12.4/12.4 MB[0m [31m11.7 MB/s[0m eta [36m0:00:00[0m
+[?25hCollecting tzdata>=2022.1
+  Downloading tzdata-2025.2-py2.py3-none-any.whl (347 kB)
+[?25l     [38;5;237m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m0.0/347.8 kB[0m [31m?[0m eta [36m-:--:--[0m[2K     [38;5;107m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m347.8/347.8 kB[0m [31m13.0 MB/s[0m eta [36m0:00:00[0m
+[?25hRequirement already satisfied: python-dateutil>=2.8.2 in /usr/local/lib/python3.8/site-packages (from pandas<2.1,>=2.0) (2.9.0.post0)
+Requirement already satisfied: numpy>=1.20.3 in /usr/local/lib/python3.8/site-packages (from pandas<2.1,>=2.0) (1.21.0)
+Requirement already satisfied: pytz>=2020.1 in /usr/local/lib/python3.8/site-packages (from pandas<2.1,>=2.0) (2025.2)
+Requirement already satisfied: six>=1.5 in /usr/local/lib/python3.8/site-packages (from python-dateutil>=2.8.2->pandas<2.1,>=2.0) (1.17.0)
+Installing collected packages: tzdata, pandas
+  Attempting uninstall: pandas
+    Found existing installation: pandas 1.3.0
+    Uninstalling pandas-1.3.0:
+      Successfully uninstalled pandas-1.3.0
+Successfully installed pandas-2.0.3 tzdata-2025.2
+[33mWARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv[0m[33m
+[0m
+[1m[[0m[34;49mnotice[0m[1;39;49m][0m[39;49m A new release of pip is available: [0m[31;49m23.0.1[0m[39;49m -> [0m[32;49m25.0.1[0m
+[1m[[0m[34;49mnotice[0m[1;39;49m][0m[39;49m To update, run: [0m[32;49mpip install --upgrade pip[0m
+[?2004hroot@1fc4103ece3e:/app# python -c "import pandas as pd; print('pandas version:', pd.__version__)"
+[?2004lpandas version: 2.0.3
+python -m src.data_processor
+[?2004hroot@1fc4103ece3e:/app# python -m src.data_processor
+[?2004l   id  name  value  valid
+0   1  John   10.5   True
+1   2  Jane   20.3  False
+2   3   NaN   30.1    NaN
+   transaction_id  customer_id  amount is_approved     category  segment transaction_date processing_date
+0               1          101  100.50        True         food        1       2023-01-15      2023-01-15
+1               2          102   75.25       False       travel        2       2023-02-20      2023-02-20
+2               3          103   50.75        True  electronics        3       2023-03-25      2023-03-25
+3               4          101  150.00        True         food        1       2023-04-10      2023-04-10
+4               5          102  200.00       False       travel        2       2023-05-15      2023-05-15
+[?2004hroot@1fc4103ece3e:/app# python -c "import pandas as pd; import pkgutil; print('pandas:', pd.__version__, 'pyarrow installed:', pkgutil.find_loader('pyarrow') is not None)"
+[?2004lpython -m src.data_processor
+pandas: 2.0.3 pyarrow installed: True
+[?2004hroot@1fc4103ece3e:/app# python -m src.data_processor
+[?2004l   id  name  value  valid
+0   1  John   10.5   True
+1   2  Jane   20.3  False
+2   3   NaN   30.1    NaN
+   transaction_id  customer_id  amount is_approved     category  segment transaction_date processing_date
+0               1          101  100.50        True         food        1       2023-01-15      2023-01-15
+1               2          102   75.25       False       travel        2       2023-02-20      2023-02-20
+2               3          103   50.75        True  electronics        3       2023-03-25      2023-03-25
+3               4          101  150.00        True         food        1       2023-04-10      2023-04-10
+4               5          102  200.00       False       travel        2       2023-05-15      2023-05-15
+[?2004hroot@1fc4103ece3e:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@1fc4103ece3e:/app# 

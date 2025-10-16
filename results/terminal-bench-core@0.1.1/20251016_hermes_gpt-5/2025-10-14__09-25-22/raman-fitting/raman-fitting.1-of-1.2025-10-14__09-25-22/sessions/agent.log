@@ -1,0 +1,449 @@
+[?2004hroot@dded334ceee8:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@dded334ceee8:/app# clear
+[?2004l[H[J[3J[?2004hroot@dded334ceee8:/app# ls -la
+[?2004ltotal 96
+drwxr-xr-x 1 root root  4096 Oct  8 15:44 .
+drwxr-xr-x 1 root root  4096 Oct 14 12:08 ..
+-rw-rw-r-- 1 root root 88805 Oct  8 15:44 graphene.dat
+[?2004hroot@dded334ceee8:/app# ls -la * 2>/dev/null | head -n 50
+[?2004l-rw-rw-r-- 1 root root 88805 Oct  8 15:44 graphene.dat
+[?2004hroot@dded334ceee8:/app# find . -maxdepth 2 -type f -iregex ".*\.(txt|csv|dat)" -print
+[?2004l[?2004hroot@dded334ceee8:/app# head -n 5 *.txt 2>/dev/null; head -n 5 *.csv 2>/dev/null; head -n 5 *.dat 2>/dev/null
+[?2004l47183,554644	19261,547207
+46588,360019	19266,089699
+46008,191298	19077,996963
+45442,488736	19173,287322
+44890,718036	19501,518253
+[?2004hroot@dded334ceee8:/app# python3 - << 'PY'
+[?2004l[?2004h> import sys,glob,os
+[?2004l[?2004h> cands = []
+[?2004l[?2004h> for ext in ('*.txt','*.csv','*.dat'):
+[?2004l[?2004h>     cands += glob.glob(ext)
+[?2004l[?2004h> if not cands:
+[?2004l[?2004h>     print('NO_DATA')
+[?2004l[?2004h>     sys.exit(0)
+[?2004l[?2004h> # naive heuristic: pick the largest candidate file
+[?2004l[?2004h> cands.sort(key=lambda p: os.path.getsize(p), reverse=True)
+[?2004l[?2004h> print(cands[0])
+[?2004l[?2004h> PY
+[?2004lgraphene.dat
+[?2004hroot@dded334ceee8:/app# cat > fit_raman.py << 'PY'
+[?2004lsk.sum() >= 5 else x
+    ym = y[mask] if mask.sum() >= 5 else y
+    # bounds
+    xmin, xmax = float(xm.min()), float(xm.max())
+    # Parameter bounds: x0 within window, gamma positive, amplitude >=0, offset free
+    lb = [target_center - 2*window, 1e-3, 0.0, min(ym.min(), offset - abs(amplitude)*2)]
+    ub = [target_center + 2*window, 500.0, (ym.max()-ym.min())*5 + 1.0, max(ym.max(), offset + abs(amplitude)*2)]
+    p0 = [x0, gamma if np.isfinite(gamma) else default_gamma, amplitude, offset]
+    if curve_fit is not None:
+        try:
+            popt, pcov = curve_fit(lorentzian, xm, ym, p0=p0, bounds=(lb, ub), maxfev=20000)
+            x0f, gammaf, amp_f, off_f = map(float, popt)
+            # Validate
+            if not all(map(np.isfinite, [x0f,gammaf,amp_f,off_f])):
+                raise RuntimeError('Non-finite fit')
+            return {
+                'x0': x0f,
+                'gamma': gammaf,
+                'amplitude': amp_f,
+                'offset': off_f
+            }
+        except Exception:
+            pass
+    # Fallback: simple grid search on x0 and gamma, linear solve for amplitude+offset
+    # Build coarse grids
+    x0_grid = np.linspace(target_center - window, target_center + window, 61)
+    gamma_grid = np.linspace(5.0, 120.0, 59)
+    best = None
+    for x0g in x0_grid:
+        for gg in gamma_grid:
+            basis = ( (gg/2.0)**2 / ((xm - x0g)**2 + (gg/2.0)**2) )
+            A = np.vstack([basis, np.ones_like(basis)]).T
+            try:
+                coef, _, _, _ = np.linalg.lstsq(A, ym, rcond=None)
+                amp, off = coef
+                resid = ym - (amp*basis + off)
+                sse = float(np.dot(resid, resid))
+                if best is None or sse < best[0]:
+                    best = (sse, x0g, gg, float(amp), float(off))
+            except Exception:
+                continue
+    if best is None:
+        # final fallback to initial guess
+        return {
+            'x0': float(x0), 'gamma': float(gamma), 'amplitude': float(amplitude), 'offset': float(offset)
+        }
+    _, x0b, gb, ab, ob =[?2004h> import json, sys, os
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> from math import isfinite
+[?2004l[?2004h> try:
+[?2004l[?2004h>     from scipy.optimize import curve_fit
+[?2004l[?2004h> except Exception as e:
+[?2004l[?2004h>     curve_fit = None
+[?2004l[?2004h> 
+[?2004l[?2004h> def load_data(path):
+[?2004l[?2004h>     # Try loading with numpy genfromtxt handling common delimiters
+[?2004l[?2004h>     for delim in (None, ',', '\t', ';', ' '):
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             arr = np.genfromtxt(path, delimiter=delim)
+[?2004l[?2004h>             if arr is not None and arr.ndim == 2 and arr.shape[1] >= 2 and np.isfinite(arr).all():
+[?2004l[?2004h>                 x = arr[:,0].astype(float)
+[?2004l[?2004h>                 y = arr[:,1].astype(float)
+[?2004l[?2004h>                 # filter NaNs
+[?2004l[?2004h>                 m = np.isfinite(x) & np.isfinite(y)
+[?2004l[?2004h>                 x = x[m]; y = y[m]
+[?2004l[?2004h>                 # sort by x
+[?2004l[?2004h>                 order = np.argsort(x)
+[?2004l[?2004h>                 return x[order], y[order]
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>     raise RuntimeError(f"Could not parse data file: {path}")
+[?2004l[?2004h> 
+[?2004l[?2004h> def lorentzian(x, x0, gamma, amplitude, offset):
+[?2004l[?2004h>     g2 = (gamma/2.0)**2
+[?2004l[?2004h>     return offset + amplitude * ( g2 / ((x - x0)**2 + g2) )
+[?2004l[?2004h> 
+[?2004l[?2004h> def initial_guess(x, y, target_center, window):
+[?2004l[?2004h>     # window around target_center
+[?2004l[?2004h>     mask = (x > target_center - window) & (x < target_center + window)
+[?2004l[?2004h>     if mask.sum() < 5:
+[?2004l[?2004h>         # fallback to global
+[?2004l[?2004h>         xm, ym = x, y
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         xm, ym = x[mask], y[mask]
+[?2004l[?2004h>     # estimate offset from lower percentile
+[?2004l[?2004h>     offset = float(np.percentile(ym, 10))
+[?2004l[?2004h>     # peak index
+[?2004l[?2004h>     idx = int(np.argmax(ym))
+[?2004l[?2004h>     x0 = float(x[np.argmax(y)]) if mask.sum() < 5 else float(xm[np.argmax(ym)])
+[?2004l[?2004h>     amplitude = float(max(ym.max() - offset, 1e-6))
+[?2004l[?2004h>     # rough gamma from width at half max
+[?2004l[?2004h>     half = offset + amplitude/2.0
+[?2004l[?2004h>     above = np.where(ym >= half)[0]
+[?2004l[?2004h>     if above.size >= 2:
+[?2004l[?2004h>         gamma = float(abs(xm[above[-1]] - xm[above[0]]))
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         gamma = 30.0
+[?2004l[?2004h>     gamma = max(min(gamma, 200.0), 5.0)
+[?2004l[?2004h>     return x0, gamma, amplitude, offset, mask
+[?2004l[?2004h> 
+[?2004l[?2004h> def fit_peak(x, y, target_center, window, default_gamma):
+[?2004l[?2004h>     x0, gamma, amplitude, offset, mask = initial_guess(x, y, target_center, window)
+[?2004l[?2004h>     xm = x[mask] if mask.sum() >= 5 else x
+[?2004l[?2004h>     ym = y[mask] if mask.sum() >= 5 else y
+[?2004l[?2004h>     # bounds
+[?2004l[?2004h>     xmin, xmax = float(xm.min()), float(xm.max())
+[?2004l[?2004h>     # Parameter bounds: x0 within window, gamma positive, amplitude >=0, offset free
+[?2004l[?2004h>     lb = [target_center - 2*window, 1e-3, 0.0, min(ym.min(), offset - abs(amplitude)*2)]
+[?2004l[?2004h>     ub = [target_center + 2*window, 500.0, (ym.max()-ym.min())*5 + 1.0, max(ym.max(), offset + abs(amplitude)*2)]
+[?2004l[?2004h>     p0 = [x0, gamma if np.isfinite(gamma) else default_gamma, amplitude, offset]
+[?2004l[?2004h>     if curve_fit is not None:
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             popt, pcov = curve_fit(lorentzian, xm, ym, p0=p0, bounds=(lb, ub), maxfev=20000)
+[?2004l[?2004h>             x0f, gammaf, amp_f, off_f = map(float, popt)
+[?2004l[?2004h>             # Validate
+[?2004l[?2004h>             if not all(map(np.isfinite, [x0f,gammaf,amp_f,off_f])):
+[?2004l[?2004h>                 raise RuntimeError('Non-finite fit')
+[?2004l[?2004h>             return {
+[?2004l[?2004h>                 'x0': x0f,
+[?2004l[?2004h>                 'gamma': gammaf,
+[?2004l[?2004h>                 'amplitude': amp_f,
+[?2004l[?2004h>                 'offset': off_f
+[?2004l[?2004h>             }
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             pass
+[?2004l[?2004h>     # Fallback: simple grid search on x0 and gamma, linear solve for amplitude+offset
+[?2004l[?2004h>     # Build coarse grids
+[?2004l[?2004h>     x0_grid = np.linspace(target_center - window, target_center + window, 61)
+[?2004l[?2004h>     gamma_grid = np.linspace(5.0, 120.0, 59)
+[?2004l[?2004h>     best = None
+[?2004l[?2004h>     for x0g in x0_grid:
+[?2004l[?2004h>         for gg in gamma_grid:
+[?2004l[?2004h>             basis = ( (gg/2.0)**2 / ((xm - x0g)**2 + (gg/2.0)**2) )
+[?2004l[?2004h>             A = np.vstack([basis, np.ones_like(basis)]).T
+[?2004l[?2004h>             try:
+[?2004l[?2004h>                 coef, _, _, _ = np.linalg.lstsq(A, ym, rcond=None)
+[?2004l[?2004h>                 amp, off = coef
+[?2004l[?2004h>                 resid = ym - (amp*basis + off)
+[?2004l[?2004h>                 sse = float(np.dot(resid, resid))
+[?2004l[?2004h>                 if best is None or sse < best[0]:
+[?2004l[?2004h>                     best = (sse, x0g, gg, float(amp), float(off))
+[?2004l[?2004h>             except Exception:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>     if best is None:
+[?2004l[?2004h>         # final fallback to initial guess
+[?2004l[?2004h>         return {
+[?2004l[?2004h>             'x0': float(x0), 'gamma': float(gamma), 'amplitude': float(amplitude), 'offset': float(offset)
+[?2004l[?2004h>         }
+[?2004l[?2004h>     _, x0b, gb, ab, ob = best
+[?2004l[?2004h>     return {'x0': float(x0b), 'gamma': float(gb), 'amplitude': float(ab), 'offset': float(ob)}
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     # Determine input file
+[?2004l[?2004h>     inpath = None
+[?2004l[?2004h>     if len(sys.argv) > 1:
+[?2004l[?2004h>         inpath = sys.argv[1]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         # pick the largest plausible data file
+[?2004l[?2004h>         import glob, os
+[?2004l[?2004h>         cands = []
+[?2004l[?2004h>         for ext in ('*.txt','*.csv','*.dat'):
+[?2004l[?2004h>             cands += glob.glob(ext)
+[?2004l[?2004h>         if not cands:
+[?2004l[?2004h>             print('Error: No data file found', file=sys.stderr)
+[?2004l[?2004h>             sys.exit(1)
+[?2004l[?2004h>         cands.sort(key=lambda p: os.path.getsize(p), reverse=True)
+[?2004l[?2004h>         inpath = cands[0]
+[?2004l[?2004h>     x, y = load_data(inpath)
+[?2004l[?2004h>     # Normalize optional: not necessary for fitting
+[?2004l[?2004h>     # Fit G and 2D peaks
+[?2004l[?2004h>     resG = fit_peak(x, y, target_center=1580.0, window=120.0, default_gamma=25.0)
+[?2004l[?2004h>     res2D = fit_peak(x, y, target_center=2700.0, window=250.0, default_gamma=40.0)
+[?2004l[?2004h>     results = {
+[?2004l[?2004h>         'G': {k: float(v) for k,v in resG.items()},
+[?2004l[?2004h>         '2D': {k: float(v) for k,v in res2D.items()}
+[?2004l[?2004h>     }
+[?2004l[?2004h>     with open('results.json', 'w') as f:
+[?2004l[?2004h>         json.dump(results, f, indent=2)
+[?2004l[?2004h>     print('Wrote results.json from', os.path.basename(inpath))
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@dded334ceee8:/app# chmod +x fit_raman.py
+[?2004l[?2004hroot@dded334ceee8:/app# python3 -c "import numpy,sys; print('NUMPY_OK')" 2>/dev/null || echo "NUMPY_MISSING"
+[?2004lNUMPY_MISSING
+[?2004hroot@dded334ceee8:/app# python3 -c "import scipy,sys; import scipy.optimize as o; print('SCIPY_OK')" 2>/dev/null || echo "SCIPY_MISSING"
+[?2004lSCIPY_MISSING
+[?2004hroot@dded334ceee8:/app# python3 fit_raman.py
+[?2004lTraceback (most recent call last):
+  File [35m"/app/fit_raman.py"[0m, line [35m2[0m, in [35m<module>[0m
+    import numpy as np
+[1;35mModuleNotFoundError[0m: [35mNo module named 'numpy'[0m
+[?2004hroot@dded334ceee8:/app# ls -la results.json
+[?2004lls: cannot access 'results.json': No such file or directory
+[?2004hroot@dded334ceee8:/app# cat results.json
+[?2004lcat: results.json: No such file or directory
+[?2004hroot@dded334ceee8:/app# head -n 10 graphene.dat | sed 's/,/./g'
+[?2004l47183.554644	19261.547207
+46588.360019	19266.089699
+46008.191298	19077.996963
+45442.488736	19173.287322
+44890.718036	19501.518253
+44352.368927	19506.586203
+43826.959593	19752.431144
+43314.029137	19812.863021
+42813.138290	19678.348151
+42323.866373	19764.871128
+[?2004hroot@dded334ceee8:/app# wc -l graphene.dat
+[?2004l3565 graphene.dat
+[?2004hroot@dded334ceee8:/app# cat > fit_raman.py << 'PY'
+[?2004l[?2004h> import json, math, statistics, sys
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_data(path):
+[?2004l[?2004h>     x = []
+[?2004l[?2004h>     y = []
+[?2004l[?2004h>     with open(path, 'r', errors='ignore') as f:
+[?2004l[?2004h>         for line in f:
+[?2004l[?2004h>             line = line.strip()
+[?2004l[?2004h>             if not line:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             line = line.replace(',', '.')
+[?2004l[?2004h>             parts = line.split()
+[?2004l[?2004h>             if len(parts) < 2:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             try:
+[?2004l[?2004h>                 xv = float(parts[0])
+[?2004l[?2004h>                 yv = float(parts[1])
+[?2004l[?2004h>             except Exception:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             x.append(xv)
+[?2004l[?2004h>             y.append(yv)
+[?2004l[?2004h>     if not x:
+[?2004l[?2004h>         raise RuntimeError('No valid data parsed')
+[?2004l[?2004h>     # sort by x
+[?2004l[?2004h>     idx = sorted(range(len(x)), key=lambda i: x[i])
+[?2004l[?2004h>     x = [x[i] for i in idx]
+[?2004l[?2004h>     y = [y[i] for i in idx]
+[?2004l[?2004h>     return x, y
+[?2004l[?2004h> 
+[?2004l[?2004h> def smooth(y, w=7):
+[?2004l[?2004h>     if w < 3:
+[?2004l[?2004h>         return y[:]
+[?2004l[?2004h>     n = len(y)
+[?2004l[?2004h>     out = []
+[?2004l[?2004h>     h = w // 2
+[?2004l[?2004h>     for i in range(n):
+[?2004l[?2004h>         s = 0.0
+[?2004l[?2004h>         c = 0
+[?2004l[?2004h>         for j in range(i - h, i + h + 1):
+[?2004l[?2004h>             if 0 <= j < n:
+[?2004l[?2004h>                 s += y[j]
+[?2004l[?2004h>                 c += 1
+[?2004l[?2004h>         out.append(s / c if c else y[i])
+[?2004l[?2004h>     return out
+[?2004l[?2004h> 
+[?2004l[?2004h> def find_top_two_peaks(x, y):
+[?2004l[?2004h>     n = len(y)
+[?2004l[?2004h>     ys = smooth(y, w=7)
+[?2004l[?2004h>     peaks = []
+[?2004l[?2004h>     for i in range(1, n - 1):
+[?2004l[?2004h>         if ys[i] > ys[i - 1] and ys[i] > ys[i + 1]:
+[?2004l[?2004h>             peaks.append(i)
+[?2004l[?2004h>     if not peaks:
+[?2004l[?2004h>         # fallback: pick global maxima and a second far point
+[?2004l[?2004h>         i1 = max(range(n), key=lambda i: ys[i])
+[?2004l[?2004h>         # choose second maxima away from i1
+[?2004l[?2004h>         distances = [(abs(i - i1), i) for i in range(n) if i != i1]
+[?2004l[?2004h>         distances.sort(reverse=True)
+[?2004l[?2004h>         i2 = max(range(n), key=lambda i: ys[i] if i != i1 else -1)
+[?2004l[?2004h>         centers = sorted([x[i1], x[i2]])
+[?2004l[?2004h>         return centers[0], centers[1]
+[?2004l[?2004h>     # sort peaks by height
+[?2004l[?2004h>     peaks.sort(key=lambda i: ys[i], reverse=True)
+[?2004l[?2004h>     # pick two peaks not too close
+[?2004l[?2004h>     i1 = peaks[0]
+[?2004l[?2004h>     i2 = None
+[?2004l[?2004h>     for i in peaks[1:]:
+[?2004l[?2004h>         if abs(i - i1) >= max(5, int(0.01 * n)):
+[?2004l[?2004h>             i2 = i
+[?2004l[?2004h>             break
+[?2004l[?2004h>     if i2 is None:
+[?2004l[?2004h>         # pick the farthest other peak
+[?2004l[?2004h>         far = sorted(((abs(i - i1), i) for i in peaks[1:]), reverse=True)
+[?2004l[?2004h>         i2 = far[0][1] if far else (i1 + max(10, n // 10)) % n
+[?2004l[?2004h>     centers = sorted([x[i1], x[i2]])
+[?2004l[?2004h>     return centers[0], centers[1]
+[?2004l[?2004h> 
+[?2004l[?2004h> def fit_peak(x, y, center):
+[?2004l[?2004h>     n = len(x)
+[?2004l[?2004h>     rx = x[-1] - x[0]
+[?2004l[?2004h>     window = max(50.0, rx * 0.01)
+[?2004l[?2004h>     # select windowed data
+[?2004l[?2004h>     mask_idx = [i for i in range(n) if abs(x[i] - center) <= window]
+[?2004l[?2004h>     if len(mask_idx) < 5:
+[?2004l[?2004h>         mask_idx = list(range(n))
+[?2004l[?2004h>     xm = [x[i] for i in mask_idx]
+[?2004l[?2004h>     ym = [y[i] for i in mask_idx]
+[?2004l[?2004h>     if not xm:
+[?2004l[?2004h>         # fallback
+[?2004l[?2004h>         off = statistics.median(y)
+[?2004l[?2004h>         amp = max(max(y) - off, 1e-6)
+[?2004l[?2004h>         return {'x0': center, 'gamma': 30.0, 'amplitude': amp, 'offset': off}
+[?2004l[?2004h>     # grids
+[?2004l[?2004h>     step_x = window / 60.0
+[?2004l[?2004h>     x0_grid = [center - window + k * step_x for k in range(61)]
+[?2004l[?2004h>     gmin = max(5.0, rx * 0.002)
+[?2004l[?2004h>     gmax = min(500.0, rx * 0.02)
+[?2004l[?2004h>     if gmax <= gmin:
+[?2004l[?2004h>         gmax = gmin + 10.0
+[?2004l[?2004h>     steps = 59
+[?2004l[?2004h>     step_g = (gmax - gmin) / steps
+[?2004l[?2004h>     gamma_grid = [gmin + k * step_g for k in range(steps + 1)]
+[?2004l[?2004h>     best = None
+[?2004l[?2004h>     for x0 in x0_grid:
+[?2004l[?2004h>         for gamma in gamma_grid:
+[?2004l[?2004h>             g2 = (gamma / 2.0) ** 2
+[?2004l[?2004h>             # build basis and sums
+[?2004l[?2004h>             s_bb = 0.0
+[?2004l[?2004h>             s_b1 = 0.0
+[?2004l[?2004h>             s_11 = float(len(xm))
+[?2004l[?2004h>             s_by = 0.0
+[?2004l[?2004h>             s_1y = 0.0
+[?2004l[?2004h>             for xi, yi in zip(xm, ym):
+[?2004l[?2004h>                 b = g2 / ((xi - x0) ** 2 + g2)
+[?2004l[?2004h>                 s_bb += b * b
+[?2004l[?2004h>                 s_b1 += b
+[?2004l[?2004h>                 s_by += b * yi
+[?2004l[?2004h>                 s_1y += yi
+[?2004l[?2004h>             det = s_bb * s_11 - s_b1 * s_b1
+[?2004l[?2004h>             if det == 0.0:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             amp = (s_by * s_11 - s_b1 * s_1y) / det
+[?2004l[?2004h>             off = (s_bb * s_1y - s_b1 * s_by) / det
+[?2004l[?2004h>             if amp < 0:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             # compute SSE
+[?2004l[?2004h>             sse = 0.0
+[?2004l[?2004h>             for xi, yi in zip(xm, ym):
+[?2004l[?2004h>                 b = g2 / ((xi - x0) ** 2 + g2)
+[?2004l[?2004h>                 yhat = amp * b + off
+[?2004l[?2004h>                 d = yi - yhat
+[?2004l[?2004h>                 sse += d * d
+[?2004l[?2004h>             if (best is None) or (sse < best[0]):
+[?2004l[?2004h>                 best = (sse, x0, gamma, amp, off)
+[?2004l[?2004h>     if best is None:
+[?2004l[?2004h>         off = statistics.median(ym)
+[?2004l[?2004h>         amp = max(max(ym) - off, 1e-6)
+[?2004l[?2004h>         return {'x0': center, 'gamma': 30.0, 'amplitude': amp, 'offset': off}
+[?2004l[?2004h>     _, x0b, gb, ab, ob = best
+[?2004l[?2004h>     return {'x0': float(x0b), 'gamma': float(gb), 'amplitude': float(ab), 'offset': float(ob)}
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     inpath = 'graphene.dat'
+[?2004l[?2004h>     if len(sys.argv) > 1:
+[?2004l[?2004h>         inpath = sys.argv[1]
+[?2004l[?2004h>     x, y = read_data(inpath)
+[?2004l[?2004h>     c1, c2 = find_top_two_peaks(x, y)
+[?2004l[?2004h>     # Assign lower as G, higher as 2D
+[?2004l[?2004h>     G_center, D_center = c1, c2
+[?2004l[?2004h>     resG = fit_peak(x, y, G_center)
+[?2004l[?2004h>     res2D = fit_peak(x, y, D_center)
+[?2004l[?2004h>     results = {
+[?2004l[?2004h>         'G': {k: float(v) for k, v in resG.items()},
+[?2004l[?2004h>         '2D': {k: float(v) for k, v in res2D.items()}
+[?2004l[?2004h>     }
+[?2004l[?2004h>     with open('results.json', 'w') as f:
+[?2004l[?2004h>         json.dump(results, f, indent=2)
+[?2004l[?2004h>     print('Wrote results.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@dded334ceee8:/app# chmod +x fit_raman.py
+[?2004l[?2004hroot@dded334ceee8:/app# python3 fit_raman.py graphene.dat
+[?2004lls -la results.json
+cat results.json
+Wrote results.json
+[?2004hroot@dded334ceee8:/app# ls -la results.json
+[?2004l-rw-r--r-- 1 root root 262 Oct 14 12:11 results.json
+[?2004hroot@dded334ceee8:/app# cat results.json
+[?2004l{
+  "G": {
+    "x0": 19235.326894,
+    "gamma": 500.0,
+    "amplitude": 40006.80609758815,
+    "offset": 45711.69783867049
+  },
+  "2D": {
+    "x0": 33100.775683906664,
+    "gamma": 500.0,
+    "amplitude": 34935.781192539536,
+    "offset": 4107.845774144654
+  }
+}[?2004hroot@dded334ceee8:/app# python3 fit_raman.py graphene.dat
+[?2004lWrote results.json
+[?2004hroot@dded334ceee8:/app# ls -la results.json
+[?2004l-rw-r--r-- 1 root root 262 Oct 14 12:11 results.json
+[?2004hroot@dded334ceee8:/app# cat results.json
+[?2004l{
+  "G": {
+    "x0": 19235.326894,
+    "gamma": 500.0,
+    "amplitude": 40006.80609758815,
+    "offset": 45711.69783867049
+  },
+  "2D": {
+    "x0": 33100.775683906664,
+    "gamma": 500.0,
+    "amplitude": 34935.781192539536,
+    "offset": 4107.845774144654
+  }
+}[?2004hroot@dded334ceee8:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@dded334ceee8:/app# 

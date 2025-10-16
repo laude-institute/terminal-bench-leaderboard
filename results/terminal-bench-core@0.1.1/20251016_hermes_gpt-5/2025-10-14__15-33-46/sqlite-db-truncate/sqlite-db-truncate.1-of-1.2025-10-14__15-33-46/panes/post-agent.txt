@@ -1,0 +1,408 @@
+root@62a03abf0884:/app# ls -la /app
+total 12
+drwxr-xr-x 1 root root 4096 Oct 14 17:04 .
+drwxr-xr-x 1 root root 4096 Oct 14 17:04 ..
+-rw-rw-r-- 1 root root 4096 Oct  8 15:44 trunc.db
+root@62a03abf0884:/app# file /app/trunc.db
+bash: file: command not found
+root@62a03abf0884:/app# sqlite3 --version
+bash: sqlite3: command not found
+root@62a03abf0884:/app# sqlite3 /app/trunc.db ".recover" > /app/recovered.sql
+bash: sqlite3: command not found
+root@62a03abf0884:/app# sqlite3 /app/recovered.db < /app/recovered.sql
+bash: sqlite3: command not found
+root@62a03abf0884:/app# sqlite3 /app/recovered.db ".tables"
+bash: sqlite3: command not found
+root@62a03abf0884:/app# cat > /app/extract_json.py << 'PY'
+> #!/usr/bin/env python3
+> import sqlite3, json, os
+>
+> def quote_ident(name):
+>     return '"' + name.replace('"','""') + '"'
+>
+> def get_rows(dbpath):
+>     rows = []
+>     if not os.path.exists(dbpath):
+>         return rows
+>     conn = sqlite3.connect(dbpath)
+>     cur = conn.cursor()
+>     try:
+>         cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+>         tables = [r[0] for r in cur.fetchall()]
+>         for t in tables:
+>             try:
+>                 cur.execute("PRAGMA table_info(%s)" % quote_ident(t))
+>                 cols = [c[1].lower() for c in cur.fetchall()]
+>                 if "word" in cols and "value" in cols:
+>                     cur.execute("SELECT word, value FROM %s" % quote_ident(t))
+>                     for w,v in cur.fetchall():
+>                         if w is not None and v is not None:
+>                             val = v
+>                             try:
+>                                 if isinstance(v, (bytes, bytearray)):
+>                                     val = int(v.decode('utf-8','ignore'))
+>                                 elif isinstance(v, str):
+>                                     val = int(v)
+>                                 elif isinstance(v, float) and v.is_integer():
+>                                     val = int(v)
+>                             except Exception:
+>                                 pass
+>                             rows.append({"word": str(w), "value": val})
+>             except Exception:
+>                 continue
+>     except Exception:
+>         pass
+>     conn.close()
+>     return rows
+>
+> def main():
+>     dbs = ["/app/recovered.db", "/app/trunc.db"]
+>     rows = []
+>     for db in dbs:
+>         try:
+>             rows = get_rows(db)
+>             if rows:
+>                 break
+>         except Exception:
+>             continue
+>     seen = set()
+>     uniq = []
+>     for r in rows:
+>         key = (r["word"], r["value"])
+>         if key not in seen:
+>             seen.add(key)
+>             uniq.append(r)
+>     with open("/app/recover.json","w") as f:
+>         json.dump(uniq, f)
+>     print("Wrote %d rows to /app/recover.json" % len(uniq))
+>
+> if __name__ == "__main__":
+>     main()
+> PY
+root@62a03abf0884:/app# chmod +x /app/extract_json.py
+root@62a03abf0884:/app# python3 --version
+Python 3.12.3
+root@62a03abf0884:/app# python3 /app/extract_json.py
+Wrote 0 rows to /app/recover.json
+root@62a03abf0884:/app# ls -l /app/recover.json
+-rw-r--r-- 1 root root 2 Oct 14 17:06 /app/recover.json
+root@62a03abf0884:/app# head -n 50 /app/recover.json
+[]root@62a03abf0884:/app# apt-get update
+Get:1 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]
+Get:2 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Get:3 http://security.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [34.6 kB]
+Get:4 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+Get:5 http://security.ubuntu.com/ubuntu noble-security/main amd64 Packages [1531 kB]
+Get:6 http://archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+Get:7 http://archive.ubuntu.com/ubuntu noble/restricted amd64 Packages [117 kB]
+Get:8 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages [19.3 MB]
+Get:9 http://security.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1139 kB]
+Get:10 http://security.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [2512 kB]
+Get:11 http://archive.ubuntu.com/ubuntu noble/main amd64 Packages [1808 kB]
+Get:12 http://archive.ubuntu.com/ubuntu noble/multiverse amd64 Packages [331 kB]
+Get:13 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1928 kB]
+Get:14 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1897 kB]
+Get:15 http://archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [38.9 kB]
+Get:16 http://archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [2644 kB]
+Get:17 http://archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [33.9 kB]
+Get:18 http://archive.ubuntu.com/ubuntu noble-backports/main amd64 Packages [49.4 kB]
+Fetched 34.0 MB in 5s (6710 kB/s)
+Reading package lists... Done
+root@62a03abf0884:/app# apt-get install -y sqlite3
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  libsqlite3-0
+Suggested packages:
+  sqlite3-doc
+The following NEW packages will be installed:
+  sqlite3
+The following packages will be upgraded:
+  libsqlite3-0
+1 upgraded, 1 newly installed, 0 to remove and 32 not upgraded.
+Need to get 845 kB of archives.
+After this operation, 584 kB of additional disk space will be used.
+Get:1 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libsqlite3-0 amd64 3.45.1-1ubuntu2.5 [701 kB]
+Get:2 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 sqlite3 amd64 3.45.1-1ubuntu2.5 [144 kB]
+Fetched 845 kB in 1s (914 kB/s)
+debconf: delaying package configuration, since apt-utils is not installed
+(Reading database ... 6337 files and directories currently installed.)
+Preparing to unpack .../libsqlite3-0_3.45.1-1ubuntu2.5_amd64.deb ...
+Unpacking libsqlite3-0:amd64 (3.45.1-1ubuntu2.5) over (3.45.1-1ubuntu2.3) ...
+Selecting previously unselected package sqlite3.
+Preparing to unpack .../sqlite3_3.45.1-1ubuntu2.5_amd64.deb ...
+Unpacking sqlite3 (3.45.1-1ubuntu2.5) ...
+Setting up libsqlite3-0:amd64 (3.45.1-1ubuntu2.5) ...
+Setting up sqlite3 (3.45.1-1ubuntu2.5) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.4) ...
+root@62a03abf0884:/app# sqlite3 --version
+3.45.1 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257ccalt1 (64-bit)
+root@62a03abf0884:/app# sqlite3 /app/trunc.db ".recover" > /app/recovered.sql 2> /app/recover.err
+root@62a03abf0884:/app# wc -l /app/recovered.sql
+2 /app/recovered.sql
+root@62a03abf0884:/app# head -n 50 /app/recover.err
+sql error: file is not a database (26)
+root@62a03abf0884:/app# sqlite3 /app/recovered.db < /app/recovered.sql
+root@62a03abf0884:/app# sqlite3 /app/recovered.db ".tables"
+root@62a03abf0884:/app# sqlite3 /app/trunc.db ".dump" > /app/dump.sql 2> /app/dump.err
+root@62a03abf0884:/app# sqlite3 /app/recovered_dump.db < /app/dump.sql
+root@62a03abf0884:/app# sqlite3 /app/recovered_dump.db ".tables"
+root@62a03abf0884:/app# cat > /app/extract_json.py << 'PY'
+> #!/usr/bin/env python3
+> import sqlite3, json, os
+>
+> def quote_ident(name):
+>     return '"' + name.replace('"','""') + '"'
+>
+> def get_rows(dbpath):
+>     rows = []
+>     if not os.path.exists(dbpath):
+>         return rows
+>     try:
+>         conn = sqlite3.connect(dbpath)
+>     except Exception:
+>         return rows
+>     cur = conn.cursor()
+>     try:
+>         cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+>         tables = [r[0] for r in cur.fetchall()]
+>         for t in tables:
+>             try:
+>                 cur.execute("PRAGMA table_info(%s)" % quote_ident(t))
+>                 cols_info = cur.fetchall()
+>                 cols = [c[1] for c in cols_info]
+>                 cols_lower = [c[1].lower() for c in cols_info]
+>                 if "word" in cols_lower and "value" in cols_lower:
+>                     cur.execute("SELECT word, value FROM %s" % quote_ident(t))
+>                     for w,v in cur.fetchall():
+>                         if w is not None and v is not None:
+>                             val = v
+>                             try:
+>                                 if isinstance(v, (bytes, bytearray)):
+>                                     val = int(v.decode('utf-8','ignore'))
+>                                 elif isinstance(v, str):
+>                                     val = int(v)
+>                                 elif isinstance(v, float) and v.is_integer():
+>                                     val = int(v)
+>                             except Exception:
+>                                 pass
+>                             rows.append({"word": str(w), "value": val})
+>             except Exception:
+>                 continue
+>     except Exception:
+>         pass
+>     conn.close()
+>     return rows
+>
+> def main():
+>     dbs = ["/app/recovered.db", "/app/recovered_dump.db", "/app/trunc.db"]
+>     rows = []
+>     for db in dbs:
+>         try:
+>             rows = get_rows(db)
+>             if rows:
+>                 break
+>         except Exception:
+>             continue
+>     seen = set()
+>     uniq = []
+>     for r in rows:
+>         key = (r["word"], r["value"])
+>         if key not in seen:
+>             seen.add(key)
+>             uniq.append(r)
+>     with open("/app/recover.json","w") as f:
+>         json.dump(uniq, f)
+>     print("Wrote %d rows to /app/recover.json" % len(uniq))
+>
+> if __name__ == "__main__":
+>     main()
+> PY
+root@62a03abf0884:/app# chmod +x /app/extract_json.py
+root@62a03abf0884:/app# python3 /app/extract_json.py
+Wrote 0 rows to /app/recover.json
+root@62a03abf0884:/app# ls -l /app/recover.json
+-rw-r--r-- 1 root root 2 Oct 14 17:08 /app/recover.json
+root@62a03abf0884:/app# head -n 50 /app/recover.json
+[]root@62a03abf0884:/app# apt-get install -y binutils file
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  binutils-common binutils-x86-64-linux-gnu libbinutils libctf-nobfd0 libctf0 libgprofng0 libjansson4 libmagic-mgc libmagic1t64 libsframe1
+Suggested packages:
+  binutils-doc gprofng-gui
+The following NEW packages will be installed:
+  binutils binutils-common binutils-x86-64-linux-gnu file libbinutils libctf-nobfd0 libctf0 libgprofng0 libjansson4 libmagic-mgc libmagic1t64 libsframe1
+0 upgraded, 12 newly installed, 0 to remove and 32 not upgraded.
+Need to get 4802 kB of archives.
+After this operation, 28.5 MB of additional disk space will be used.
+Get:1 http://archive.ubuntu.com/ubuntu noble/main amd64 libmagic-mgc amd64 1:5.45-3build1 [307 kB]
+Get:2 http://archive.ubuntu.com/ubuntu noble/main amd64 libmagic1t64 amd64 1:5.45-3build1 [87.2 kB]
+Get:3 http://archive.ubuntu.com/ubuntu noble/main amd64 file amd64 1:5.45-3build1 [22.0 kB]
+Get:4 http://archive.ubuntu.com/ubuntu noble/main amd64 libjansson4 amd64 2.14-2build2 [32.8 kB]
+Get:5 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 binutils-common amd64 2.42-4ubuntu2.5 [240 kB]
+Get:6 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libsframe1 amd64 2.42-4ubuntu2.5 [15.5 kB]
+Get:7 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libbinutils amd64 2.42-4ubuntu2.5 [577 kB]
+Get:8 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libctf-nobfd0 amd64 2.42-4ubuntu2.5 [97.7 kB]
+Get:9 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libctf0 amd64 2.42-4ubuntu2.5 [94.5 kB]
+Get:10 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libgprofng0 amd64 2.42-4ubuntu2.5 [849 kB]
+Get:11 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 binutils-x86-64-linux-gnu amd64 2.42-4ubuntu2.5 [2462 kB]
+Get:12 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 binutils amd64 2.42-4ubuntu2.5 [18.1 kB]
+Fetched 4802 kB in 1s (5951 kB/s)
+debconf: delaying package configuration, since apt-utils is not installed
+Selecting previously unselected package libmagic-mgc.
+(Reading database ... 6343 files and directories currently installed.)
+Preparing to unpack .../00-libmagic-mgc_1%3a5.45-3build1_amd64.deb ...
+Unpacking libmagic-mgc (1:5.45-3build1) ...
+Selecting previously unselected package libmagic1t64:amd64.
+Preparing to unpack .../01-libmagic1t64_1%3a5.45-3build1_amd64.deb ...
+Unpacking libmagic1t64:amd64 (1:5.45-3build1) ...
+Selecting previously unselected package file.
+Preparing to unpack .../02-file_1%3a5.45-3build1_amd64.deb ...
+Unpacking file (1:5.45-3build1) ...
+Selecting previously unselected package libjansson4:amd64.
+Preparing to unpack .../03-libjansson4_2.14-2build2_amd64.deb ...
+Unpacking libjansson4:amd64 (2.14-2build2) ...
+Selecting previously unselected package binutils-common:amd64.
+Preparing to unpack .../04-binutils-common_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking binutils-common:amd64 (2.42-4ubuntu2.5) ...
+Selecting previously unselected package libsframe1:amd64.
+Preparing to unpack .../05-libsframe1_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking libsframe1:amd64 (2.42-4ubuntu2.5) ...
+Selecting previously unselected package libbinutils:amd64.
+Preparing to unpack .../06-libbinutils_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking libbinutils:amd64 (2.42-4ubuntu2.5) ...
+Selecting previously unselected package libctf-nobfd0:amd64.
+Preparing to unpack .../07-libctf-nobfd0_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking libctf-nobfd0:amd64 (2.42-4ubuntu2.5) ...
+Selecting previously unselected package libctf0:amd64.
+Preparing to unpack .../08-libctf0_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking libctf0:amd64 (2.42-4ubuntu2.5) ...
+Selecting previously unselected package libgprofng0:amd64.
+Preparing to unpack .../09-libgprofng0_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking libgprofng0:amd64 (2.42-4ubuntu2.5) ...
+Selecting previously unselected package binutils-x86-64-linux-gnu.
+Preparing to unpack .../10-binutils-x86-64-linux-gnu_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking binutils-x86-64-linux-gnu (2.42-4ubuntu2.5) ...
+Selecting previously unselected package binutils.
+Preparing to unpack .../11-binutils_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking binutils (2.42-4ubuntu2.5) ...
+Setting up libmagic-mgc (1:5.45-3build1) ...
+Setting up libmagic1t64:amd64 (1:5.45-3build1) ...
+Setting up binutils-common:amd64 (2.42-4ubuntu2.5) ...
+Setting up libctf-nobfd0:amd64 (2.42-4ubuntu2.5) ...
+Setting up file (1:5.45-3build1) ...
+Setting up libsframe1:amd64 (2.42-4ubuntu2.5) ...
+Setting up libjansson4:amd64 (2.14-2build2) ...
+Setting up libbinutils:amd64 (2.42-4ubuntu2.5) ...
+Setting up libctf0:amd64 (2.42-4ubuntu2.5) ...
+Setting up libgprofng0:amd64 (2.42-4ubuntu2.5) ...
+Setting up binutils-x86-64-linux-gnu (2.42-4ubuntu2.5) ...
+Setting up binutils (2.42-4ubuntu2.5) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.4) ...
+root@62a03abf0884:/app# file /app/trunc.db
+/app/trunc.db: data
+root@62a03abf0884:/app# strings -a -t d -n 4 /app/trunc.db | head -n 200
+   3919 testword09?
+   3943 testword08@X
+   3967 testword07c
+   3984 testword06K
+   4001 testword052
+   4018 testword04*
+   4035 testword03
+   4052 testword02
+   4069 testword01
+   4084 !       testword00
+root@62a03abf0884:/app# strings -a -t d -n 4 /app/trunc.db | grep -n "testword" | head -n 50
+1:   3919 testword09?
+2:   3943 testword08@X
+3:   3967 testword07c
+4:   3984 testword06K
+5:   4001 testword052
+6:   4018 testword04*
+7:   4035 testword03
+8:   4052 testword02
+9:   4069 testword01
+10:   4084 !    testword00
+root@62a03abf0884:/app# cat > /app/carve_trunc.py << 'PY'
+> #!/usr/bin/env python3
+> import re, json
+> from pathlib import Path
+>
+> def read_varint(buf, offset):
+>     v = 0
+>     length = 0
+>     for i in range(9):
+>         if offset + i >= len(buf):
+>             return None, 0
+>         b = buf[offset + i]
+>         v = (v << 7) | (b & 0x7F)
+>         length += 1
+>         if b < 0x80:
+>             return v, length
+>     return None, 0
+>
+> def nearest_ascii_int(data, start, end):
+>     num_re = re.compile(rb"[-+]?[0-9]{1,10}")
+>     forward = data[end:end+128]
+>     back = data[max(0, start-64):start]
+>     best = None
+>     # search forward
+>     for m in num_re.finditer(forward):
+>         pos = end + m.start()
+>         val = int(m.group())
+>         dist = pos - end
+>         if best is None or dist < best[0]:
+>             best = (dist, val)
+>     # search backward
+>     for m in num_re.finditer(back):
+>         pos = start - len(back) + m.start()
+>         val = int(m.group())
+>         dist = start - pos
+>         if best is None or dist < best[0]:
+>             best = (dist, val)
+>     return None if best is None else best[1]
+>
+> def carve_pairs(path):
+>     data = Path(path).read_bytes()
+>     word_re = re.compile(rb"testword[0-9A-Za-z_]+")
+>     results = []
+>     seen = set()
+>     for m in word_re.finditer(data):
+>         start, end = m.start(), m.end()
+>         word = m.group().decode('utf-8', 'ignore')
+>         val = None
+>         # try nearby ascii int
+>         val = nearest_ascii_int(data, start, end)
+>         # fallback: try varint immediately after word
+>         if val is None:
+>             v, l = read_varint(data, end)
+>             if v is not None and 0 <= v <= 2_000_000_000:
+>                 val = v
+>         if val is not None:
+>             key = (word, val)
+>             if key not in seen:
+>                 seen.add(key)
+>                 results.append({"word": word, "value": val})
+>     return results
+>
+> def main():
+>     out = "/app/recover.json"
+>     pairs = carve_pairs("/app/trunc.db")
+>     Path(out).write_text(json.dumps(pairs))
+>     print(f"Wrote {len(pairs)} rows to {out}")
+>
+> if __name__ == "__main__":
+>     main()
+> PY
+root@62a03abf0884:/app# chmod +x /app/carve_trunc.py
+root@62a03abf0884:/app# python3 /app/carve_trunc.py
+Wrote 10 rows to /app/recover.json
+root@62a03abf0884:/app# ls -l /app/recover.json
+-rw-r--r-- 1 root root 364 Oct 14 17:09 /app/recover.json
+root@62a03abf0884:/app# head -n 100 /app/recover.json
+[{"word": "testword09", "value": 8}, {"word": "testword08", "value": 9}, {"word": "testword07c", "value": 6}, {"word": "testword06K", "value": 7}, {"word": "tes
+tword052", "value": 6}, {"word": "testword04", "value": 52}, {"word": "testword03", "value": 4}, {"word": "testword02", "value": 3}, {"word": "testword01", "val
+ue": 2}, {"word": "testword00", "value": 1}]root@62a03abf0884:/app#

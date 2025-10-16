@@ -1,0 +1,381 @@
+root@56fe257cfb24:/app# apt-get update
+Get:1 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Get:2 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]
+Get:3 http://security.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [2512 kB]
+Get:4 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+Get:5 http://archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+Get:6 http://archive.ubuntu.com/ubuntu noble/multiverse amd64 Packages [331 kB]
+Get:7 http://archive.ubuntu.com/ubuntu noble/restricted amd64 Packages [117 kB]
+Get:8 http://archive.ubuntu.com/ubuntu noble/main amd64 Packages [1808 kB]
+Get:9 http://security.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1141 kB]
+Get:10 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages [19.3 MB]
+Get:11 http://security.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [34.6 kB]
+Get:12 http://security.ubuntu.com/ubuntu noble-security/main amd64 Packages [1531 kB]
+Get:13 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1897 kB]
+Get:14 http://archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [2644 kB]
+Get:15 http://archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [38.9 kB]
+Get:16 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1928 kB]
+Get:17 http://archive.ubuntu.com/ubuntu noble-backports/main amd64 Packages [49.4 kB]
+Get:18 http://archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [33.9 kB]
+Fetched 34.0 MB in 4s (7596 kB/s)
+Reading package lists... Done
+root@56fe257cfb24:/app# DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server nginx openssl rsync git sshpass
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+openssh-server is already the newest version (1:9.6p1-3ubuntu13.14).
+nginx is already the newest version (1.24.0-2ubuntu7.5).
+openssl is already the newest version (3.0.13-0ubuntu3.6).
+git is already the newest version (1:2.43.0-1ubuntu7.3).
+The following additional packages will be installed:
+  libpopt0
+Suggested packages:
+  python3-braceexpand
+The following NEW packages will be installed:
+  libpopt0 rsync sshpass
+0 upgraded, 3 newly installed, 0 to remove and 0 not upgraded.
+Need to get 477 kB of archives.
+After this operation, 958 kB of additional disk space will be used.
+Get:1 http://archive.ubuntu.com/ubuntu noble/main amd64 libpopt0 amd64 1.19+dfsg-1build1 [28.6 kB]
+Get:2 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 rsync amd64 3.2.7-1ubuntu1.2 [436 kB]
+Get:3 http://archive.ubuntu.com/ubuntu noble/universe amd64 sshpass amd64 1.09-1 [11.7 kB]
+Fetched 477 kB in 0s (1538 kB/s)
+debconf: delaying package configuration, since apt-utils is not installed
+Selecting previously unselected package libpopt0:amd64.
+(Reading database ... 23986 files and directories currently installed.)
+Preparing to unpack .../libpopt0_1.19+dfsg-1build1_amd64.deb ...
+Unpacking libpopt0:amd64 (1.19+dfsg-1build1) ...
+Selecting previously unselected package rsync.
+Preparing to unpack .../rsync_3.2.7-1ubuntu1.2_amd64.deb ...
+Unpacking rsync (3.2.7-1ubuntu1.2) ...
+Selecting previously unselected package sshpass.
+Preparing to unpack .../sshpass_1.09-1_amd64.deb ...
+Unpacking sshpass (1.09-1) ...
+Setting up sshpass (1.09-1) ...
+Setting up libpopt0:amd64 (1.19+dfsg-1build1) ...
+Setting up rsync (3.2.7-1ubuntu1.2) ...
+invoke-rc.d: could not determine current runlevel
+invoke-rc.d: policy-rc.d denied execution of start.
+Processing triggers for libc-bin (2.39-0ubuntu8.6) ...
+root@56fe257cfb24:/app# id -u git >/dev/null 2>&1 || useradd -m -s /usr/bin/git-shell git
+echo 'git:password' | chpasswd
+sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+mkdir -p /run/sshd
+service ssh restart
+root@56fe257cfb24:/app# echo 'git:password' | chpasswd
+root@56fe257cfb24:/app# sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+root@56fe257cfb24:/app# mkdir -p /run/sshd
+root@56fe257cfb24:/app# service ssh restart
+ * Restarting OpenBSD Secure Shell server sshd                                                                                                           [ OK ]
+root@56fe257cfb24:/app# mkdir -p /git && chown -R git:git /git
+root@56fe257cfb24:/app# sudo -u git git init --bare /git/project
+bash: sudo: command not found
+root@56fe257cfb24:/app# printf '#!/bin/sh
+> set -e
+> while read oldrev newrev refname; do
+>   branch=${refname#refs/heads/}
+>   if [ "$branch" = "main" ] || [ "$branch" = "dev" ]; then
+>     if [ "$branch" = "main" ]; then
+>       target="/var/www/html"
+>     else
+>       target="/var/www/html/dev"
+>     fi
+>     tmpdir=$(mktemp -d)
+>     mkdir -p "$target"
+>     git archive "$branch" | tar -x -C "$tmpdir"
+>     rsync -a --delete "$tmpdir"/ "$target"/
+>     rm -rf "$tmpdir"
+>   fi
+> done
+> ' > /git/project/hooks/post-receive
+bash: /git/project/hooks/post-receive: No such file or directory
+root@56fe257cfb24:/app# chmod +x /git/project/hooks/post-receive
+chmod: cannot access '/git/project/hooks/post-receive': No such file or directory
+root@56fe257cfb24:/app# mkdir -p /var/www/html/dev && chown -R git:git /var/www/html
+root@56fe257cfb24:/app# openssl req -x509 -nodes -days 365 -newkey rsa:2048 -subj "/CN=localhost" -keyout /etc/ssl/private/selfsigned.key -out /etc/ssl/certs/se
+lfsigned.crt
+...........+...+..+.........+....+...+..+...+....+...+...+..+.......+......+...+......+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*......+.
+.+...+......+.+...+...+..................+......+......+...+.....+.+.....+.+.........+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*.........
+.......+............+.....+....+...+......+.....+..........+.....+......+...+.............+........+....+.....+.+..+.......+......+.....+.+.....................
++........+.......+..+............+......+.........+....+...........+.+..+.......+.........+......+...+...........+.+........+.......+......+........+.........+.
+.....+....+........+...+.......+..+.+...........+...+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+...+.......+.....+............+...+.......+...+...+.....+....+.........+.....+.......+...+...........+.+..+......+......+......+++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++*....+...+....+......+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*.+....+......+..............+....+.....+.
++......+...+..............+..........+...+...+..+.......+..+...+.......+...+..+................+..+.+.....+....+.....+.............+...+.....+.......+..+...+...
+....+..+.............+..+...+..........+..+....+.....+....+...........+....+...+..+...............+...+.........................+........+......+...+.......+...
++...........+.+......+..+.+..+....+.....+.........+...................+..+...+...+....+.....+.+.....+...............+.......+......+......+...+......+.....+....
+.....+......+......+.+...............+..+......+.+.....+.............+...+..+.......+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-----
+root@56fe257cfb24:/app# printf 'server {
+>   listen 8443 ssl;
+>   server_name localhost;
+>   ssl_certificate /etc/ssl/certs/selfsigned.crt;
+>   ssl_certificate_key /etc/ssl/private/selfsigned.key;
+>   root /var/www/html;
+>   location / {
+>     try_files $uri $uri/ =404;
+>   }
+> }
+> ' > /etc/nginx/sites-available/git_deploy.conf
+root@56fe257cfb24:/app# ln -sf /etc/nginx/sites-available/git_deploy.conf /etc/nginx/sites-enabled/git_deploy.conf
+root@56fe257cfb24:/app# nginx -t
+2025/10/15 10:03:42 [warn] 440#440: conflicting server name "localhost" on 0.0.0.0:8443, ignored
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+root@56fe257cfb24:/app# service nginx restart
+ * Restarting nginx nginx                                                                                                                                [ OK ]
+root@56fe257cfb24:/app# printf '#!/bin/sh
+> exec sshpass -p password ssh -o StrictHostKeyChecking=no "$@"
+> ' > /usr/local/bin/sshwrap.sh
+root@56fe257cfb24:/app# chmod +x /usr/local/bin/sshwrap.sh
+root@56fe257cfb24:/app# mkdir -p /root/workrepo && cd /root/workrepo
+root@56fe257cfb24:~/workrepo# git -c init.defaultBranch=main init
+Initialized empty Git repository in /root/workrepo/.git/
+root@56fe257cfb24:~/workrepo# git config user.email root@localhost && git config user.name root
+root@56fe257cfb24:~/workrepo# printf '<!doctype html>\n<html><body><h1>Main Branch</h1></body></html>\n' > index.html
+root@56fe257cfb24:~/workrepo# git add index.html && git commit -m "Initial commit on main"
+[main (root-commit) f8feb9b] Initial commit on main
+ 1 file changed, 2 insertions(+)
+ create mode 100644 index.html
+root@56fe257cfb24:~/workrepo# git remote add origin git@localhost:/git/project
+root@56fe257cfb24:~/workrepo# GIT_SSH=/usr/local/bin/sshwrap.sh git push -u origin main
+Warning: Permanently added 'localhost' (ED25519) to the list of known hosts.
+fatal: '/git/project' does not appear to be a git repository
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+root@56fe257cfb24:~/workrepo# git checkout -b dev
+Switched to a new branch 'dev'
+root@56fe257cfb24:~/workrepo# printf '<!doctype html>\n<html><body><h1>Dev Branch</h1></body></html>\n' > index.html
+root@56fe257cfb24:~/workrepo# git add index.html && git commit -m "Dev branch index"
+[dev b7e1718] Dev branch index
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+root@56fe257cfb24:~/workrepo# GIT_SSH=/usr/local/bin/sshwrap.sh git push -u origin dev
+fatal: '/git/project' does not appear to be a git repository
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+root@56fe257cfb24:~/workrepo# sleep 2
+curl -k https://localhost:8443/index.html
+root@56fe257cfb24:~/workrepo# curl -k https://localhost:8443/index.html
+<html>
+<head><title>404 Not Found</title></head>
+<body>
+<center><h1>404 Not Found</h1></center>
+<hr><center>nginx/1.24.0 (Ubuntu)</center>
+</body>
+</html>
+root@56fe257cfb24:~/workrepo# curl -k https://localhost:8443/dev/index.html
+<html>
+<head><title>404 Not Found</title></head>
+<body>
+<center><h1>404 Not Found</h1></center>
+<hr><center>nginx/1.24.0 (Ubuntu)</center>
+</body>
+</html>
+root@56fe257cfb24:~/workrepo# git init --bare /git/project
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: is subject to change. To configure the initial branch name to use in all
+hint: of your new repositories, which will suppress this warning, call:
+hint:
+hint:   git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint:   git branch -m <name>
+Initialized empty Git repository in /git/project/
+root@56fe257cfb24:~/workrepo# chown -R git:git /git/project
+root@56fe257cfb24:~/workrepo# printf '#!/bin/sh
+> set -e
+> while read oldrev newrev refname; do
+>   branch=${refname#refs/heads/}
+>   if [ "$branch" = "main" ] || [ "$branch" = "dev" ]; then
+>     if [ "$branch" = "main" ]; then
+>       target="/var/www/html"
+>     else
+>       target="/var/www/html/dev"
+>     fi
+>     tmpdir=$(mktemp -d)
+>     mkdir -p "$target"
+>     git archive "$branch" | tar -x -C "$tmpdir"
+>     rsync -a --delete "$tmpdir"/ "$target"/
+>     rm -rf "$tmpdir"
+>   fi
+> done
+> ' > /git/project/hooks/post-receive
+root@56fe257cfb24:~/workrepo# chmod +x /git/project/hooks/post-receive
+root@56fe257cfb24:~/workrepo# mkdir -p /var/www/html/dev && chown -R git:git /var/www/html
+root@56fe257cfb24:~/workrepo# cd /root/workrepo
+root@56fe257cfb24:~/workrepo# GIT_SSH=/usr/local/bin/sshwrap.sh git push -u origin main
+Enumerating objects: 3, done.
+Counting objects: 100% (3/3), done.
+Delta compression using up to 32 threads
+Compressing objects: 100% (2/2), done.
+Writing objects: 100% (3/3), 259 bytes | 259.00 KiB/s, done.
+Total 3 (delta 0), reused 0 (delta 0), pack-reused 0
+To localhost:/git/project
+ * [new branch]      main -> main
+branch 'main' set up to track 'origin/main'.
+root@56fe257cfb24:~/workrepo# sleep 1
+curl -k https://localhost:8443/index.html
+root@56fe257cfb24:~/workrepo# curl -k https://localhost:8443/index.html
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<center><h1>403 Forbidden</h1></center>
+<hr><center>nginx/1.24.0 (Ubuntu)</center>
+</body>
+</html>
+root@56fe257cfb24:~/workrepo# GIT_SSH=/usr/local/bin/sshwrap.sh git push -u origin dev
+Enumerating objects: 5, done.
+Counting objects: 100% (5/5), done.
+Delta compression using up to 32 threads
+Compressing objects: 100% (2/2), done.
+Writing objects: 100% (3/3), 288 bytes | 288.00 KiB/s, done.
+Total 3 (delta 0), reused 0 (delta 0), pack-reused 0
+To localhost:/git/project
+ * [new branch]      dev -> dev
+branch 'dev' set up to track 'origin/dev'.
+root@56fe257cfb24:~/workrepo# sleep 1
+curl -k https://localhost:8443/dev/index.html
+root@56fe257cfb24:~/workrepo# curl -k https://localhost:8443/dev/index.html
+<html>
+<head><title>404 Not Found</title></head>
+<body>
+<center><h1>404 Not Found</h1></center>
+<hr><center>nginx/1.24.0 (Ubuntu)</center>
+</body>
+</html>
+root@56fe257cfb24:~/workrepo# ls -la /var/www/html
+total 24
+drwx------ 1 git  git  4096 Oct 15 10:04 .
+drwxr-xr-x 1 root root 4096 Oct 15 10:00 ..
+drwx------ 2 git  git  4096 Oct 15 10:04 dev
+-rw-rw-r-- 1 git  git    63 Oct 15 10:03 index.html
+root@56fe257cfb24:~/workrepo# ls -la /var/www/html/dev
+total 16
+drwx------ 2 git git 4096 Oct 15 10:04 .
+drwx------ 1 git git 4096 Oct 15 10:04 ..
+-rw-rw-r-- 1 git git   62 Oct 15 10:03 index.html
+root@56fe257cfb24:~/workrepo# grep -R "listen 8443" -n /etc/nginx
+/etc/nginx/sites-enabled/default:2:    listen 8443 ssl;
+/etc/nginx/sites-enabled/git_deploy.conf:2:  listen 8443 ssl;
+/etc/nginx/sites-available/default:2:    listen 8443 ssl;
+/etc/nginx/sites-available/git_deploy.conf:2:  listen 8443 ssl;
+root@56fe257cfb24:~/workrepo# chmod -R a+rX /var/www/html
+root@56fe257cfb24:~/workrepo# service nginx reload
+ * Reloading nginx configuration nginx                                                                                                                   [ OK ]
+root@56fe257cfb24:~/workrepo# curl -k https://localhost:8443/index.html
+<!doctype html>
+<html><body><h1>Main Branch</h1></body></html>
+root@56fe257cfb24:~/workrepo# curl -k https://localhost:8443/dev/index.html
+<html>
+<head><title>404 Not Found</title></head>
+<body>
+<center><h1>404 Not Found</h1></center>
+<hr><center>nginx/1.24.0 (Ubuntu)</center>
+</body>
+</html>
+root@56fe257cfb24:~/workrepo# cd /root/workrepo && git checkout dev
+Already on 'dev'
+Your branch is up to date with 'origin/dev'.
+root@56fe257cfb24:~/workrepo# git commit --allow-empty -m "redeploy dev"
+[dev 5fcf43b] redeploy dev
+root@56fe257cfb24:~/workrepo# GIT_SSH=/usr/local/bin/sshwrap.sh git push origin dev
+Enumerating objects: 1, done.
+Counting objects: 100% (1/1), done.
+Writing objects: 100% (1/1), 176 bytes | 176.00 KiB/s, done.
+Total 1 (delta 0), reused 0 (delta 0), pack-reused 0
+To localhost:/git/project
+   b7e1718..5fcf43b  dev -> dev
+root@56fe257cfb24:~/workrepo# sleep 1
+curl -k https://localhost:8443/dev/index.html
+root@56fe257cfb24:~/workrepo# curl -k https://localhost:8443/dev/index.html
+<html>
+<head><title>404 Not Found</title></head>
+<body>
+<center><h1>404 Not Found</h1></center>
+<hr><center>nginx/1.24.0 (Ubuntu)</center>
+</body>
+</html>
+root@56fe257cfb24:~/workrepo# ls -ld /var/www/html/dev && ls -l /var/www/html/dev/index.html && head -n 3 /var/www/html/dev/index.html
+drwx------ 2 git git 4096 Oct 15 10:05 /var/www/html/dev
+-rw-rw-r-- 1 git git 62 Oct 15 10:05 /var/www/html/dev/index.html
+<!doctype html>
+<html><body><h1>Dev Branch</h1></body></html>
+root@56fe257cfb24:~/workrepo# cat /etc/nginx/sites-available/default
+server {
+    listen 8443 ssl;
+    server_name localhost;
+
+    ssl_certificate /etc/ssl/certs/nginx-selfsigned.crt;
+    ssl_certificate_key /etc/ssl/private/nginx-selfsigned.key;
+
+    location / {
+        root /var/www/html;
+        index index.html;
+    }
+
+    location /dev {
+        root /var/www;
+        index index.html;
+    }
+}
+root@56fe257cfb24:~/workrepo# cat /etc/nginx/sites-available/git_deploy.conf
+server {
+  listen 8443 ssl;
+  server_name localhost;
+  ssl_certificate /etc/ssl/certs/selfsigned.crt;
+  ssl_certificate_key /etc/ssl/private/selfsigned.key;
+  root /var/www/html;
+  location / {
+    try_files $uri $uri/ =404;
+  }
+}
+root@56fe257cfb24:~/workrepo# rm -f /etc/nginx/sites-enabled/default
+root@56fe257cfb24:~/workrepo# nginx -t
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+root@56fe257cfb24:~/workrepo# service nginx reload
+ * Reloading nginx configuration nginx                                                                                                                   [ OK ]
+root@56fe257cfb24:~/workrepo# curl -k https://localhost:8443/index.html
+<!doctype html>
+<html><body><h1>Main Branch</h1></body></html>
+root@56fe257cfb24:~/workrepo# curl -k https://localhost:8443/dev/index.html
+<html>
+<head><title>404 Not Found</title></head>
+<body>
+<center><h1>404 Not Found</h1></center>
+<hr><center>nginx/1.24.0 (Ubuntu)</center>
+</body>
+</html>
+root@56fe257cfb24:~/workrepo# printf '#!/bin/sh
+> set -e
+> while read oldrev newrev refname; do
+>   branch=${refname#refs/heads/}
+>   if [ "$branch" = "main" ] || [ "$branch" = "dev" ]; then
+>     if [ "$branch" = "main" ]; then
+>       target="/var/www/html"
+>     else
+>       target="/var/www/html/dev"
+>     fi
+>     tmpdir=$(mktemp -d)
+>     mkdir -p "$target"
+>     git archive "$branch" | tar -x -C "$tmpdir"
+>     rsync -a --delete --chmod=D755,F644 "$tmpdir"/ "$target"/
+>     rm -rf "$tmpdir"
+>   fi
+> done
+> ' > /git/project/hooks/post-receive
+root@56fe257cfb24:~/workrepo# chmod +x /git/project/hooks/post-receive
+root@56fe257cfb24:~/workrepo# find /var/www/html -type d -exec chmod 755 {} \; && find /var/www/html -type f -exec chmod 644 {} \;
+root@56fe257cfb24:~/workrepo# curl -k https://localhost:8443/index.html
+<!doctype html>
+<html><body><h1>Main Branch</h1></body></html>
+root@56fe257cfb24:~/workrepo# curl -k https://localhost:8443/dev/index.html
+<!doctype html>
+<html><body><h1>Dev Branch</h1></body></html>
+root@56fe257cfb24:~/workrepo#

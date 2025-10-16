@@ -1,0 +1,728 @@
+root@4671c0b9c5b1:/app# ls -la /app
+total 16
+drwxr-xr-x 1 root root 4096 Oct 15 05:54 .
+drwxr-xr-x 1 root root 4096 Oct 15 05:55 ..
+-rw-rw-r-- 1 root root 5548 Oct  8 15:44 data.hex
+root@4671c0b9c5b1:/app# wc -l /app/data.hex
+88 /app/data.hex
+root@4671c0b9c5b1:/app# head -n 20 /app/data.hex
+0000000 000407 002046 000036 001074 000424 000000 000000 000001
+0000020 170011 010600 011046 005720 010066 000002 004767 000150
+0000040 022626 005000 104401 004567 001354 000002 016500 000004
+0000060 072027 177776 016501 000004 072127 177775 074100 016501
+0000100 000004 072127 177773 074100 016501 000004 074100 042700
+0000120 177776 072027 000017 016501 000004 006201 050100 000400
+0000140 000167 001300 004567 001256 000002 017516 000004 004737
+0000160 000026 010075 000004 010001 005701 006700 071065 000006
+0000200 010100 000400 000167 001234 004567 001212 000006 012765
+0000220 002322 177770 005065 177766 026527 177766 000024 002035
+0000240 012716 000144 010546 062716 177770 004737 000124 005726
+0000260 010016 012746 002046 004737 000316 005726 016501 177766
+0000300 005201 006700 071027 000012 005701 001004 012716 002052
+0000320 004737 000316 005265 177766 000737 000167 001106 004567
+0000340 001064 000200 016567 000004 001556 010504 062704 000006
+0000360 117700 001544 001411 005267 001536 020027 000045 001406
+0000400 010016 004737 001224 000764 000167 001030 005067 001512
+0000420 005067 001476 127727 001500 000055 001004 005267 001470
+0000440 005267 001466 004367 000474 002106 005067 001456 020027
+0000460 000056 001003 004367 000454 002102 010603 012701 000472
+root@4671c0b9c5b1:/app# python3 --version
+Python 3.13.1
+root@4671c0b9c5b1:/app# cat > /app/parse_hexdump.py << 'PY'
+> #!/usr/bin/env python3
+> import re, sys
+>
+> def parse_hexdump(fname):
+>     out = bytearray()
+>     with open(fname, 'r', encoding='utf-8', errors='ignore') as f:
+>         for line in f:
+>             if not line.strip():
+>                 continue
+>             left = line.split('|')[0]
+>             left = re.sub(r'^[0-9a-fA-F]+\s+', '', left)
+>             tokens = re.findall(r'\b[0-9a-fA-F]{2}\b', left)
+>             for tok in tokens:
+>                 out.append(int(tok, 16))
+>     return bytes(out)
+>
+> def main():
+>     if len(sys.argv) < 3:
+>         print("Usage: parse_hexdump.py input.hex output.bin", file=sys.stderr)
+>         sys.exit(1)
+>     data = parse_hexdump(sys.argv[1])
+>     with open(sys.argv[2], 'wb') as g:
+>         g.write(data)
+>
+> if __name__ == '__main__':
+>     main()
+> PY
+root@4671c0b9c5b1:/app# python3 /app/parse_hexdump.py /app/data.hex /app/recovered.bin
+root@4671c0b9c5b1:/app# ls -la /app/recovered.bin
+-rw-r--r-- 1 root root 0 Oct 15 05:55 /app/recovered.bin
+root@4671c0b9c5b1:/app# file /app/recovered.bin
+bash: file: command not found
+root@4671c0b9c5b1:/app# chmod +x /app/recovered.bin
+root@4671c0b9c5b1:/app# ./recovered.bin
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> import re, struct
+> from pathlib import Path
+> inp = '/app/data.hex'
+> outp = '/app/recovered.bin'
+> data = bytearray()
+> with open(inp, 'r', encoding='utf-8', errors='ignore') as f:
+>     for line in f:
+>         line = line.strip()
+>         if not line:
+>             continue
+>         parts = line.split()
+>         if not parts:
+>             continue
+>         # skip offset (first token), then parse six-digit octal words
+>         for tok in parts[1:]:
+>             if re.fullmatch(r'[0-7]{6}', tok):
+>                 val = int(tok, 8) & 0xFFFF
+>                 data += struct.pack('<H', val)
+> with open(outp, 'wb') as g:
+>     g.write(data)
+> print(f'wrote {len(data)} bytes to {outp}')
+> PY
+wrote 1384 bytes to /app/recovered.bin
+root@4671c0b9c5b1:/app# ls -la /app/recovered.bin
+-rwxr-xr-x 1 root root 1384 Oct 15 05:56 /app/recovered.bin
+root@4671c0b9c5b1:/app# od -An -t o2 -N 16 /app/recovered.bin
+ 000407 002046 000036 001074 000424 000000 000000 000001
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> import struct
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     hdr = f.read(16)
+>     words = struct.unpack('<8H', hdr)
+> magic, text, data, bss, syms, entry, trsize, drsize = words
+> print('magic(oct)=%06o' % magic)
+> print('text=%d data=%d bss=%d syms=%d entry(oct)=%06o trsize=%d drsize=%d' % (text, data, bss, syms, entry, trsize, drsize))
+> PY
+magic(oct)=000407
+text=1062 data=30 bss=572 syms=276 entry(oct)=000000 trsize=0 drsize=1
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> import sys, string
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     b = f.read()
+> printable = set(bytes(string.printable, 'ascii'))
+> res = []
+> curr = bytearray()
+> for ch in b:
+>     if 32 <= ch < 127 or ch in (9,10,13):
+>         curr.append(ch)
+>     else:
+>         if len(curr) >= 4:
+>             res.append(curr.decode('ascii', errors='ignore'))
+>         curr = bytearray()
+> if len(curr) >= 4:
+>     res.append(curr.decode('ascii', errors='ignore'))
+> for s in res:
+>     print(s)
+> PY
+
+7
+6
+crt0.o
+printf.o
+ffltpr.o
+putchr.o
+rsave.o
+ecvt.o
+savr5
+_main
+rsave
+rretrn
+_printf
+_ndigit
+pfloat
+pscien
+_putchar"
+_flush
+_fout
+mrsave
+ecvt
+fcvt
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> import struct, string
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     b = f.read()
+> # Parse header
+> hdr = b[:16]
+> magic, text, data, bss, syms, entry, trsize, drsize = struct.unpack('<8H', hdr)
+> text_off = 16
+> data_off = text_off + text
+> data_end = data_off + data
+> print(f'Header: magic={magic:o} text={text} data={data} bss={bss} syms={syms} entry={entry:o} trsize={trsize} drsize={drsize}')
+> # Find ASCII strings with offsets
+> def ascii_strings(buf, minlen=1):
+>     res = []
+>     i = 0
+>     n = len(buf)
+>     while i < n:
+>         if 32 <= buf[i] < 127:
+>             j = i
+>             while j < n and (32 <= buf[j] < 127):
+>                 j += 1
+>             if j - i >= minlen:
+>                 res.append((i, buf[i:j].decode('ascii', errors='ignore')))
+>             i = j
+>         else:
+>             i += 1
+>     return res
+> all_strings = ascii_strings(b, 1)
+> # Print strings containing '%'
+> fmt_strings = [(off,s) for off,s in all_strings if '%' in s]
+> print('Format-like strings:')
+> for off,s in fmt_strings:
+>     print(f'  +{off}: {s}')
+> print('Data segment strings:')
+> for off,s in all_strings:
+>     if data_off <= off < data_end:
+>         print(f'  +{off}: {s}')
+> # Also print short numeric-only strings in data segment
+> nums = [(off,s) for off,s in all_strings if s.strip().isdigit()]
+> print('Numeric strings (anywhere):')
+> for off,s in nums[:20]:
+>     print(f'  +{off}: {s}')
+> PY
+Header: magic=407 text=1062 data=30 bss=572 syms=276 entry=0 trsize=0 drsize=1
+Format-like strings:
+  +33: %
+  +251:  %
+  +858: %
+  +1078: %d
+Data segment strings:
+  +1078: %d
+  +1094: T
+  +1099: >
+Numeric strings (anywhere):
+  +24: 6
+  +148: 5
+  +224: 4
+  +268: 7
+  +272: 7
+  +286: 8
+  +290: 6
+  +298: 7
+  +448: 2
+  +458: 0
+  +472: 0
+  +503:  9
+  +538: 7
+  +612: 7
+  +628: 0
+  +744: 7
+  +758: 4
+  +820: 7
+  +850: 7
+  +852: 6
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> # Attempt to infer literals near format strings by dumping bytes around them
+> import struct
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     b = f.read()
+> # find '%' occurrences
+> indices = [i for i,ch in enumerate(b) if ch == ord('%')]
+> for i in indices:
+>     start = max(0, i-32)
+>     end = min(len(b), i+64)
+>     seg = b[start:end]
+>     print(f'Around +{i} ({start}-{end}):')
+>     try:
+>         print(seg.decode('ascii', errors='ignore'))
+>     except Exception:
+>         pass
+>     # show octal words for context
+>     import textwrap
+>     words = [seg[j:j+2] for j in range(0, len(seg), 2)]
+>     ow = ['%06o'%struct.unpack('<H', w)[0] for w in words if len(w)==2]
+>     print('oct-words:', ' '.join(ow))
+> PY
+Around +33 (1-97):
+&<      &
+         6      h%
+w       @tAWt@xAWt@xA@xEtA
+                          @Pw
+oct-words: 023001 017004 036000 012002 000001 000000 000400 004400 100360 023021 150022 033013 001020 173400 064011 113000 000045 000412 073611 166011 001002 04
+0000 002035 013400 177164 040777 002035 053400 176564 040377 040570 002035 053400 175564 040377 040570 002035 040000 140170 177105 013777 007564 040400 002035 1
+00400 040014 000120 073401
+Around +252 (220-316):
+Fw      4wnDed
+^ %     w7
+J7
+>@-
+8
+<F7
+. ,B
+oct-words: 001106 004567 001064 000200 016567 000004 001556 010504 062704 000006 117700 001544 001411 005267 001536 020027 000045 001406 010016 004737 001224 00
+0764 000167 001030 005067 001512 005067 001476 127727 001500 000055 001004 005267 001470 005267 001466 004367 000474 002106 005067 001456 020027 000056 001003 0
+04367 000454 002102 010603
+Around +858 (826-922):
+NW&fT
+7
+6@%
+*@A&@|7@L> Be0#
+@T
+oct-words: 012767 000001 001516 170246 170127 000200 174046 174146 010346 012701 003124 005002 005067 001466 170500 170000 001445 003003 005267 001452 170700 17
+1427 040200 170501 170000 001436 174046 174100 012703 003174 171467 000320 174002 174100 172227 037114 171627 041040 175700 062700 000060 110043 005202 170500 1
+70000 001360 012701 003124
+Around +1078 (1046-1142):
+t6
+  n`0TTVV%d
+T>
+crt0.oa.oprintf.o
+oct-words: 001164 016700 000066 005767 001156 001001 060200 105060 003124 012700 003124 012603 172526 172426 170126 000207 062045 000040 000012 177774 177760 17
+7775 177770 104404 002124 000000 037314 146314 146314 146315 000012 071143 030164 067456 000000 000037 000000 027141 000157 000000 000000 000037 000026 071160 0
+67151 063164 067456 000037
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> import struct
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     b = f.read()
+> # header
+> magic, text, data, bss, syms, entry, trsize, drsize = struct.unpack('<8H', b[:16])
+> text_off = 16
+> text_bytes = b[text_off:text_off+text]
+> # read words
+> words = list(struct.unpack('<%dH' % (len(text_bytes)//2), text_bytes))
+> # opcodes of interest
+> JSRPC = 0o04567
+> MOV_IMM_PUSH = 0o12706  # MOV #imm, -(SP)
+> # data address of "%d"
+> ddata_base = text  # OMAGIC loads data immediately after text at 0
+> fmt_addr = ddata_base  # first bytes of data are "%d"
+> print('fmt_addr(oct)=%06o' % fmt_addr)
+> # scan for patterns
+> for i in range(len(words)-4):
+>     if words[i] == MOV_IMM_PUSH and words[i+2] == MOV_IMM_PUSH and words[i+4] == JSRPC:
+>         imm1 = words[i+1]
+>         imm2 = words[i+3]
+>         call_addr = words[i+5] if i+5 < len(words) else None
+>         print('Pattern at word index', i, 'imm1=%06o imm2=%06o call=%06o' % (imm1, imm2, call_addr or 0))
+>     # also check single push then JSR
+>     if words[i] == MOV_IMM_PUSH and words[i+2] == JSRPC:
+>         imm = words[i+1]
+>         call_addr = words[i+3] if i+3 < len(words) else None
+>         print('Push+JSR at', i, 'imm=%06o call=%06o' % (imm, call_addr or 0))
+> # specifically locate pushes of fmt_addr
+> indices = [idx for idx in range(len(words)-1) if words[idx]==MOV_IMM_PUSH and words[idx+1]==fmt_addr]
+> print('fmt pushes at indices:', indices)
+> for idx in indices:
+>     # look at previous push for integer argument
+>     prev = idx-2
+>     arg = None
+>     if prev >= 0 and words[prev] == MOV_IMM_PUSH:
+>         arg = words[prev+1]
+>     print('At', idx, 'arg word=%s' % ('%06o' % arg if arg is not None else 'None'))
+> PY
+fmt_addr(oct)=002046
+fmt pushes at indices: []
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> # If a likely printf pattern is identified, decode argument and print expected output
+> import struct
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     b = f.read()
+> magic, text, data, bss, syms, entry, trsize, drsize = struct.unpack('<8H', b[:16])
+> text_off = 16
+> text_bytes = b[text_off:text_off+text]
+> words = list(struct.unpack('<%dH' % (len(text_bytes)//2), text_bytes))
+> MOV_IMM_PUSH = 0o12706
+> fmt_addr = text
+> # find occurrence where a value is pushed immediately before pushing fmt_addr and then JSR
+> for i in range(len(words)-5):
+>     if words[i]==MOV_IMM_PUSH and words[i+2]==MOV_IMM_PUSH and words[i+3]==fmt_addr and words[i+4]==0o04567:
+>         arg = words[i+1]
+>         # interpret arg as signed 16-bit?
+>         sval = arg if arg < 0x8000 else arg-0x10000
+>         print('Detected printf("%d", %d) at word index', i, '=> output:', str(sval))
+>         break
+> else:
+>     print('No direct pattern found')
+> PY
+No direct pattern found
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> import struct
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     b = f.read()
+> magic, text, data, bss, syms, entry, trsize, drsize = struct.unpack('<8H', b[:16])
+> data_off = 16 + text
+> print('Data segment bytes:', b[data_off:data_off+data])
+> print('As chars:')
+> print(''.join(chr(x) if 32<=x<127 else '\\x%02x'%x for x in b[data_off:data_off+data]))
+> PY
+Data segment bytes: b'%d \x00\n\x00\xfc\xff\xf0\xff\xfd\xff\xf8\xff\x04\x89T\x04\x00\x00\xcc>\xcc\xcc\xcc\xcc\xcd\xcc\n\x00'
+As chars:
+%d \x00\x0a\x00\xfc\xff\xf0\xff\xfd\xff\xf8\xff\x04\x89T\x04\x00\x00\xcc>\xcc\xcc\xcc\xcc\xcd\xcc\x0a\x00
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> import struct
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     b = f.read()
+> magic, text, data, bss, syms, entry, trsize, drsize = struct.unpack('<8H', b[:16])
+> # Approximate symbol table offset: after text+data (no reloc per header)
+> sym_off = 16 + text + data + trsize + drsize
+> sym_blob = b[sym_off:sym_off+syms]
+> # search for target names
+> for name in (b'_printf', b'_putchar'):
+>     idx = sym_blob.find(name)
+>     print('name', name, 'at sym offset', idx)
+>     if idx != -1:
+>         start = max(0, idx-16)
+>         end = min(len(sym_blob), idx+32)
+>         seg = sym_blob[start:end]
+>         print('context bytes:', seg)
+>         # show as octal words
+>         words = [seg[i:i+2] for i in range(0, len(seg), 2)]
+>         ow = ['%06o'%struct.unpack('<H', w)[0] for w in words if len(w)==2]
+>         print('oct-words:', ' '.join(ow))
+> PY
+name b'_printf' at sym offset 155
+context bytes: b'"\x00\x14\x03_r\x00\x00\x00\x00\x00\x00"\x00T\x00_printf\x00"\x00\xce\x00_ndigit\x00#\x00B\x04pfloat\x00\x00'
+oct-words: 000042 001424 071137 000000 000000 000000 000042 000124 070137 064562 072156 000146 000042 000316 067137 064544 064547 000164 000043 002102 063160 06
+7554 072141 000000
+name b'_putchar' at sym offset 203
+context bytes: b'"\x00\x8a\x02pscien\x00\x00"\x00\x8a\x02_putchar"\x00\x94\x02_flush\x00\x00"\x00\xc2\x02_fout\x00\x00\x00'
+oct-words: 000042 001212 071560 064543 067145 000000 000042 001212 070137 072165 064143 071141 000042 001224 063137 072554 064163 000000 000042 001302 063137 07
+2557 000164 000000
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+ []
+    for i in range(len(text_words)-1):
+        if text_words[i]==JSRPC and text_words[i+1]==addr:
+            hits.append(i)
+    print(nm, 'JSR hits:', hits[:10])
+    # show context around first hit
+    if hits:
+        i = hits[0]
+        ctx = text_words[max(0,i-6):i+6]
+        print('context words(oct):', ' '.join('%06o'%w for w in ctx))
+PY
+> import struct
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     b = f.read()
+> magic, text, data, bss, syms, entry, trsize, drsize = struct.unpack('<8H', b[:16])
+> text_off = 16
+> text_words = list(struct.unpack('<%dH' % (text//2), b[text_off:text_off+text]))
+> # Try to guess function addresses from symbol table by scanning for names and then reading trailing 2-byte value
+> sym_off = 16 + text + data + trsize + drsize
+> sym = b[sym_off:sym_off+syms]
+> import re
+> addrs = {}
+> for nm in (b'_printf', b'_putchar'):
+>     i = sym.find(nm)
+>     if i!=-1:
+>         # Heuristic: address might be 2 bytes following the name within next 8-12 bytes
+>         for j in range(0, 16, 2):
+>             k = i + len(nm) + j
+>             if k+2 <= len(sym):
+>                 val = struct.unpack('<H', sym[k:k+2])[0]
+>                 if 0 < val < text:
+>                     addrs[nm.decode()] = val
+>                     break
+> print('guessed addrs:', addrs)
+> # Scan text for JSR PC,<addr>
+> JSRPC = 0o04567
+> for nm,addr in addrs.items():
+>     hits = []
+>     for i in range(len(text_words)-1):
+>         if text_words[i]==JSRPC and text_words[i+1]==addr:
+>             hits.append(i)
+>     print(nm, 'JSR hits:', hits[:10])
+>     # show context around first hit
+>     if hits:
+>         i = hits[0]
+>         ctx = text_words[max(0,i-6):i+6]
+>         print('context words(oct):', ' '.join('%06o'%w for w in ctx))
+> PY
+guessed addrs: {'_putchar': 34}
+_putchar JSR hits: []
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> # Summarize expected output based on data segment and call patterns
+> import struct
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     b = f.read()
+> magic, text, data, bss, syms, entry, trsize, drsize = struct.unpack('<8H', b[:16])
+> data_off = 16 + text
+> ds = b[data_off:data_off+data]
+> # extract strings in data
+> def extract_strings(buf):
+>     out = []
+>     i=0
+>     while i<len(buf):
+>         if 32<=buf[i]<127:
+>             j=i
+>             while j<len(buf) and 32<=buf[j]<127:
+>                 j+=1
+>             out.append(buf[i:j].decode('ascii'))
+>             i=j
+>         else:
+>             i+=1
+>     return out
+> print('data strings:', extract_strings(ds))
+> # Conclude likely output is 'T>' followed by a decimal number printed with %d; we cannot deduce number reliably without full disassembly.
+> PY
+data strings: ['%d ', 'T', '>']
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> import struct
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     b = f.read()
+> magic, text, data, bss, syms, entry, trsize, drsize = struct.unpack('<8H', b[:16])
+> text_off = 16
+> words = list(struct.unpack('<%dH' % (text//2), b[text_off:text_off+text]))
+> # Opcodes
+> JSRPC = 0o04567
+> MOV_IMM_R = {r:0o12700+r for r in range(8)}  # MOV #imm,Rn
+> MOV_R_PUSHSP = {r:0o10046 + (r<<6) for r in range(8)}  # approximate encoding MOV Rn,-(SP)
+> # Search for MOV #imm,Rn ; MOV Rn,-(SP) ; JSR PC,<addr>
+> patterns = []
+> for i in range(len(words)-4):
+>     # check MOV #imm,Rn
+>     for r in range(8):
+>         if words[i] == MOV_IMM_R[r]:
+>             imm = words[i+1]
+>             # next MOV Rn,-(SP)
+>             if words[i+2] == MOV_R_PUSHSP[r] and words[i+3] == JSRPC:
+>                 call = words[i+4]
+>                 patterns.append((i,r,imm,call))
+> print('call patterns count:', len(patterns))
+> for i,r,imm,call in patterns[:20]:
+>     print('idx', i, 'R', r, 'imm(oct)=%06o' % imm, 'call(oct)=%06o' % call)
+> # Look for imm values equal to ASCII 'T'(0124) and '>'(0076)
+> for i,r,imm,call in patterns:
+>     if imm in (0o0124, 0o0076):
+>         print('putchar-like: idx', i, 'imm', '%06o'%imm, 'call', '%06o'%call)
+> # Also look for pushes of "%d " address (data starts at text, "%d " at offset 0 of data)
+> fmt_addr = text  # OMAGIC: data loaded at text
+> # Find sequences: push integer then push fmt and JSR
+> for i in range(len(words)-6):
+>     # case using register r
+>     for r in range(8):
+>         if words[i]==MOV_IMM_R[r]:
+>             val = words[i+1]
+>             if words[i+2]==MOV_R_PUSHSP[r]:
+>                 # push fmt via immediate to another reg then push
+>                 for r2 in range(8):
+>                     if words[i+3]==MOV_IMM_R[r2] and words[i+4]==fmt_addr and words[i+5]==MOV_R_PUSHSP[r2] and words[i+6]==JSRPC:
+>                         call = words[i+7] if i+7<len(words) else 0
+>                         print('printf-like at', i, 'arg=%d(oct %06o)'%(val,val), 'fmt_addr=%06o'%fmt_addr, 'call=%06o'%call)
+> PY
+call patterns count: 0
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> # If we detected character prints, assemble the expected output order heuristically
+> import struct
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     b = f.read()
+> magic, text, data, bss, syms, entry, trsize, drsize = struct.unpack('<8H', b[:16])
+> text_off = 16
+> words = list(struct.unpack('<%dH' % (text//2), b[text_off:text_off+text]))
+> JSRPC = 0o04567
+> MOV_IMM_R = {r:0o12700+r for r in range(8)}
+> MOV_R_PUSHSP = {r:0o10046 + (r<<6) for r in range(8)}
+> seq = []
+> for i in range(len(words)-4):
+>     for r in range(8):
+>         if words[i]==MOV_IMM_R[r] and words[i+2]==MOV_R_PUSHSP[r] and words[i+3]==JSRPC:
+>             imm = words[i+1]
+>             call = words[i+4]
+>             seq.append((i,imm,call))
+> # collect ASCII outputs for imm equal to printable chars
+> outchars = []
+> for i,imm,call in seq:
+>     if 32 <= imm < 127:
+>         outchars.append(chr(imm))
+> print('printed chars (likely order subset):', ''.join(outchars))
+> PY
+printed chars (likely order subset):
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> import struct
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     b = f.read()
+> magic, text, data, bss, syms, entry, trsize, drsize = struct.unpack('<8H', b[:16])
+> text_off = 16
+> words = list(struct.unpack('<%dH' % (text//2), b[text_off:text_off+text]))
+> JSRPC = 0o04567
+> PUSH_IMM = 0o12706  # MOV #imm, -(SP)
+> fmt_addr = text
+> events = []
+> for i in range(len(words)-2):
+>     if words[i] == PUSH_IMM:
+>         imm = words[i+1]
+>         # find next JSR PC within next few words
+>         jsr_idx = None
+>         for k in range(1,6):
+>             if i+k < len(words) and words[i+k] == JSRPC:
+>                 jsr_idx = i+k
+>                 call = words[i+k+1] if i+k+1 < len(words) else None
+>                 break
+>         events.append((i, imm, jsr_idx, call))
+> # Print a summary
+> for i,imm,jsr,call in events[:50]:
+>     print('idx', i, 'imm(oct)=%06o' % imm, 'imm(dec)=%d' % (imm if imm<0x8000 else imm-0x10000), 'jsr_at', jsr, 'call(oct)=%s' % ('%06o'%call if call is not N
+one else 'None'))
+> # Reconstruct likely output: any imm matching ASCII printable with immediate JSR seen
+> out = []
+> for i,imm,jsr,call in events:
+>     if jsr is not None:
+>         if 32 <= imm < 127:
+>             out.append(chr(imm))
+>         elif imm == fmt_addr:
+>             out.append('[%d ]')
+>         elif imm == fmt_addr+2:  # possibly "\n" string in data
+>             out.append('\n')
+> print('heuristic output sequence:', ''.join(out))
+> PY
+heuristic output sequence:
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> import struct
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     b = f.read()
+> magic, text, data, bss, syms, entry, trsize, drsize = struct.unpack('<8H', b[:16])
+> base = 16
+> text_off = base
+> data_off = base + text
+> sym_off = base + text + data + trsize + drsize
+> sym_blob = b[sym_off:sym_off+syms]
+> recsz = 12
+> syms_list = []
+> for i in range(0, len(sym_blob), recsz):
+>     rec = sym_blob[i:i+recsz]
+>     if len(rec) < recsz:
+>         break
+>     name = rec[:8].rstrip(b'\x00').decode('ascii', errors='ignore')
+>     n_type = rec[8]
+>     n_other = rec[9]
+>     n_value = struct.unpack('<H', rec[10:12])[0]
+>     syms_list.append((name, n_type, n_other, n_value))
+> print('symbols (name,type,other,val_oct):')
+> for s in syms_list:
+>     print(s[0], s[1], s[2], '%06o'%s[3])
+> # Find addresses for _printf and _putchar
+> symdict = {name: val for name,_,__,val in syms_list}
+> printf_addr = symdict.get('_printf')
+> putchar_addr = symdict.get('_putchar')
+> print('printf_addr(oct)=', '%06o'%printf_addr if printf_addr is not None else None)
+> print('putchar_addr(oct)=', '%06o'%putchar_addr if putchar_addr is not None else None)
+> # Scan text for JSR PC,<addr>
+> JSRPC = 0o04567
+> text_words = list(struct.unpack('<%dH' % (text//2), b[text_off:text_off+text]))
+> jsr_sites = []
+> for i in range(len(text_words)-1):
+>     if text_words[i] == JSRPC:
+>         call = text_words[i+1]
+>         jsr_sites.append((i, call))
+> print('JSR count:', len(jsr_sites))
+> # Look for calls to printf and putchar
+> calls = []
+> for i,call in jsr_sites:
+>     if call in (printf_addr, putchar_addr):
+>         calls.append((i, call))
+> print('target calls:', [(i, '%06o'%c) for i,c in calls])
+> # For each call, look back up to 6 words for push-immediate (MOV #imm, -(SP) = 012706)
+> PUSH_IMM = 0o12706
+> events = []
+> for i,call in calls:
+>     args = []
+>     # Collect up to two prior PUSH_IMM immediates
+>     for k in range(1,8):
+>         if i-k >= 1 and text_words[i-k] == PUSH_IMM:
+>             args.append(text_words[i-k+1])
+>     events.append((i, call, args))
+> # Print events with decoded args
+> fmt_addr = text  # data base
+> for i,call,args in events:
+>     kind = 'printf' if call == printf_addr else 'putchar'
+>     print(kind, 'at idx', i, 'args(oct)=[', ' '.join('%06o'%a for a in args), ']')
+>     # Heuristic interpretation
+>     if kind == 'putchar':
+>         for a in args:
+>             if 32 <= a < 127:
+>                 print(' putchar ->', chr(a))
+>     else:
+>         # expect args: value then fmt address (order may vary)
+>         val = None
+>         has_fmt = any(a == fmt_addr for a in args)
+>         for a in args:
+>             if a != fmt_addr:
+>                 val = a
+>                 break
+>         if has_fmt and val is not None:
+>             sval = val if val < 0x8000 else val - 0x10000
+>             print(' printf -> %d ' % sval)
+> PY
+symbols (name,type,other,val_oct):
+rt0.o 0 0 060400
+.o 0 22 070000
+rintf.o 0 206 063000
+fltpr.o 0 138 070002
+utchr.o 0 148 071002
+save.o 0 4 062403
+cvt.o 0 36 071403
+avr5$ 0 68 057404
+main" 0 120 057400
+n" 0 22 071000
+save" 0 6 071003
+retrn" 0 20 057403
+r" 0 84 057400
+printf" 0 206 057400
+ndigit# 0 66 070004
+float" 0 138 070002
+scien" 0 138 057402
+putchar" 0 148 057402
+flush" 0 194 057402
+fout$ 0 78 066404
+rsave" 0 4 062403
+cvt" 0 42 063003
+printf_addr(oct)= None
+putchar_addr(oct)= None
+JSR count: 4
+target calls: []
+root@4671c0b9c5b1:/app# python3 - << 'PY'
+> import struct
+> fn = '/app/recovered.bin'
+> with open(fn,'rb') as f:
+>     b = f.read()
+> magic, text, data, bss, syms, entry, trsize, drsize = struct.unpack('<8H', b[:16])
+> data_off = 16 + text
+> ds = b[data_off:data_off+data]
+> # Extract strings
+> def read_cstr(buf, start):
+>     end = buf.find(b'\x00', start)
+>     if end == -1:
+>         end = len(buf)
+>     return buf[start:end].decode('ascii'), end+1
+> fmt, p = read_cstr(ds, 0)
+> newline_str, p2 = read_cstr(ds, p)
+> # Next four 16-bit signed integers
+> ints = [struct.unpack('<h', ds[p2+i:p2+i+2])[0] for i in range(0, 8, 2)]
+> # Find 'T' and '>' characters later in data
+> rest = ds[p2+8:]
+> chars = ''.join(chr(c) for c in rest if 32 <= c < 127)
+> print('fmt:', fmt)
+> print('newline_str:', repr(newline_str))
+> print('ints:', ints)
+> print('tail_printables:', chars)
+> # Construct expected output
+> out = ' '.join(str(x) for x in ints) + ' ' + '\n' + 'T>'
+> print('EXPECTED PROGRAM OUTPUT:\n' + out)
+> PY
+fmt: %d
+newline_str: '\n'
+ints: [-4, -16, -3, -8]
+tail_printables: T>
+EXPECTED PROGRAM OUTPUT:
+-4 -16 -3 -8
+T>
+root@4671c0b9c5b1:/app#

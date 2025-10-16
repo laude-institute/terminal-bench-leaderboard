@@ -1,0 +1,894 @@
+root@e63f14aa7e7c:/app# ls -la
+total 16
+drwxr-xr-x 1 root root 4096 Oct 15 11:29 .
+drwxr-xr-x 1 root root 4096 Oct 15 11:29 ..
+drwxr-xr-x 1 root root 4096 Oct 15 11:29 my_website
+root@e63f14aa7e7c:/app# git status
+fatal: not a git repository (or any of the parent directories): .git
+root@e63f14aa7e7c:/app# ls -la .github/workflows
+ls: cannot access '.github/workflows': No such file or directory
+root@e63f14aa7e7c:/app# grep -R -nE "curl|wget|bash -c|pull_request_target|GITHUB_TOKEN|secrets|::set-output|powershell|Invoke-WebRequest" .github/workflows ||
+true
+grep: .github/workflows: No such file or directory
+root@e63f14aa7e7c:/app# test -f info.md && head -n 50 info.md || echo "info.md not found"
+info.md not found
+root@e63f14aa7e7c:/app# mkdir -p website/assets website/about website/publications website/blog/posts website/scripts scripts .github/workflows
+root@e63f14aa7e7c:/app# cat > website/assets/style.css << 'EOF'
+> /* Clean, professional research profile design */
+> :root {
+>   --bg: #f7f9fc;
+>   --text: #0b132b;
+>   --muted: #3a506b;
+>   --accent: #5bc0be;
+>   --panel: #ffffff;
+>   --link: #1c7ed6;
+> }
+> * { box-sizing: border-box; }
+> html, body { height: 100%; }
+> body {
+>   margin: 0;
+>   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", Arial, sans-seri
+f;
+>   color: var(--text);
+>   background: var(--bg);
+>   line-height: 1.6;
+> }
+> .header {
+>   background: var(--panel);
+>   border-bottom: 1px solid #e6e9ef;
+>   position: sticky;
+>   top: 0;
+>   z-index: 1000;
+> }
+> .nav {
+>   max-width: 980px;
+>   margin: 0 auto;
+>   display: flex;
+>   align-items: center;
+>   justify-content: space-between;
+>   padding: 14px 18px;
+> }
+> .nav .brand {
+>   font-weight: 700;
+>   color: var(--text);
+>   letter-spacing: 0.2px;
+> }
+> .nav a {
+>   color: var(--text);
+>   text-decoration: none;
+>   margin-left: 18px;
+> }
+> .nav a:hover { color: var(--accent); }
+> .container {
+>   max-width: 980px;
+>   margin: 24px auto;
+>   padding: 0 18px;
+> }
+> .hero {
+>   background: linear-gradient(135deg, #eaf6ff, #f7f9fc);
+>   border: 1px solid #e6e9ef;
+>   border-radius: 12px;
+>   padding: 28px;
+> }
+> .hero h1 { margin-top: 0; font-size: 28px; }
+> .hero p { color: var(--muted); }
+> .panel {
+>   background: var(--panel);
+>   border: 1px solid #e6e9ef;
+>   border-radius: 12px;
+>   padding: 24px;
+> }
+> footer {
+>   color: var(--muted);
+>   font-size: 14px;
+>   padding: 24px 18px;
+>   text-align: center;
+> }
+> h1, h2, h3 { color: var(--text); }
+> ul, ol { padding-left: 24px; }
+> code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+> blockquote {
+>   border-left: 4px solid #e6e9ef;
+>   margin: 0;
+>   padding: 8px 12px;
+>   color: var(--muted);
+>   background: #fbfdff;
+> }
+> a { color: var(--link); }
+> a:hover { text-decoration: underline; }
+> .post-list { list-style: none; padding: 0; }
+> .post-list li { margin: 12px 0; }
+> .badge { display: inline-block; background: #eef6ff; color: var(--muted); padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+> EOF
+root@e63f14aa7e7c:/app# cat > website/scripts/md_to_html.py << 'EOF'
+> #!/usr/bin/env python3
+> import re
+> from html import escape
+>
+> def _format_inline(text: str) -> str:
+>     # Links [text](url)
+>     text = re.sub(r"\[([^\]]+)\]\(([^\)]+)\)", r'<a href="\2">\1</a>', text)
+>     # Bold **text**
+>     text = re.sub(r"\*\*([^*]+)\*\*", r'<strong>\1</strong>', text)
+>     # Italic *text* or _text_
+>     text = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r'<em>\1</em>', text)
+>     text = re.sub(r"_([^_]+)_", r'<em>\1</em>', text)
+>     # Inline code `code`
+>     text = re.sub(r"`([^`]+)`", lambda m: f"<code>{escape(m.group(1))}</code>", text)
+>     return text
+>
+> def md_to_html(md: str) -> str:
+>     lines = md.splitlines()
+>     html = []
+>     in_ul = False
+>     in_ol = False
+>     in_pre = False
+>     buf_par = []
+>
+>     def flush_par():
+>         nonlocal buf_par
+>         if buf_par:
+>             paragraph = ' '.join(buf_par).strip()
+>             if paragraph:
+>                 html.append(f"<p>{_format_inline(paragraph)}</p>")
+>             buf_par = []
+>
+>     for raw in lines:
+>         line = raw.rstrip()
+>         if re.match(r"\s*```", line):
+>             if not in_pre:
+>                 flush_par()
+>                 html.append('<pre>')
+>                 in_pre = True
+>             else:
+>                 html.append('</pre>')
+>                 in_pre = False
+>             continue
+>         if in_pre:
+>             html.append(escape(line))
+>             continue
+>         if not line.strip():
+>             flush_par()
+>             if in_ul:
+>                 html.append('</ul>')
+>                 in_ul = False
+>             if in_ol:
+>                 html.append('</ol>')
+>                 in_ol = False
+>             continue
+>         # Headings
+>         m = re.match(r"^(#{1,6})\s+(.*)$", line)
+>         if m:
+>             flush_par()
+>             if in_ul:
+>                 html.append('</ul>'); in_ul = False
+>             if in_ol:
+>                 html.append('</ol>'); in_ol = False
+>             level = len(m.group(1))
+>             content = _format_inline(m.group(2))
+>             html.append(f"<h{level}>{content}</h{level}>")
+>             continue
+>         # Unordered list
+>         if re.match(r"^\s*[-*]\s+", line):
+>             if not in_ul:
+>                 flush_par()
+>                 if in_ol:
+>                     html.append('</ol>'); in_ol = False
+>                 html.append('<ul>'); in_ul = True
+>             item = re.sub(r"^\s*[-*]\s+", '', line)
+>             html.append(f"<li>{_format_inline(item)}</li>")
+>             continue
+>         # Ordered list
+>         if re.match(r"^\s*\d+\.\s+", line):
+>             if not in_ol:
+>                 flush_par()
+>                 if in_ul:
+>                     html.append('</ul>'); in_ul = False
+>                 html.append('<ol>'); in_ol = True
+>             item = re.sub(r"^\s*\d+\.\s+", '', line)
+>             html.append(f"<li>{_format_inline(item)}</li>")
+>             continue
+>         # Blockquote
+>         if re.match(r"^>\s+", line):
+>             flush_par()
+>             if in_ul:
+>                 html.append('</ul>'); in_ul = False
+>             if in_ol:
+>                 html.append('</ol>'); in_ol = False
+>             content = re.sub(r"^>\s+", '', line)
+>             html.append(f"<blockquote>{_format_inline(content)}</blockquote>")
+>             continue
+>         # Paragraph buffer
+>         buf_par.append(line)
+>
+>     flush_par()
+>     if in_ul:
+>         html.append('</ul>')
+>     if in_ol:
+>         html.append('</ol>')
+>     return '\n'.join(html)
+>
+> if __name__ == '__main__':
+>     import sys
+>     md = sys.stdin.read()
+>     print(md_to_html(md))
+> EOF
+root@e63f14aa7e7c:/app# chmod +x website/scripts/md_to_html.py
+root@e63f14aa7e7c:/app# cat > website/scripts/generate_site.py << 'EOF'
+> #!/usr/bin/env python3
+> import datetime
+> from pathlib import Path
+> from md_to_html import md_to_html
+>
+> ROOT = Path(__file__).resolve().parents[1]
+> REPO = ROOT.parents[0]
+> INFO_MD = REPO / 'info.md'
+>
+> NAV_LINKS = [
+>     ('Home', 'index.html'),
+>     ('About Me', 'about/index.html'),
+>     ('Blog', 'blog/index.html'),
+>     ('Publications', 'publications/index.html'),
+> ]
+>
+> def header(title: str, depth: int = 0) -> str:
+>     prefix = '../' * depth
+>     nav_items = ' '.join([f'<a href="{prefix}{href}">{text}</a>' for text, href in NAV_LINKS])
+>     return f'''<!doctype html>
+> <html lang="en">
+> <head>
+> <meta charset="utf-8">
+> <meta name="viewport" content="width=device-width, initial-scale=1">
+> <title>{title}</title>
+> <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+> <link rel="stylesheet" href="{prefix}assets/style.css">
+> </head>
+> <body>
+> <div class="header">
+>   <div class="nav">
+>     <div class="brand">Research Profile</div>
+>     <nav>{nav_items}</nav>
+>   </div>
+> </div>
+> <div class="container">
+> '''
+>
+> def footer() -> str:
+>     year = datetime.datetime.now().year
+>     return f'''</div>
+> <footer>© {year} • Built with a lightweight static site generator</footer>
+> </body>
+> </html>
+> '''
+>
+> def write(path: Path, content: str):
+>     path.parent.mkdir(parents=True, exist_ok=True)
+>     path.write_text(content, encoding='utf-8')
+>
+> def build_index():
+>     body = '''<div class="hero">
+> <h1>Welcome</h1>
+> <p>This is a clean, professional research profile website. Explore the About Me, Blog, and Publications pages.</p>
+> <div class="badge">v1.0</div>
+> </div>
+> '''
+>     html = header('Home', depth=0) + body + footer()
+>     write(ROOT / 'index.html', html)
+>
+> def extract_publications(md_text: str):
+>     lines = md_text.splitlines()
+>     pubs = []
+>     in_section = False
+>     for line in lines:
+>         if line.strip().lower().startswith('# publications') or line.strip().lower().startswith('## publications') or line.strip().lower().startswith('### pub
+lications'):
+>             in_section = True
+>             continue
+>         if in_section:
+>             if line.strip().startswith('#') and not line.strip().lower().startswith('# publications'):
+>                 break
+>             if line.strip().startswith('- ') or line.strip().startswith('* ') or line.strip().startswith('1. '):
+>                 pubs.append(line.strip())
+>     return pubs
+>
+> def build_about_and_publications():
+>     if INFO_MD.exists():
+>         md_text = INFO_MD.read_text(encoding='utf-8')
+>         about_html = md_to_html(md_text)
+>     else:
+>         about_html = md_to_html('# About Me\n\nNo info.md found. Please provide your CV in info.md to populate this page.')
+>         md_text = ''
+>     about_page = header('About Me', depth=1) + f'<div class="panel">{about_html}</div>' + footer()
+>     write(ROOT / 'about' / 'index.html', about_page)
+>
+>     pubs = extract_publications(md_text)
+>     if pubs:
+>         pubs_md = '# Publications\n\n' + '\n'.join(pubs)
+>         pubs_html = md_to_html(pubs_md)
+>         preface = '<p>Selected publications extracted from info.md.</p>'
+>     else:
+>         preface = '<p>No Publications section found in info.md. Update info.md with a "## Publications" section listing your works.</p>'
+>         pubs_html = ''
+>     pub_page = header('Publications', depth=1) + f'<div class="panel">{preface}{pubs_html}</div>' + footer()
+>     write(ROOT / 'publications' / 'index.html', pub_page)
+>
+> def build_blog():
+>     posts_dir = ROOT / 'blog' / 'posts'
+>     posts_dir.mkdir(parents=True, exist_ok=True)
+>     # Convert any .md posts to .html
+>     entries = []
+>     for md_file in sorted(posts_dir.glob('*.md')):
+>         md = md_file.read_text(encoding='utf-8')
+>         html = md_to_html(md)
+>         # Title extraction
+>         title = 'Untitled Post'
+>         for line in md.splitlines():
+>             if line.strip().startswith('# '):
+>                 title = line.strip()[2:].strip()
+>                 break
+>         out = md_file.with_suffix('.html')
+>         post_html = header(title, depth=2) + f'<div class="panel">{html}</div>' + footer()
+>         write(out, post_html)
+>         entries.append((title, md_file.stem + '.html'))
+>     # Blog index
+>     items = '\n'.join([f'<li><a href="posts/{href}">{title}</a></li>' for title, href in entries]) or '<li>No posts yet.</li>'
+>     index_body = f'''<h1>Blog</h1>
+> <ul class="post-list">
+> {items}
+> </ul>
+> '''
+>     blog_index = header('Blog', depth=1) + index_body + footer()
+>     write(ROOT / 'blog' / 'index.html', blog_index)
+>
+> if __name__ == '__main__':
+>     build_index()
+>     build_about_and_publications()
+>     build_blog()
+> EOF
+root@e63f14aa7e7c:/app# chmod +x website/scripts/generate_site.py
+root@e63f14aa7e7c:/app# cat > website/blog/posts/welcome.md << 'EOF'
+> # Welcome to My Research Blog
+>
+> This is the first post on my new research profile website. Here, I'll share updates on publications, projects, and thoughts on topics in my field.
+>
+> - Highlights of recent work
+> - Notes on methodologies
+> - Links to talks and slides
+>
+> Stay tuned!
+> EOF
+root@e63f14aa7e7c:/app# python3 website/scripts/generate_site.py
+root@e63f14aa7e7c:/app# ls -la website
+total 32
+drwxr-xr-x 7 root root 4096 Oct 15 11:31 .
+drwxr-xr-x 1 root root 4096 Oct 15 11:31 ..
+drwxr-xr-x 2 root root 4096 Oct 15 11:31 about
+drwxr-xr-x 2 root root 4096 Oct 15 11:31 assets
+drwxr-xr-x 3 root root 4096 Oct 15 11:31 blog
+-rw-r--r-- 1 root root  869 Oct 15 11:31 index.html
+drwxr-xr-x 2 root root 4096 Oct 15 11:31 publications
+drwxr-xr-x 3 root root 4096 Oct 15 11:31 scripts
+root@e63f14aa7e7c:/app# ls -la website/about website/blog website/publications website/assets
+website/about:
+total 12
+drwxr-xr-x 2 root root 4096 Oct 15 11:31 .
+drwxr-xr-x 7 root root 4096 Oct 15 11:31 ..
+-rw-r--r-- 1 root root  824 Oct 15 11:31 index.html
+
+website/assets:
+total 12
+drwxr-xr-x 2 root root 4096 Oct 15 11:31 .
+drwxr-xr-x 7 root root 4096 Oct 15 11:31 ..
+-rw-r--r-- 1 root root 2046 Oct 15 11:31 style.css
+
+website/blog:
+total 16
+drwxr-xr-x 3 root root 4096 Oct 15 11:31 .
+drwxr-xr-x 7 root root 4096 Oct 15 11:31 ..
+-rw-r--r-- 1 root root  809 Oct 15 11:31 index.html
+drwxr-xr-x 2 root root 4096 Oct 15 11:31 posts
+
+website/publications:
+total 12
+drwxr-xr-x 2 root root 4096 Oct 15 11:31 .
+drwxr-xr-x 7 root root 4096 Oct 15 11:31 ..
+-rw-r--r-- 1 root root  845 Oct 15 11:31 index.html
+root@e63f14aa7e7c:/app# cat > .gitignore << 'EOF'
+> # Python
+> __pycache__/
+> *.pyc
+>
+> # Site build artifacts (if any future)
+> site/
+> EOF
+root@e63f14aa7e7c:/app# cat > README.md << 'EOF'
+> # Personal Research Profile Website
+>
+> This repository hosts a simple static website generated from `info.md` (your CV). It includes:
+>
+> - About Me (populated from `info.md`)
+> - Blog (auto-generates an index from posts in `website/blog/posts/`)
+> - Publications (parsed from a `## Publications` section in `info.md` if present)
+>
+> ## Structure
+>
+> - `website/` — static site root
+>   - `assets/style.css` — clean, professional CSS design
+>   - `index.html` — home page
+>   - `about/index.html` — about page generated from `info.md`
+>   - `blog/index.html` & `blog/posts/` — blog pages
+>   - `publications/index.html` — publications page
+>   - `scripts/` — lightweight markdown converter & generator
+>
+> ## Generate Pages
+>
+> Run:
+>
+> ```
+> python3 website/scripts/generate_site.py
+> ```
+>
+> ## Security Audit
+>
+> A workflow scans GitHub Actions definitions for potentially risky patterns (e.g., `pull_request_target`, untrusted `curl/wget`, or secrets exposure). See `.gi
+thub/workflows/security-audit.yml` and `scripts/security_audit.sh`.
+>
+> ## Deployment
+>
+> Push to GitHub (dummy remote in this environment). Workflows will run on push.
+> EOF
+root@e63f14aa7e7c:/app# cat > scripts/security_audit.sh << 'EOF'
+> #!/usr/bin/env bash
+> set -euo pipefail
+> WF_DIR=".github/workflows"
+> if [[ ! -d "$WF_DIR" ]]; then
+>   echo "No workflows directory found."; exit 0
+> fi
+> RET=0
+> # Suspicious patterns
+> PATTERNS=(
+>   'pull_request_target'
+>   'curl'
+>   'wget'
+>   'Invoke-WebRequest'
+>   'powershell'
+>   'bash -c'
+>   '::set-output'
+>   'secrets.'
+> )
+> for f in $(find "$WF_DIR" -type f -name '*.yml' -o -name '*.yaml'); do
+>   while IFS= read -r line; do
+>     for p in "${PATTERNS[@]}"; do
+>       if [[ "$line" == *"$p"* ]]; then
+>         echo "[WARN] $f: contains pattern '$p' => review recommended"
+>         RET=0
+>       fi
+>     done
+>   done < "$f"
+>   # Recommend minimal permissions
+>   if ! grep -q "permissions:" "$f"; then
+>     echo "[INFO] $f: add 'permissions: contents: read' for least privilege where appropriate"
+>   fi
+> done
+> exit $RET
+> EOF
+root@e63f14aa7e7c:/app# chmod +x scripts/security_audit.sh
+root@e63f14aa7e7c:/app# cat > .github/workflows/security-audit.yml << 'EOF'
+> name: Security Audit
+> on:
+>   push:
+>   pull_request:
+> permissions:
+>   contents: read
+> jobs:
+>   audit:
+>     runs-on: ubuntu-latest
+>     steps:
+>       - name: Checkout
+>         uses: actions/checkout@v4
+>       - name: Run security audit
+>         run: |
+>           bash scripts/security_audit.sh
+> EOF
+root@e63f14aa7e7c:/app# git add website .gitignore README.md scripts/security_audit.sh .github/workflows/security-audit.yml
+fatal: not a git repository (or any of the parent directories): .git
+root@e63f14aa7e7c:/app# git config user.name "Automation Bot"
+fatal: not in a git directory
+root@e63f14aa7e7c:/app# git config user.email "bot@example.com"
+fatal: not in a git directory
+root@e63f14aa7e7c:/app# git init
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: is subject to change. To configure the initial branch name to use in all
+hint: of your new repositories, which will suppress this warning, call:
+hint:
+hint:   git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint:   git branch -m <name>
+Initialized empty Git repository in /app/.git/
+root@e63f14aa7e7c:/app# git commit -m "feat: convert repo into static research profile website using info.md; add generator, styles, and security audit workflow
+"
+Author identity unknown
+
+*** Please tell me who you are.
+
+Run
+
+  git config --global user.email "you@example.com"
+  git config --global user.name "Your Name"
+
+to set your account's default identity.
+Omit --global to set the identity only in this repository.
+
+fatal: unable to auto-detect email address (got 'root@e63f14aa7e7c.(none)')
+root@e63f14aa7e7c:/app# git remote add origin https://github.com/example-user/example-repo.git 2>/dev/null || true
+git checkout -B feature/site
+root@e63f14aa7e7c:/app# git checkout -B feature/site
+Switched to a new branch 'feature/site'
+root@e63f14aa7e7c:/app# git push -u origin feature/site
+error: src refspec feature/site does not match any
+error: failed to push some refs to 'https://github.com/example-user/example-repo.git'
+root@e63f14aa7e7c:/app# git checkout -B main
+Switched to a new branch 'main'
+root@e63f14aa7e7c:/app# git merge --no-ff feature/site -m "Merge feature/site into main"
+fatal: Non-fast-forward commit does not make sense into an empty head
+root@e63f14aa7e7c:/app# git push -u origin main
+error: src refspec main does not match any
+error: failed to push some refs to 'https://github.com/example-user/example-repo.git'
+root@e63f14aa7e7c:/app# git tag -a v1.0.0 -m "Initial website release"
+fatal: Failed to resolve 'HEAD' as a valid ref.
+root@e63f14aa7e7c:/app# git push origin --tags
+Username for 'https://github.com': ls -la
+Password for 'https://ls%20-la@github.com':
+sed -i 's/sans-seri f/sans-serif/g' website/assets/style.css || true
+cat > website/scripts/generate_site.py << 'EOF'
+#!/usr/bin/env python3
+import datetime
+from pathlib import Path
+from md_to_html import md_to_html
+
+ROOT = Path(__file__).resolve().parents[1]
+REPO = ROOT.parents[0]
+INFO_MD = REPO / 'info.md'
+
+NAV_LINKS = [
+    ('Home', 'index.html'),
+    ('About Me', 'about/index.html'),
+    ('Blog', 'blog/index.html'),
+    ('Publications', 'publications/index.html'),
+]
+
+def header(title: str, depth: int = 0) -> str:
+    prefix = '../' * depth
+    nav_items = ' '.join([f'<a href="{prefix}{href}">{text}</a>' for text, href in NAV_LINKS])
+    return f'''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="{prefix}assets/style.css">
+</head>
+<body>
+<div class="header">
+  <div class="nav">
+    <div class="brand">Research Profile</div>
+    <nav>{nav_items}</nav>
+  </div>
+</div>
+<div class="container">
+'''
+
+def footer() -> str:
+    year = datetime.datetime.now().year
+    return f'''</div>
+<footer>© {year} • Built with a lightweight static site generator</footeremote: Invalid username or token. Password authentication is not supported for Git oper
+ations.
+r>
+</body>
+</html>
+'''
+
+def write(path: Path, content: str):
+    path.parent.mkdir(pfatal: Authentication failed for 'https://github.com/example-user/example-repo.git/'
+arents=True, exist_ok=True)
+    path.write_text(content, encoding='utf-8')
+
+def build_index():
+    body = '''<div class="hero">
+<h1>Welcome</h1>
+<p>This is a clean, professional research profile website. Explore the About Me, Blog, and Publications pages.</p>
+<div class="badge">v1.0</div>
+</div>
+'''
+    html = header('Home', depth=0) + body + footer()
+    write(ROOT / 'index.html', html)
+
+def extract_publications(md_text: str):
+    lines = md_text.splitlines()
+    pubs = []
+    in_section = False
+    for line in lines:
+        if line.strip().lower().startswith('# publications') or line.strip().lower().startswith('## publications') or line.strip().lower().startswith('### publi
+cations'):
+            in_section = True
+            continue
+        if in_section:
+            if line.strip().startswith('#') and not line.strip().lower().startswith('# publications'):
+                break
+            if line.strip().startswith('- ') or line.strip().startswith('* ') or line.strip().startswith('1. '):
+                pubs.append(line.strip())
+    return pubs
+
+def build_about_and_publications():
+    if INFO_MD.exists():
+        md_text = INFO_MD.read_text(encoding='utf-8')
+        about_html = md_to_html(md_text)
+    else:
+        about_html = md_to_html('# About Me\n\nNo info.md found. Please provide your CV in info.md to populate this page.')
+        md_text = ''
+    about_page = header('About Me', depth=1) + f'<div class="panel">{about_html}</div>' + footer()
+    write(ROOT / 'about' / 'index.html', about_page)
+
+    pubs = extract_publications(md_text)
+    if pubs:
+        pubs_md = '# Publications\n\n' + '\n'.join(pubs)
+        pubs_html = md_to_html(pubs_md)
+        preface = '<p>Selected publications extracted from info.md.</p>'
+    else:
+        preface = '<p>No Publications section found in info.md. Update info.md with a "## Publications" section listing your works.</p>'
+        pubs_html = ''
+    pub_page = header('Publications', depth=1) + f'<div class="panel">{preface}{pubs_html}</div>' + footer()
+    write(ROOT / 'publications' / 'index.html', pub_page)
+
+def build_blog():
+    posts_dir = ROOT / 'blog' / 'posts'
+    posts_dir.mkdir(parents=True, exist_ok=True)
+    entries = []
+    for md_file in sorted(posts_dir.glob('*.md')):
+        md = md_file.read_text(encoding='utf-8')
+        html = md_to_html(md)
+        title = 'Untitled Post'
+        for line in md.splitlines():
+            if line.strip().startswith('# '):
+                title = line.strip()[2:].strip()
+                break
+        out = md_file.with_suffix('.html')
+        post_html = header(title, depth=2) + f'<div class="panel">{html}</div>' + footer()
+        write(out, post_html)
+        entries.append((title, md_file.stemroot@e63f14aa7e7c:/app# sed -i 's/sans-seri f/sans-serif/g' website/assets/style.css || true
+root@e63f14aa7e7c:/app# cat > website/scripts/generate_site.py << 'EOF'
+> #!/usr/bin/env python3
+> import datetime
+> from pathlib import Path
+> from md_to_html import md_to_html
+>
+> ROOT = Path(__file__).resolve().parents[1]
+> REPO = ROOT.parents[0]
+> INFO_MD = REPO / 'info.md'
+>
+> NAV_LINKS = [
+>     ('Home', 'index.html'),
+>     ('About Me', 'about/index.html'),
+>     ('Blog', 'blog/index.html'),
+>     ('Publications', 'publications/index.html'),
+> ]
+>
+> def header(title: str, depth: int = 0) -> str:
+>     prefix = '../' * depth
+>     nav_items = ' '.join([f'<a href="{prefix}{href}">{text}</a>' for text, href in NAV_LINKS])
+>     return f'''<!doctype html>
+> <html lang="en">
+> <head>
+> <meta charset="utf-8">
+> <meta name="viewport" content="width=device-width, initial-scale=1">
+> <title>{title}</title>
+> <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+> <link rel="stylesheet" href="{prefix}assets/style.css">
+> </head>
+> <body>
+> <div class="header">
+>   <div class="nav">
+>     <div class="brand">Research Profile</div>
+>     <nav>{nav_items}</nav>
+>   </div>
+> </div>
+> <div class="container">
+> '''
+>
+> def footer() -> str:
+>     year = datetime.datetime.now().year
+>     return f'''</div>
+> <footer>© {year} • Built with a lightweight static site generator</footer>
+> </body>
+> </html>
+> '''
+>
+> def write(path: Path, content: str):
+>     path.parent.mkdir(parents=True, exist_ok=True)
+>     path.write_text(content, encoding='utf-8')
+>
+> def build_index():
+>     body = '''<div class="hero">
+> <h1>Welcome</h1>
+> <p>This is a clean, professional research profile website. Explore the About Me, Blog, and Publications pages.</p>
+> <div class="badge">v1.0</div>
+> </div>
+> '''
+>     html = header('Home', depth=0) + body + footer()
+>     write(ROOT / 'index.html', html)
+>
+> def extract_publications(md_text: str):
+>     lines = md_text.splitlines()
+>     pubs = []
+>     in_section = False
+>     for line in lines:
+>         if line.strip().lower().startswith('# publications') or line.strip().lower().startswith('## publications') or line.strip().lower().startswith('### pub
+lications'):
+>             in_section = True
+>             continue
+>         if in_section:
+>             if line.strip().startswith('#') and not line.strip().lower().startswith('# publications'):
+>                 break
+>             if line.strip().startswith('- ') or line.strip().startswith('* ') or line.strip().startswith('1. '):
+>                 pubs.append(line.strip())
+>     return pubs
+>
+> def build_about_and_publications():
+>     if INFO_MD.exists():
+>         md_text = INFO_MD.read_text(encoding='utf-8')
+>         about_html = md_to_html(md_text)
+>     else:
+>         about_html = md_to_html('# About Me\n\nNo info.md found. Please provide your CV in info.md to populate this page.')
+>         md_text = ''
+>     about_page = header('About Me', depth=1) + f'<div class="panel">{about_html}</div>' + footer()
+>     write(ROOT / 'about' / 'index.html', about_page)
+>
+>     pubs = extract_publications(md_text)
+>     if pubs:
+>         pubs_md = '# Publications\n\n' + '\n'.join(pubs)
+>         pubs_html = md_to_html(pubs_md)
+>         preface = '<p>Selected publications extracted from info.md.</p>'
+>     else:
+>         preface = '<p>No Publications section found in info.md. Update info.md with a "## Publications" section listing your works.</p>'
+>         pubs_html = ''
+>     pub_page = header('Publications', depth=1) + f'<div class="panel">{preface}{pubs_html}</div>' + footer()
+>     write(ROOT / 'publications' / 'index.html', pub_page)
+>
+> def build_blog():
+>     posts_dir = ROOT / 'blog' / 'posts'
+>     posts_dir.mkdir(parents=True, exist_ok=True)
+>     entries = []
+>     for md_file in sorted(posts_dir.glob('*.md')):
+>         md = md_file.read_text(encoding='utf-8')
+>         html = md_to_html(md)
+>         title = 'Untitled Post'
+>         for line in md.splitlines():
+>             if line.strip().startswith('# '):
+>                 title = line.strip()[2:].strip()
+>                 break
+>         out = md_file.with_suffix('.html')
+>         post_html = header(title, depth=2) + f'<div class="panel">{html}</div>' + footer()
+>         write(out, post_html)
+>         entries.append((title, md_file.stem + '.html'))
+>     items = '\n'.join([f'<li><a href="posts/{href}">{title}</a></li>' for title, href in entries]) or '<li>No posts yet.</li>'
+>     index_body = f'''<h1>Blog</h1>
+> <ul class="post-list">
+> {items}
+> </ul>
+> '''
+>     blog_index = header('Blog', depth=1) + index_body + footer()
+>     write(ROOT / 'blog' / 'index.html', blog_index)
+>
+> if __name__ == '__main__':
+>     build_index()
+>     build_about_and_publications()
+>     build_blog()
+> EOF
+root@e63f14aa7e7c:/app# chmod +x website/scripts/generate_site.py
+root@e63f14aa7e7c:/app# test -f website/scripts/md_to_html.py && chmod +x website/scripts/md_to_html.py || printf ''
+root@e63f14aa7e7c:/app# test -f website/blog/posts/welcome.md || cat > website/blog/posts/welcome.md << 'EOF'
+> # Welcome to My Research Blog
+>
+> This is the first post on my new research profile website. Here, I'll share updates on publications, projects, and thoughts on topics in my field.
+>
+> - Highlights of recent work
+> - Notes on methodologies
+> - Links to talks and slides
+>
+> Stay tuned!
+> EOF
+root@e63f14aa7e7c:/app# python3 website/scripts/generate_site.py
+root@e63f14aa7e7c:/app# ls -la website website/about website/blog website/publications website/assets
+website:
+total 32
+drwxr-xr-x 7 root root 4096 Oct 15 11:31 .
+drwxr-xr-x 1 root root 4096 Oct 15 11:31 ..
+drwxr-xr-x 2 root root 4096 Oct 15 11:31 about
+drwxr-xr-x 2 root root 4096 Oct 15 11:32 assets
+drwxr-xr-x 3 root root 4096 Oct 15 11:31 blog
+-rw-r--r-- 1 root root  869 Oct 15 11:32 index.html
+drwxr-xr-x 2 root root 4096 Oct 15 11:31 publications
+drwxr-xr-x 3 root root 4096 Oct 15 11:31 scripts
+
+website/about:
+total 12
+drwxr-xr-x 2 root root 4096 Oct 15 11:31 .
+drwxr-xr-x 7 root root 4096 Oct 15 11:31 ..
+-rw-r--r-- 1 root root  824 Oct 15 11:32 index.html
+
+website/assets:
+total 12
+drwxr-xr-x 2 root root 4096 Oct 15 11:32 .
+drwxr-xr-x 7 root root 4096 Oct 15 11:31 ..
+-rw-r--r-- 1 root root 2046 Oct 15 11:32 style.css
+
+website/blog:
+total 16
+drwxr-xr-x 3 root root 4096 Oct 15 11:31 .
+drwxr-xr-x 7 root root 4096 Oct 15 11:31 ..
+-rw-r--r-- 1 root root  809 Oct 15 11:32 index.html
+drwxr-xr-x 2 root root 4096 Oct 15 11:31 posts
+
+website/publications:
+total 12
+drwxr-xr-x 2 root root 4096 Oct 15 11:31 .
+drwxr-xr-x 7 root root 4096 Oct 15 11:31 ..
+-rw-r--r-- 1 root root  845 Oct 15 11:32 index.html
+root@e63f14aa7e7c:/app# git status
+On branch main
+
+No commits yet
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+        .github/
+        .gitignore
+        README.md
+        my_website/
+        scripts/
+        website/
+
+nothing added to commit but untracked files present (use "git add" to track)
+root@e63f14aa7e7c:/app# git config user.name "Automation Bot"
+git config user.email "bot@example.com"
+root@e63f14aa7e7c:/app# git config user.email "bot@example.com"
+root@e63f14aa7e7c:/app# git add -A
+root@e63f14aa7e7c:/app# git commit -m "feat: initialize static research profile website; generator, styles, blog scaffold, security audit workflow"
+[main (root-commit) eb8c5fa] feat: initialize static research profile website; generator, styles, blog scaffold, security audit workflow
+ 15 files changed, 640 insertions(+)
+ create mode 100644 .github/workflows/security-audit.yml
+ create mode 100644 .gitignore
+ create mode 100644 README.md
+ create mode 100644 my_website/.github/workflows/deploy.yml
+ create mode 100644 my_website/info.md
+ create mode 100755 scripts/security_audit.sh
+ create mode 100644 website/about/index.html
+ create mode 100644 website/assets/style.css
+ create mode 100644 website/blog/index.html
+ create mode 100644 website/blog/posts/welcome.html
+ create mode 100644 website/blog/posts/welcome.md
+ create mode 100644 website/index.html
+ create mode 100644 website/publications/index.html
+ create mode 100755 website/scripts/generate_site.py
+ create mode 100755 website/scripts/md_to_html.py
+root@e63f14aa7e7c:/app# git remote -v || true
+origin  https://github.com/example-user/example-repo.git (fetch)
+origin  https://github.com/example-user/example-repo.git (push)
+root@e63f14aa7e7c:/app# git remote add origin https://github.com/example-user/example-repo.git 2>/dev/null || true
+root@e63f14aa7e7c:/app# git checkout -B feature/site
+Switched to a new branch 'feature/site'
+root@e63f14aa7e7c:/app# git push -u origin feature/site
+Username for 'https://github.com': git checkout -B main
+Password for 'https://git%20checkout%20-B%20main@github.com':
+remote: Invalid username or token. Password authentication is not supported for Git operations.
+fatal: Authentication failed for 'https://github.com/example-user/example-repo.git/'
+root@e63f14aa7e7c:/app# git push -u origin main
+Username for 'https://github.com': git tag -a v1.0.0 -m "Initial website release"
+Password for 'https://git%20tag%20-a%20v1.0.0%20-m%20%22Initial%20website%20release%22@github.com':
+remote: Invalid username or token. Password authentication is not supported for Git operations.
+fatal: Authentication failed for 'https://github.com/example-user/example-repo.git/'
+root@e63f14aa7e7c:/app#

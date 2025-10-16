@@ -1,0 +1,1777 @@
+[?2004hroot@f8142e42ab33:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@f8142e42ab33:/app# clear
+[?2004l[H[J[3J[?2004hroot@f8142e42ab33:/app# ls -la
+[?2004ltotal 588
+drwxr-xr-x 1 root root   4096 Oct  8 15:44 .
+drwxr-xr-x 1 root root   4096 Oct 15 06:50 ..
+-rw-rw-r-- 1 root root  79506 Oct  8 15:44 cJSON.c
+-rw-rw-r-- 1 root root  16393 Oct  8 15:44 cJSON.h
+-rw-rw-r-- 1 root root    389 Oct  8 15:44 image.png
+-rw-rw-r-- 1 root root 311873 Oct  8 15:44 lodepng.cpp
+-rw-rw-r-- 1 root root 107788 Oct  8 15:44 lodepng.h
+-rw-rw-r-- 1 root root  54714 Oct  8 15:44 model.pth
+-rw-rw-r-- 1 root root    681 Oct  8 15:44 model.py
+[?2004hroot@f8142e42ab33:/app# cat model.py
+[?2004limport torch
+import torch.nn as nn
+
+
+class MnistModel(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        num_classes: int,
+    ) -> torch.nn.Module:
+        super().__init__()
+
+        self.input_layer = nn.Linear(input_dim, hidden_dim)
+        self.hidden_layer = nn.Linear(hidden_dim, hidden_dim)
+        self.output_layer = nn.Linear(hidden_dim, num_classes)
+        self.activation = nn.ReLU()
+
+    def forward(self, x):
+        x = self.input_layer(x)
+        x = self.activation(x)
+
+        x = self.hidden_layer(x)
+        x = self.activation(x)
+
+        x = self.output_layer(x)
+        return x
+[?2004hroot@f8142e42ab33:/app# python3 -c "import torch, sys; print(torch.__version__)" 
+[?2004lTraceback (most recent call last):
+  File [35m"<string>"[0m, line [35m1[0m, in [35m<module>[0m
+    [1;31mimport torch, sys[0m; print(torch.__version__)
+    [1;31m^^^^^^^^^^^^^^^^^[0m
+[1;35mModuleNotFoundError[0m: [35mNo module named 'torch'[0m
+[?2004hroot@f8142e42ab33:/app# python3 - << 'PY'
+[?2004luntimeError('Could not find model class in model.py')
+
+model = model_cls()
+state_dict = torch.load(state_path, map_location='cpu')
+model.load_state_dict(state_dict)
+model.eval()
+
+# Export weights in a structured way. We will detect Sequential/Linear/Conv2d, etc.
+export = { 'layers': [] }
+
+import torch.nn as nn
+
+def tensor_to_list(t):
+    return t.detach().cpu().numpy().tolist()
+
+# Build a simple description by iterating named_modules
+for name, module in model.named_modules():
+    if name == '':
+        continue
+    layer = { 'name': name }
+    if isinstance(module, nn.Linear):
+        layer['type'] = 'Linear'
+        layer['in_features'] = module.in_features
+        layer['out_features'] = module.out_features
+        # Find corresponding parameters from state_dict
+        w = module.weight.data
+        layer['weight'] = tensor_to_list(w)
+        if module.bias is not None:
+            layer['bias'] = tensor_to_list(module.bias.data)
+        else:
+            layer['bias'] = None
+        export['layers'].append(layer)
+    elif isinstance(module, nn.Conv2d):
+        layer['type'] = 'Conv2d'
+        layer['in_channels'] = module.in_channels
+        layer['out_channels'] = module.out_channels
+        layer['kernel_size'] = list(module.kernel_size) if isinstance(module.kernel_size, tuple) else [module.kernel_size, module.kernel_size]
+        layer['stride'] = list(module.stride) if isinstance(module.stride, tuple) else [module.stride, module.stride]
+        layer['padding'] = list(module.padding) if isinstance(module.padding, tuple) else [module.padding, module.padding]
+        layer['dilation'] = list(module.dilation) if isinstance(module.dilation, tuple) else [module.dilation, module.dilation]
+        layer['groups'] = module.groups
+        w = module.weight.data
+        layer['weight'] = tensor_to_list(w)
+        if module.bias is not None:
+            layer['bias'] = tensor_to_list(module.bias.data)
+        else:
+            layer['bias'] = None
+        export['layers'].append(layer)
+    elif isinstance(module, nn.ReLU):
+        layer['type'] = 'ReLU'
+        layer['inplace'] = getattr(module, 'inplace', False)
+        export['layers'].append(layer)
+    elif isinstance(module, nn.LogSoftmax):
+        layer['type'] = 'LogSoftmax'
+        layer['dim'] = module.dim
+        export['layers'].append(layer)
+    elif isinstance(module, nn.Softmax):
+        layer['type'] = 'Softmax'
+        layer['dim'] = module.dim
+        export['layers'].append(layer)
+    elif isinstance(module, nn.MaxPool2d):
+        layer['type'] = 'MaxPool2d'
+        layer['kernel_size'] = list(module.kernel_size) if isinstance(module.kernel_size, tuple) else [module.kernel_size, module.kernel_size]
+        layer['stride'] = list(module.stride) if isinstance(module.stride, tuple) else [module.stride, module.stride]
+        layer['padding'] = list(module.padding) if isinstance(module.padding, tuple) else [module.padding, module.padding]
+        export['layers'].append(layer)
+    elif isinstance(module, nn.Flatten):
+        layer['type'] = 'Flatten'
+        layer['start_di[?2004h> import json
+[?2004l[?2004h> import torch
+[?2004l[?2004h> import importlib.util
+[?2004l[?2004h> import os
+[?2004l[?2004h> 
+[?2004l[?2004h> model_py = 'model.py'
+[?2004l[?2004h> state_path = 'simple_mnist.pth'
+[?2004l[?2004h> assert os.path.exists(model_py), 'model.py not found'
+[?2004l[?2004h> assert os.path.exists(state_path), 'simple_mnist.pth not found'
+[?2004l[?2004h> 
+[?2004l[?2004h> spec = importlib.util.spec_from_file_location('mnist_model', model_py)
+[?2004l[?2004h> mnist_model = importlib.util.module_from_spec(spec)
+[?2004l[?2004h> spec.loader.exec_module(mnist_model)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Try common class names
+[?2004l[?2004h> model_cls = None
+[?2004l[?2004h> for name in ['SimpleMNIST', 'Net', 'Model', 'SimpleNet', 'MNISTModel']:
+[?2004l[?2004h>     if hasattr(mnist_model, name):
+[?2004l[?2004h>         model_cls = getattr(mnist_model, name)
+[?2004l[?2004h>         break
+[?2004l[?2004h> if model_cls is None:
+[?2004l[?2004h>     # Fallback: first torch.nn.Module subclass
+[?2004l[?2004h>     for attr_name in dir(mnist_model):
+[?2004l[?2004h>         attr = getattr(mnist_model, attr_name)
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             import torch.nn as nn
+[?2004l[?2004h>             if isinstance(attr, type) and issubclass(attr, nn.Module):
+[?2004l[?2004h>                 model_cls = attr
+[?2004l[?2004h>                 break
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             pass
+[?2004l[?2004h> if model_cls is None:
+[?2004l[?2004h>     raise RuntimeError('Could not find model class in model.py')
+[?2004l[?2004h> 
+[?2004l[?2004h> model = model_cls()
+[?2004l[?2004h> state_dict = torch.load(state_path, map_location='cpu')
+[?2004l[?2004h> model.load_state_dict(state_dict)
+[?2004l[?2004h> model.eval()
+[?2004l[?2004h> 
+[?2004l[?2004h> # Export weights in a structured way. We will detect Sequential/Linear/Conv2d, etc.
+[?2004l[?2004h> export = { 'layers': [] }
+[?2004l[?2004h> 
+[?2004l[?2004h> import torch.nn as nn
+[?2004l[?2004h> 
+[?2004l[?2004h> def tensor_to_list(t):
+[?2004l[?2004h>     return t.detach().cpu().numpy().tolist()
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build a simple description by iterating named_modules
+[?2004l[?2004h> for name, module in model.named_modules():
+[?2004l[?2004h>     if name == '':
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     layer = { 'name': name }
+[?2004l[?2004h>     if isinstance(module, nn.Linear):
+[?2004l[?2004h>         layer['type'] = 'Linear'
+[?2004l[?2004h>         layer['in_features'] = module.in_features
+[?2004l[?2004h>         layer['out_features'] = module.out_features
+[?2004l[?2004h>         # Find corresponding parameters from state_dict
+[?2004l[?2004h>         w = module.weight.data
+[?2004l[?2004h>         layer['weight'] = tensor_to_list(w)
+[?2004l[?2004h>         if module.bias is not None:
+[?2004l[?2004h>             layer['bias'] = tensor_to_list(module.bias.data)
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             layer['bias'] = None
+[?2004l[?2004h>         export['layers'].append(layer)
+[?2004l[?2004h>     elif isinstance(module, nn.Conv2d):
+[?2004l[?2004h>         layer['type'] = 'Conv2d'
+[?2004l[?2004h>         layer['in_channels'] = module.in_channels
+[?2004l[?2004h>         layer['out_channels'] = module.out_channels
+[?2004l[?2004h>         layer['kernel_size'] = list(module.kernel_size) if isinstance(module.kernel_size, tuple) else [module.kernel_size, module.kernel_size]
+[?2004l[?2004h>         layer['stride'] = list(module.stride) if isinstance(module.stride, tuple) else [module.stride, module.stride]
+[?2004l[?2004h>         layer['padding'] = list(module.padding) if isinstance(module.padding, tuple) else [module.padding, module.padding]
+[?2004l[?2004h>         layer['dilation'] = list(module.dilation) if isinstance(module.dilation, tuple) else [module.dilation, module.dilation]
+[?2004l[?2004h>         layer['groups'] = module.groups
+[?2004l[?2004h>         w = module.weight.data
+[?2004l[?2004h>         layer['weight'] = tensor_to_list(w)
+[?2004l[?2004h>         if module.bias is not None:
+[?2004l[?2004h>             layer['bias'] = tensor_to_list(module.bias.data)
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             layer['bias'] = None
+[?2004l[?2004h>         export['layers'].append(layer)
+[?2004l[?2004h>     elif isinstance(module, nn.ReLU):
+[?2004l[?2004h>         layer['type'] = 'ReLU'
+[?2004l[?2004h>         layer['inplace'] = getattr(module, 'inplace', False)
+[?2004l[?2004h>         export['layers'].append(layer)
+[?2004l[?2004h>     elif isinstance(module, nn.LogSoftmax):
+[?2004l[?2004h>         layer['type'] = 'LogSoftmax'
+[?2004l[?2004h>         layer['dim'] = module.dim
+[?2004l[?2004h>         export['layers'].append(layer)
+[?2004l[?2004h>     elif isinstance(module, nn.Softmax):
+[?2004l[?2004h>         layer['type'] = 'Softmax'
+[?2004l[?2004h>         layer['dim'] = module.dim
+[?2004l[?2004h>         export['layers'].append(layer)
+[?2004l[?2004h>     elif isinstance(module, nn.MaxPool2d):
+[?2004l[?2004h>         layer['type'] = 'MaxPool2d'
+[?2004l[?2004h>         layer['kernel_size'] = list(module.kernel_size) if isinstance(module.kernel_size, tuple) else [module.kernel_size, module.kernel_size]
+[?2004l[?2004h>         layer['stride'] = list(module.stride) if isinstance(module.stride, tuple) else [module.stride, module.stride]
+[?2004l[?2004h>         layer['padding'] = list(module.padding) if isinstance(module.padding, tuple) else [module.padding, module.padding]
+[?2004l[?2004h>         export['layers'].append(layer)
+[?2004l[?2004h>     elif isinstance(module, nn.Flatten):
+[?2004l[?2004h>         layer['type'] = 'Flatten'
+[?2004l[?2004h>         layer['start_dim'] = module.start_dim
+[?2004l[?2004h>         layer['end_dim'] = module.end_dim
+[?2004l[?2004h>         export['layers'].append(layer)
+[?2004l[?2004h>     elif isinstance(module, nn.Sequential):
+[?2004l[?2004h>         # skip container itself; layers inside are already handled
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         # For unsupported layers, just note type string
+[?2004l[?2004h>         layer['type'] = type(module).__name__
+[?2004l[?2004h>         export['layers'].append(layer)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Also include an input spec hint for preprocessing
+[?2004l[?2004h> export['input'] = { 'shape': [1, 28, 28], 'dtype': 'float32' }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('weights.json', 'w') as f:
+[?2004l[?2004h>     json.dump(export, f)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('Exported to weights.json with', len(export['layers']), 'layers')
+[?2004l[?2004h> PY
+[?2004lTraceback (most recent call last):
+  File [35m"<stdin>"[0m, line [35m2[0m, in [35m<module>[0m
+[1;35mModuleNotFoundError[0m: [35mNo module named 'torch'[0m
+[?2004hroot@f8142e42ab33:/app# ls -la | grep -E "weights.json|simple_mnist.pth|image.png"
+[?2004l-rw-rw-r-- 1 root root    389 Oct  8 15:44 image.png
+[?2004hroot@f8142e42ab33:/app# grep -R "cJSON.h" -n /app || true
+[?2004l/app/cJSON.c:59:#include "cJSON.h"
+/app/cJSON.c:121:    #error cJSON.h and cJSON.c have different versions. Make sure that both have the same.
+[?2004hroot@f8142e42ab33:/app# grep -R "lodepng" -n /app || true
+[?2004l/app/lodepng.h:86:you can define the functions lodepng_free, lodepng_malloc and lodepng_realloc in your
+/app/lodepng.h:95:lodepng_crc32 must be defined externally so that it can be linked in.
+/app/lodepng.h:98:in a comment in the lodepng.c(pp) file in the 'else' case of the searchable LODEPNG_COMPILE_CRC section.*/
+/app/lodepng.h:151:unsigned lodepng_decode_memory(unsigned char** out, unsigned* w, unsigned* h,
+/app/lodepng.h:155:/*Same as lodepng_decode_memory, but always decodes to 32-bit RGBA raw image*/
+/app/lodepng.h:156:unsigned lodepng_decode32(unsigned char** out, unsigned* w, unsigned* h,
+/app/lodepng.h:159:/*Same as lodepng_decode_memory, but always decodes to 24-bit RGB raw image*/
+/app/lodepng.h:160:unsigned lodepng_decode24(unsigned char** out, unsigned* w, unsigned* h,
+/app/lodepng.h:170:unsigned lodepng_decode_file(unsigned char** out, unsigned* w, unsigned* h,
+/app/lodepng.h:174:/*Same as lodepng_decode_file, but always decodes to 32-bit RGBA raw image.
+/app/lodepng.h:178:unsigned lodepng_decode32_file(unsigned char** out, unsigned* w, unsigned* h,
+/app/lodepng.h:181:/*Same as lodepng_decode_file, but always decodes to 24-bit RGB raw image.
+/app/lodepng.h:185:unsigned lodepng_decode24_file(unsigned char** out, unsigned* w, unsigned* h,
+/app/lodepng.h:208:unsigned lodepng_encode_memory(unsigned char** out, size_t* outsize,
+/app/lodepng.h:212:/*Same as lodepng_encode_memory, but always encodes from 32-bit RGBA raw image.*/
+/app/lodepng.h:213:unsigned lodepng_encode32(unsigned char** out, size_t* outsize,
+/app/lodepng.h:216:/*Same as lodepng_encode_memory, but always encodes from 24-bit RGB raw image.*/
+/app/lodepng.h:217:unsigned lodepng_encode24(unsigned char** out, size_t* outsize,
+/app/lodepng.h:229:unsigned lodepng_encode_file(const char* filename,
+/app/lodepng.h:233:/*Same as lodepng_encode_file, but always encodes from 32-bit RGBA raw image.
+/app/lodepng.h:237:unsigned lodepng_encode32_file(const char* filename,
+/app/lodepng.h:240:/*Same as lodepng_encode_file, but always encodes from 24-bit RGB raw image.
+/app/lodepng.h:244:unsigned lodepng_encode24_file(const char* filename,
+/app/lodepng.h:251:namespace lodepng {
+/app/lodepng.h:253:/*Same as lodepng_decode_memory, but decodes to an std::vector. The colortype
+/app/lodepng.h:276:/*Same as lodepng_encode_memory, but encodes to an std::vector. colortype
+/app/lodepng.h:302:} /* namespace lodepng */
+/app/lodepng.h:308:const char* lodepng_error_text(unsigned code);
+/app/lodepng.h:341:extern const LodePNGDecompressSettings lodepng_default_decompress_settings;
+/app/lodepng.h:342:void lodepng_decompress_settings_init(LodePNGDecompressSettings* settings);
+/app/lodepng.h:374:extern const LodePNGCompressSettings lodepng_default_compress_settings;
+/app/lodepng.h:375:void lodepng_compress_settings_init(LodePNGCompressSettings* settings);
+/app/lodepng.h:393:  This field may not be allocated directly, use lodepng_color_mode_init first,
+/app/lodepng.h:394:  then lodepng_palette_add per color to correctly initialize it (to ensure size
+/app/lodepng.h:427:void lodepng_color_mode_init(LodePNGColorMode* info);
+/app/lodepng.h:428:void lodepng_color_mode_cleanup(LodePNGColorMode* info);
+/app/lodepng.h:430:unsigned lodepng_color_mode_copy(LodePNGColorMode* dest, const LodePNGColorMode* source);
+/app/lodepng.h:432:LodePNGColorMode lodepng_color_mode_make(LodePNGColorType colortype, unsigned bitdepth);
+/app/lodepng.h:434:void lodepng_palette_clear(LodePNGColorMode* info);
+/app/lodepng.h:436:unsigned lodepng_palette_add(LodePNGColorMode* info,
+/app/lodepng.h:440:unsigned lodepng_get_bpp(const LodePNGColorMode* info);
+/app/lodepng.h:443:unsigned lodepng_get_channels(const LodePNGColorMode* info);
+/app/lodepng.h:445:unsigned lodepng_is_greyscale_type(const LodePNGColorMode* info);
+/app/lodepng.h:447:unsigned lodepng_is_alpha_type(const LodePNGColorMode* info);
+/app/lodepng.h:449:unsigned lodepng_is_palette_type(const LodePNGColorMode* info);
+/app/lodepng.h:452:unsigned lodepng_has_palette_alpha(const LodePNGColorMode* info);
+/app/lodepng.h:460:unsigned lodepng_can_have_alpha(const LodePNGColorMode* info);
+/app/lodepng.h:462:size_t lodepng_get_raw_size(unsigned w, unsigned h, const LodePNGColorMode* color);
+/app/lodepng.h:531:  correctly and use lodepng_add_text and lodepng_clear_text.
+/app/lodepng.h:556:  correctly and use lodepng_set_exif and lodepng_clear_exif.
+/app/lodepng.h:580:  color management library should be used. There is also a limited library for this in lodepng_util.h.
+/app/lodepng.h:652:  correctly and use lodepng_set_icc and lodepng_clear_icc.
+/app/lodepng.h:765:  later, such as lodepng_chunk_next and lodepng_chunk_append, to read/write this struct.
+/app/lodepng.h:773:void lodepng_info_init(LodePNGInfo* info);
+/app/lodepng.h:774:void lodepng_info_cleanup(LodePNGInfo* info);
+/app/lodepng.h:776:unsigned lodepng_info_copy(LodePNGInfo* dest, const LodePNGInfo* source);
+/app/lodepng.h:779:unsigned lodepng_add_text(LodePNGInfo* info, const char* key, const char* str); /*push back both texts at once*/
+/app/lodepng.h:780:void lodepng_clear_text(LodePNGInfo* info); /*use this to clear the texts again after you filled them in*/
+/app/lodepng.h:782:unsigned lodepng_add_itext(LodePNGInfo* info, const char* key, const char* langtag,
+/app/lodepng.h:784:void lodepng_clear_itext(LodePNGInfo* info); /*use this to clear the itexts again after you filled them in*/
+/app/lodepng.h:787:unsigned lodepng_set_icc(LodePNGInfo* info, const char* name, const unsigned char* profile, unsigned profile_size);
+/app/lodepng.h:788:void lodepng_clear_icc(LodePNGInfo* info); /*use this to clear the profile again after you filled it in*/
+/app/lodepng.h:791:unsigned lodepng_set_exif(LodePNGInfo* info, const unsigned char* exif, unsigned exif_size);
+/app/lodepng.h:792:void lodepng_clear_exif(LodePNGInfo* info); /*use this to clear the exif metadata again after you filled it in*/
+/app/lodepng.h:801:of the output color type (lodepng_get_bpp).
+/app/lodepng.h:806:unsigned lodepng_convert(unsigned char* out, const unsigned char* in,
+/app/lodepng.h:847:void lodepng_decoder_settings_init(LodePNGDecoderSettings* settings);
+/app/lodepng.h:896:void lodepng_color_stats_init(LodePNGColorStats* stats);
+/app/lodepng.h:900:unsigned lodepng_compute_color_stats(LodePNGColorStats* stats,
+/app/lodepng.h:942:void lodepng_encoder_settings_init(LodePNGEncoderSettings* settings);
+/app/lodepng.h:961:void lodepng_state_init(LodePNGState* state);
+/app/lodepng.h:962:void lodepng_state_cleanup(LodePNGState* state);
+/app/lodepng.h:963:void lodepng_state_copy(LodePNGState* dest, const LodePNGState* source);
+/app/lodepng.h:968:Same as lodepng_decode_memory, but uses a LodePNGState to allow custom settings and
+/app/lodepng.h:971:unsigned lodepng_decode(unsigned char** out, unsigned* w, unsigned* h,
+/app/lodepng.h:980:unsigned lodepng_inspect(unsigned* w, unsigned* h,
+/app/lodepng.h:986:Reads one metadata chunk (other than IHDR, which is handled by lodepng_inspect)
+/app/lodepng.h:988:Use lodepng_inspect first with a new state, then e.g. lodepng_chunk_find_const
+/app/lodepng.h:989:to find the desired chunk type, and if non null use lodepng_inspect_chunk (with
+/app/lodepng.h:994:lodepng_inspect first since format of most other chunks depends on IHDR, and if
+/app/lodepng.h:997:unsigned lodepng_inspect_chunk(LodePNGState* state, size_t pos,
+/app/lodepng.h:1002:unsigned lodepng_encode(unsigned char** out, size_t* outsize,
+/app/lodepng.h:1008:The lodepng_chunk functions are normally not needed, except to traverse the
+/app/lodepng.h:1036:unsigned lodepng_chunk_length(const unsigned char* chunk);
+/app/lodepng.h:1039:void lodepng_chunk_type(char type[5], const unsigned char* chunk);
+/app/lodepng.h:1042:unsigned char lodepng_chunk_type_equals(const unsigned char* chunk, const char* type);
+/app/lodepng.h:1045:unsigned char lodepng_chunk_ancillary(const unsigned char* chunk);
+/app/lodepng.h:1048:unsigned char lodepng_chunk_private(const unsigned char* chunk);
+/app/lodepng.h:1051:unsigned char lodepng_chunk_safetocopy(const unsigned char* chunk);
+/app/lodepng.h:1054:unsigned char* lodepng_chunk_data(unsigned char* chunk);
+/app/lodepng.h:1055:const unsigned char* lodepng_chunk_data_const(const unsigned char* chunk);
+/app/lodepng.h:1058:unsigned lodepng_chunk_check_crc(const unsigned char* chunk);
+/app/lodepng.h:1061:void lodepng_chunk_generate_crc(unsigned char* chunk);
+/app/lodepng.h:1065:Input must be at the beginning of a chunk (result of a previous lodepng_chunk_next call,
+/app/lodepng.h:1074:unsigned char* lodepng_chunk_next(unsigned char* chunk, unsigned char* end);
+/app/lodepng.h:1075:const unsigned char* lodepng_chunk_next_const(const unsigned char* chunk, const unsigned char* end);
+/app/lodepng.h:1078:unsigned char* lodepng_chunk_find(unsigned char* chunk, unsigned char* end, const char type[5]);
+/app/lodepng.h:1079:const unsigned char* lodepng_chunk_find_const(const unsigned char* chunk, const unsigned char* end, const char type[5]);
+/app/lodepng.h:1086:unsigned lodepng_chunk_append(unsigned char** out, size_t* outsize, const unsigned char* chunk);
+/app/lodepng.h:1094:unsigned lodepng_chunk_create(unsigned char** out, size_t* outsize, size_t length,
+/app/lodepng.h:1099:unsigned lodepng_crc32(const unsigned char* buf, size_t len);
+/app/lodepng.h:1112:unsigned lodepng_inflate(unsigned char** out, size_t* outsize,
+/app/lodepng.h:1122:unsigned lodepng_zlib_decompress(unsigned char** out, size_t* outsize,
+/app/lodepng.h:1135:unsigned lodepng_zlib_compress(unsigned char** out, size_t* outsize,
+/app/lodepng.h:1141:public interface only for tests, it's used internally by lodepng_deflate.
+/app/lodepng.h:1143:unsigned lodepng_huffman_code_lengths(unsigned* lengths, const unsigned* frequencies,
+/app/lodepng.h:1147:unsigned lodepng_deflate(unsigned char** out, size_t* outsize,
+/app/lodepng.h:1166:unsigned lodepng_load_file(unsigned char** out, size_t* outsize, const char* filename);
+/app/lodepng.h:1179:unsigned lodepng_save_file(const unsigned char* buffer, size_t buffersize, const char* filename);
+/app/lodepng.h:1184:namespace lodepng {
+/app/lodepng.h:1195:/* Same as other lodepng::decode, but using a State for more settings and information. */
+/app/lodepng.h:1205:/* Same as other lodepng::encode, but using a State for more settings and information. */
+/app/lodepng.h:1239:                    const LodePNGDecompressSettings& settings = lodepng_default_decompress_settings);
+/app/lodepng.h:1243:                    const LodePNGDecompressSettings& settings = lodepng_default_decompress_settings);
+/app/lodepng.h:1249:                  const LodePNGCompressSettings& settings = lodepng_default_compress_settings);
+/app/lodepng.h:1253:                  const LodePNGCompressSettings& settings = lodepng_default_compress_settings);
+/app/lodepng.h:1256:} /* namespace lodepng */
+/app/lodepng.h:1333:http://lodev.org/lodepng/
+/app/lodepng.h:1339:-lodepng.h: the header file for both C and C++
+/app/lodepng.h:1340:-lodepng.c(pp): give it the name lodepng.c or lodepng.cpp (or .cc) depending on your usage
+/app/lodepng.h:1374:*) colorimetric color profile conversions: currently experimentally available in lodepng_util.cpp only,
+/app/lodepng.h:1413:lodepng::State class which is a LodePNGState with constructor and destructor.
+/app/lodepng.h:1419:To use the C++ version, you need to rename the source file to lodepng.cpp
+/app/lodepng.h:1420:(instead of lodepng.c), and compile it with a C++ compiler.
+/app/lodepng.h:1422:To use the C version, you need to rename the source file to lodepng.c (instead
+/app/lodepng.h:1423:of lodepng.cpp), and compile it with a C compiler.
+/app/lodepng.h:1449:lodepng_decode32, and more advanced decoding can be done with the struct
+/app/lodepng.h:1450:LodePNGState and lodepng_decode. For C++, all decoding can be done with the
+/app/lodepng.h:1451:various lodepng::decode functions, and lodepng::State can be used for advanced
+/app/lodepng.h:1500:lodepng_encode32, and more advanced decoding can be done with the struct
+/app/lodepng.h:1501:LodePNGState and lodepng_encode. For C++, all encoding can be done with the
+/app/lodepng.h:1502:various lodepng::encode functions, and lodepng::State can be used for advanced
+/app/lodepng.h:1656:The function lodepng_convert does the color conversion. It is available in the
+/app/lodepng.h:1723:lodepng_error_text: given the numerical error code, it returns a description
+/app/lodepng.h:1726:Check the implementation of lodepng_error_text to see the meaning of each code.
+/app/lodepng.h:1759:When using lodepng_chunk_next, make sure the returned value is within the
+/app/lodepng.h:1762:unsigned lodepng_chunk_length(const unsigned char* chunk):
+/app/lodepng.h:1766:void lodepng_chunk_type(char type[5], const unsigned char* chunk):
+/app/lodepng.h:1767:unsigned char lodepng_chunk_type_equals(const unsigned char* chunk, const char* type):
+/app/lodepng.h:1771:unsigned char lodepng_chunk_critical(const unsigned char* chunk):
+/app/lodepng.h:1772:unsigned char lodepng_chunk_private(const unsigned char* chunk):
+/app/lodepng.h:1773:unsigned char lodepng_chunk_safetocopy(const unsigned char* chunk):
+/app/lodepng.h:1781:unsigned char* lodepng_chunk_data(unsigned char* chunk):
+/app/lodepng.h:1782:const unsigned char* lodepng_chunk_data_const(const unsigned char* chunk):
+/app/lodepng.h:1786:unsigned lodepng_chunk_check_crc(const unsigned char* chunk):
+/app/lodepng.h:1787:void lodepng_chunk_generate_crc(unsigned char* chunk):
+/app/lodepng.h:1791:unsigned char* lodepng_chunk_next(unsigned char* chunk):
+/app/lodepng.h:1792:const unsigned char* lodepng_chunk_next_const(const unsigned char* chunk):
+/app/lodepng.h:1798:unsigned lodepng_chunk_append(unsigned char** out, size_t* outsize, const unsigned char* chunk):
+/app/lodepng.h:1799:unsigned lodepng_chunk_create(unsigned char** out, size_t* outsize, unsigned length,
+/app/lodepng.h:1831:use lodepng_chunk_append or lodepng_chunk_create to the chunk data in
+/app/lodepng.h:1844:Add the files lodepng.c(pp) and lodepng.h to your project, include
+/app/lodepng.h:1845:lodepng.h where needed, and your program can read/write PNG files.
+/app/lodepng.h:1883:disable it for lodepng.cpp only by right clicking it, Properties, C/C++,
+/app/lodepng.h:1912:#include "lodepng.h"
+/app/lodepng.h:1921:  unsigned error = lodepng::decode(image, width, height, filename);
+/app/lodepng.h:1924:  if(error) std::cout << "decoder error " << error << ": " << lodepng_error_text(error) << std::endl;
+/app/lodepng.h:1932:#include "lodepng.h"
+/app/lodepng.h:1940:  error = lodepng_decode32_file(&image, &width, &height, filename);
+/app/lodepng.h:1942:  if(error) printf("decoder error %u: %s\n", error, lodepng_error_text(error));
+/app/lodepng.h:2004:https://github.com/lvandeve/lodepng
+/app/lodepng.h:2022:*) 12 jan 2020: (!) added 'end' argument to lodepng_chunk_next to allow correct
+/app/lodepng.h:2052:*) 11 mar 2013: (!) Bugfix with custom free. Changed from "my" to "lodepng_"
+/app/lodepng.h:2054:    use custom ones in your project without needing to change lodepng's code.
+/app/lodepng.h:2122:    moved some examples from here to lodepng_examples.cpp
+/app/lodepng.h:2169:    documentation in the header. Renamed files to lodepng.cpp and lodepng.h
+/app/lodepng.cpp:27:The manual and changelog are in the header file "lodepng.h"
+/app/lodepng.cpp:28:Rename this file to lodepng.cpp to use it for C++, or to lodepng.c to use it for C.
+/app/lodepng.cpp:31:#include "lodepng.h"
+/app/lodepng.cpp:64:/*The malloc, realloc and free functions defined here with "lodepng_" in front
+/app/lodepng.cpp:70:lodepng source code. Don't forget to remove "static" if you copypaste them
+/app/lodepng.cpp:74:static void* lodepng_malloc(size_t size) {
+/app/lodepng.cpp:82:static void* lodepng_realloc(void* ptr, size_t new_size) {
+/app/lodepng.cpp:89:static void lodepng_free(void* ptr) {
+/app/lodepng.cpp:94:void* lodepng_malloc(size_t size);
+/app/lodepng.cpp:95:void* lodepng_realloc(void* ptr, size_t new_size);
+/app/lodepng.cpp:96:void lodepng_free(void* ptr);
+/app/lodepng.cpp:120:static void lodepng_memcpy(void* LODEPNG_RESTRICT dst,
+/app/lodepng.cpp:126:static void lodepng_memset(void* LODEPNG_RESTRICT dst,
+/app/lodepng.cpp:133:static size_t lodepng_strlen(const char* a) {
+/app/lodepng.cpp:136:  (void)(&lodepng_strlen);
+/app/lodepng.cpp:147:static int lodepng_addofl(size_t a, size_t b, size_t* result) {
+/app/lodepng.cpp:156:static int lodepng_mulofl(size_t a, size_t b, size_t* result) {
+/app/lodepng.cpp:163:static int lodepng_gtofl(size_t a, size_t b, size_t c) {
+/app/lodepng.cpp:165:  if(lodepng_addofl(a, b, &d)) return 1;
+/app/lodepng.cpp:225:  lodepng_free(((uivector*)p)->data);
+/app/lodepng.cpp:234:    void* data = lodepng_realloc(p->data, newsize);
+/app/lodepng.cpp:272:    void* data = lodepng_realloc(p->data, newsize);
+/app/lodepng.cpp:302:  lodepng_free(*out);
+/app/lodepng.cpp:308:  char* out = (char*)lodepng_malloc(insize + 1);
+/app/lodepng.cpp:310:    lodepng_memcpy(out, in, insize);
+/app/lodepng.cpp:318:  return alloc_string_sized(in, lodepng_strlen(in));
+/app/lodepng.cpp:326:static unsigned lodepng_read32bitInt(const unsigned char* buffer) {
+/app/lodepng.cpp:334:static void lodepng_set32bitInt(unsigned char* buffer, unsigned value) {
+/app/lodepng.cpp:349:static long lodepng_filesize(FILE* file) {
+/app/lodepng.cpp:360:static unsigned lodepng_load_file_(unsigned char** out, size_t* outsize, FILE* file) {
+/app/lodepng.cpp:361:  long size = lodepng_filesize(file);
+/app/lodepng.cpp:364:  *out = (unsigned char*)lodepng_malloc((size_t)size);
+/app/lodepng.cpp:370:unsigned lodepng_load_file(unsigned char** out, size_t* outsize, const char* filename) {
+/app/lodepng.cpp:374:  error = lodepng_load_file_(out, outsize, file);
+/app/lodepng.cpp:380:unsigned lodepng_save_file(const unsigned char* buffer, size_t buffersize, const char* filename) {
+/app/lodepng.cpp:459:  if(lodepng_mulofl(size, 8u, &reader->bitsize)) return 105;
+/app/lodepng.cpp:462:  if(lodepng_addofl(reader->bitsize, 64u, &temp)) return 105;
+/app/lodepng.cpp:634:  lodepng_free(tree->codes);
+/app/lodepng.cpp:635:  lodepng_free(tree->lengths);
+/app/lodepng.cpp:636:  lodepng_free(tree->table_len);
+/app/lodepng.cpp:637:  lodepng_free(tree->table_value);
+/app/lodepng.cpp:653:  unsigned* maxlens = (unsigned*)lodepng_malloc(headsize * sizeof(unsigned));
+/app/lodepng.cpp:657:  lodepng_memset(maxlens, 0, headsize * sizeof(*maxlens));
+/app/lodepng.cpp:673:  tree->table_len = (unsigned char*)lodepng_malloc(size * sizeof(*tree->table_len));
+/app/lodepng.cpp:674:  tree->table_value = (unsigned short*)lodepng_malloc(size * sizeof(*tree->table_value));
+/app/lodepng.cpp:676:    lodepng_free(maxlens);
+/app/lodepng.cpp:692:  lodepng_free(maxlens);
+/app/lodepng.cpp:776:  tree->codes = (unsigned*)lodepng_malloc(tree->numcodes * sizeof(unsigned));
+/app/lodepng.cpp:777:  blcount = (unsigned*)lodepng_malloc((tree->maxbitlen + 1) * sizeof(unsigned));
+/app/lodepng.cpp:778:  nextcode = (unsigned*)lodepng_malloc((tree->maxbitlen + 1) * sizeof(unsigned));
+/app/lodepng.cpp:799:  lodepng_free(blcount);
+/app/lodepng.cpp:800:  lodepng_free(nextcode);
+/app/lodepng.cpp:814:  tree->lengths = (unsigned*)lodepng_malloc(numcodes * sizeof(unsigned));
+/app/lodepng.cpp:880:  BPMNode* mem = (BPMNode*)lodepng_malloc(sizeof(*leaves) * num);
+/app/lodepng.cpp:897:  if(counter & 1) lodepng_memcpy(leaves, mem, sizeof(*leaves) * num);
+/app/lodepng.cpp:898:  lodepng_free(mem);
+/app/lodepng.cpp:927:unsigned lodepng_huffman_code_lengths(unsigned* lengths, const unsigned* frequencies,
+/app/lodepng.cpp:937:  leaves = (BPMNode*)lodepng_malloc(numcodes * sizeof(*leaves));
+/app/lodepng.cpp:948:  lodepng_memset(lengths, 0, numcodes * sizeof(*lengths));
+/app/lodepng.cpp:970:    lists.memory = (BPMNode*)lodepng_malloc(lists.memsize * sizeof(*lists.memory));
+/app/lodepng.cpp:971:    lists.freelist = (BPMNode**)lodepng_malloc(lists.memsize * sizeof(BPMNode*));
+/app/lodepng.cpp:972:    lists.chains0 = (BPMNode**)lodepng_malloc(lists.listsize * sizeof(BPMNode*));
+/app/lodepng.cpp:973:    lists.chains1 = (BPMNode**)lodepng_malloc(lists.listsize * sizeof(BPMNode*));
+/app/lodepng.cpp:995:    lodepng_free(lists.memory);
+/app/lodepng.cpp:996:    lodepng_free(lists.freelist);
+/app/lodepng.cpp:997:    lodepng_free(lists.chains0);
+/app/lodepng.cpp:998:    lodepng_free(lists.chains1);
+/app/lodepng.cpp:1001:  lodepng_free(leaves);
+/app/lodepng.cpp:1010:  tree->lengths = (unsigned*)lodepng_malloc(numcodes * sizeof(unsigned));
+/app/lodepng.cpp:1015:  error = lodepng_huffman_code_lengths(tree->lengths, frequencies, numcodes, maxbitlen);
+/app/lodepng.cpp:1024:  unsigned* bitlen = (unsigned*)lodepng_malloc(NUM_DEFLATE_CODE_SYMBOLS * sizeof(unsigned));
+/app/lodepng.cpp:1035:  lodepng_free(bitlen);
+/app/lodepng.cpp:1042:  unsigned* bitlen = (unsigned*)lodepng_malloc(NUM_DISTANCE_SYMBOLS * sizeof(unsigned));
+/app/lodepng.cpp:1049:  lodepng_free(bitlen);
+/app/lodepng.cpp:1112:  bitlen_cl = (unsigned*)lodepng_malloc(NUM_CODE_LENGTH_CODES * sizeof(unsigned));
+/app/lodepng.cpp:1119:    if(lodepng_gtofl(reader->bp, HCLEN * 3, reader->bitsize)) {
+/app/lodepng.cpp:1134:    bitlen_ll = (unsigned*)lodepng_malloc(NUM_DEFLATE_CODE_SYMBOLS * sizeof(unsigned));
+/app/lodepng.cpp:1135:    bitlen_d = (unsigned*)lodepng_malloc(NUM_DISTANCE_SYMBOLS * sizeof(unsigned));
+/app/lodepng.cpp:1137:    lodepng_memset(bitlen_ll, 0, NUM_DEFLATE_CODE_SYMBOLS * sizeof(*bitlen_ll));
+/app/lodepng.cpp:1138:    lodepng_memset(bitlen_d, 0, NUM_DISTANCE_SYMBOLS * sizeof(*bitlen_d));
+/app/lodepng.cpp:1214:  lodepng_free(bitlen_cl);
+/app/lodepng.cpp:1215:  lodepng_free(bitlen_ll);
+/app/lodepng.cpp:1216:  lodepng_free(bitlen_d);
+/app/lodepng.cpp:1297:        lodepng_memcpy(out->data + start, out->data + backward, distance);
+/app/lodepng.cpp:1303:        lodepng_memcpy(out->data + start, out->data + backward, length);
+/app/lodepng.cpp:1357:    lodepng_memcpy(out->data + out->size - LEN, reader->data + bytepos, LEN);
+/app/lodepng.cpp:1366:static unsigned lodepng_inflatev(ucvector* out,
+/app/lodepng.cpp:1392:unsigned lodepng_inflate(unsigned char** out, size_t* outsize,
+/app/lodepng.cpp:1396:  unsigned error = lodepng_inflatev(&v, in, insize, settings);
+/app/lodepng.cpp:1415:    return lodepng_inflatev(out, in, insize, settings);
+/app/lodepng.cpp:1488:  hash->head = (int*)lodepng_malloc(sizeof(int) * HASH_NUM_VALUES);
+/app/lodepng.cpp:1489:  hash->val = (int*)lodepng_malloc(sizeof(int) * windowsize);
+/app/lodepng.cpp:1490:  hash->chain = (unsigned short*)lodepng_malloc(sizeof(unsigned short) * windowsize);
+/app/lodepng.cpp:1492:  hash->zeros = (unsigned short*)lodepng_malloc(sizeof(unsigned short) * windowsize);
+/app/lodepng.cpp:1493:  hash->headz = (int*)lodepng_malloc(sizeof(int) * (MAX_SUPPORTED_DEFLATE_LENGTH + 1));
+/app/lodepng.cpp:1494:  hash->chainz = (unsigned short*)lodepng_malloc(sizeof(unsigned short) * windowsize);
+/app/lodepng.cpp:1512:  lodepng_free(hash->head);
+/app/lodepng.cpp:1513:  lodepng_free(hash->val);
+/app/lodepng.cpp:1514:  lodepng_free(hash->chain);
+/app/lodepng.cpp:1516:  lodepng_free(hash->zeros);
+/app/lodepng.cpp:1517:  lodepng_free(hash->headz);
+/app/lodepng.cpp:1518:  lodepng_free(hash->chainz);
+/app/lodepng.cpp:1749:    lodepng_memcpy(out->data + pos + 5, data + datapos, LEN);
+/app/lodepng.cpp:1833:  frequencies_ll = (unsigned*)lodepng_malloc(286 * sizeof(*frequencies_ll));
+/app/lodepng.cpp:1834:  frequencies_d = (unsigned*)lodepng_malloc(30 * sizeof(*frequencies_d));
+/app/lodepng.cpp:1835:  frequencies_cl = (unsigned*)lodepng_malloc(NUM_CODE_LENGTH_CODES * sizeof(*frequencies_cl));
+/app/lodepng.cpp:1842:    lodepng_memset(frequencies_ll, 0, 286 * sizeof(*frequencies_ll));
+/app/lodepng.cpp:1843:    lodepng_memset(frequencies_d, 0, 30 * sizeof(*frequencies_d));
+/app/lodepng.cpp:1844:    lodepng_memset(frequencies_cl, 0, NUM_CODE_LENGTH_CODES * sizeof(*frequencies_cl));
+/app/lodepng.cpp:1878:    bitlen_lld = (unsigned*)lodepng_malloc(numcodes_lld * sizeof(*bitlen_lld));
+/app/lodepng.cpp:1880:    bitlen_lld_e = (unsigned*)lodepng_malloc(numcodes_lld * sizeof(*bitlen_lld_e));
+/app/lodepng.cpp:1999:  lodepng_free(frequencies_ll);
+/app/lodepng.cpp:2000:  lodepng_free(frequencies_d);
+/app/lodepng.cpp:2001:  lodepng_free(frequencies_cl);
+/app/lodepng.cpp:2002:  lodepng_free(bitlen_lld);
+/app/lodepng.cpp:2003:  lodepng_free(bitlen_lld_e);
+/app/lodepng.cpp:2053:static unsigned lodepng_deflatev(ucvector* out, const unsigned char* in, size_t insize,
+/app/lodepng.cpp:2094:unsigned lodepng_deflate(unsigned char** out, size_t* outsize,
+/app/lodepng.cpp:2098:  unsigned error = lodepng_deflatev(&v, in, insize, settings);
+/app/lodepng.cpp:2112:    return lodepng_deflate(out, outsize, in, insize, settings);
+/app/lodepng.cpp:2153:static unsigned lodepng_zlib_decompressv(ucvector* out,
+/app/lodepng.cpp:2186:    unsigned ADLER32 = lodepng_read32bitInt(&in[insize - 4]);
+/app/lodepng.cpp:2195:unsigned lodepng_zlib_decompress(unsigned char** out, size_t* outsize, const unsigned char* in,
+/app/lodepng.cpp:2198:  unsigned error = lodepng_zlib_decompressv(&v, in, insize, settings);
+/app/lodepng.cpp:2223:    error = lodepng_zlib_decompressv(&v, in, insize, settings);
+/app/lodepng.cpp:2234:unsigned lodepng_zlib_compress(unsigned char** out, size_t* outsize, const unsigned char* in,
+/app/lodepng.cpp:2247:    *out = (unsigned char*)lodepng_malloc(*outsize);
+/app/lodepng.cpp:2264:    lodepng_set32bitInt(&(*out)[*outsize - 4], ADLER32);
+/app/lodepng.cpp:2267:  lodepng_free(deflatedata);
+/app/lodepng.cpp:2279:    return lodepng_zlib_compress(out, outsize, in, insize, settings);
+/app/lodepng.cpp:2312:void lodepng_compress_settings_init(LodePNGCompressSettings* settings) {
+/app/lodepng.cpp:2326:const LodePNGCompressSettings lodepng_default_compress_settings = {2, 1, DEFAULT_WINDOWSIZE, 3, 128, 1, 0, 0, 0};
+/app/lodepng.cpp:2333:void lodepng_decompress_settings_init(LodePNGDecompressSettings* settings) {
+/app/lodepng.cpp:2343:const LodePNGDecompressSettings lodepng_default_decompress_settings = {0, 0, 0, 0, 0, 0};
+/app/lodepng.cpp:2362:static const unsigned lodepng_crc32_table0[256] = {
+/app/lodepng.cpp:2397:static const unsigned lodepng_crc32_table1[256] = {
+/app/lodepng.cpp:2432:static const unsigned lodepng_crc32_table2[256] = {
+/app/lodepng.cpp:2467:static const unsigned lodepng_crc32_table3[256] = {
+/app/lodepng.cpp:2502:static const unsigned lodepng_crc32_table4[256] = {
+/app/lodepng.cpp:2537:static const unsigned lodepng_crc32_table5[256] = {
+/app/lodepng.cpp:2572:static const unsigned lodepng_crc32_table6[256] = {
+/app/lodepng.cpp:2607:static const unsigned lodepng_crc32_table7[256] = {
+/app/lodepng.cpp:2643:unsigned lodepng_crc32(const unsigned char* data, size_t length) {
+/app/lodepng.cpp:2647:    r = lodepng_crc32_table7[(data[0] ^ (r & 0xffu))] ^
+/app/lodepng.cpp:2648:        lodepng_crc32_table6[(data[1] ^ ((r >> 8) & 0xffu))] ^
+/app/lodepng.cpp:2649:        lodepng_crc32_table5[(data[2] ^ ((r >> 16) & 0xffu))] ^
+/app/lodepng.cpp:2650:        lodepng_crc32_table4[(data[3] ^ ((r >> 24) & 0xffu))] ^
+/app/lodepng.cpp:2651:        lodepng_crc32_table3[data[4]] ^
+/app/lodepng.cpp:2652:        lodepng_crc32_table2[data[5]] ^
+/app/lodepng.cpp:2653:        lodepng_crc32_table1[data[6]] ^
+/app/lodepng.cpp:2654:        lodepng_crc32_table0[data[7]];
+/app/lodepng.cpp:2659:    r = lodepng_crc32_table0[(r ^ *data++) & 0xffu] ^ (r >> 8);
+/app/lodepng.cpp:2669:unsigned lodepng_crc32(const unsigned char* data, size_t length) {
+/app/lodepng.cpp:2683:unsigned lodepng_crc32(const unsigned char* data, size_t length);
+/app/lodepng.cpp:2721:unsigned lodepng_chunk_length(const unsigned char* chunk) {
+/app/lodepng.cpp:2722:  return lodepng_read32bitInt(chunk);
+/app/lodepng.cpp:2725:void lodepng_chunk_type(char type[5], const unsigned char* chunk) {
+/app/lodepng.cpp:2731:unsigned char lodepng_chunk_type_equals(const unsigned char* chunk, const char* type) {
+/app/lodepng.cpp:2732:  if(lodepng_strlen(type) != 4) return 0;
+/app/lodepng.cpp:2737:static unsigned char lodepng_chunk_type_name_valid(const unsigned char* chunk) {
+/app/lodepng.cpp:2748:unsigned char lodepng_chunk_ancillary(const unsigned char* chunk) {
+/app/lodepng.cpp:2752:unsigned char lodepng_chunk_private(const unsigned char* chunk) {
+/app/lodepng.cpp:2758:static unsigned char lodepng_chunk_reserved(const unsigned char* chunk) {
+/app/lodepng.cpp:2762:unsigned char lodepng_chunk_safetocopy(const unsigned char* chunk) {
+/app/lodepng.cpp:2766:unsigned char* lodepng_chunk_data(unsigned char* chunk) {
+/app/lodepng.cpp:2770:const unsigned char* lodepng_chunk_data_const(const unsigned char* chunk) {
+/app/lodepng.cpp:2774:unsigned lodepng_chunk_check_crc(const unsigned char* chunk) {
+/app/lodepng.cpp:2775:  unsigned length = lodepng_chunk_length(chunk);
+/app/lodepng.cpp:2776:  unsigned CRC = lodepng_read32bitInt(&chunk[length + 8]);
+/app/lodepng.cpp:2778:  unsigned checksum = lodepng_crc32(&chunk[4], length + 4);
+/app/lodepng.cpp:2783:void lodepng_chunk_generate_crc(unsigned char* chunk) {
+/app/lodepng.cpp:2784:  unsigned length = lodepng_chunk_length(chunk);
+/app/lodepng.cpp:2785:  unsigned CRC = lodepng_crc32(&chunk[4], length + 4);
+/app/lodepng.cpp:2786:  lodepng_set32bitInt(chunk + 8 + length, CRC);
+/app/lodepng.cpp:2789:unsigned char* lodepng_chunk_next(unsigned char* chunk, unsigned char* end) {
+/app/lodepng.cpp:2798:    if(lodepng_addofl(lodepng_chunk_length(chunk), 12, &total_chunk_length)) return end;
+/app/lodepng.cpp:2804:const unsigned char* lodepng_chunk_next_const(const unsigned char* chunk, const unsigned char* end) {
+/app/lodepng.cpp:2813:    if(lodepng_addofl(lodepng_chunk_length(chunk), 12, &total_chunk_length)) return end;
+/app/lodepng.cpp:2819:unsigned char* lodepng_chunk_find(unsigned char* chunk, unsigned char* end, const char type[5]) {
+/app/lodepng.cpp:2822:    if(lodepng_chunk_type_equals(chunk, type)) return chunk;
+/app/lodepng.cpp:2823:    chunk = lodepng_chunk_next(chunk, end);
+/app/lodepng.cpp:2827:const unsigned char* lodepng_chunk_find_const(const unsigned char* chunk, const unsigned char* end, const char type[5]) {
+/app/lodepng.cpp:2830:    if(lodepng_chunk_type_equals(chunk, type)) return chunk;
+/app/lodepng.cpp:2831:    chunk = lodepng_chunk_next_const(chunk, end);
+/app/lodepng.cpp:2835:unsigned lodepng_chunk_append(unsigned char** out, size_t* outsize, const unsigned char* chunk) {
+/app/lodepng.cpp:2840:  if(!lodepng_chunk_type_name_valid(chunk)) {
+/app/lodepng.cpp:2843:  if(lodepng_chunk_reserved(chunk)) {
+/app/lodepng.cpp:2847:  if(lodepng_addofl(lodepng_chunk_length(chunk), 12, &total_chunk_length)) return 77;
+/app/lodepng.cpp:2848:  if(lodepng_addofl(*outsize, total_chunk_length, &new_length)) return 77;
+/app/lodepng.cpp:2850:  new_buffer = (unsigned char*)lodepng_realloc(*out, new_length);
+/app/lodepng.cpp:2864:lodepng_chunk_generate_crc */
+/app/lodepng.cpp:2865:static unsigned lodepng_chunk_init(unsigned char** chunk,
+/app/lodepng.cpp:2869:  if(lodepng_addofl(new_length, length, &new_length)) return 77;
+/app/lodepng.cpp:2870:  if(lodepng_addofl(new_length, 12, &new_length)) return 77;
+/app/lodepng.cpp:2875:  lodepng_set32bitInt(*chunk, (unsigned)length);
+/app/lodepng.cpp:2878:  lodepng_memcpy(*chunk + 4, type, 4);
+/app/lodepng.cpp:2883:/* like lodepng_chunk_create but with custom allocsize */
+/app/lodepng.cpp:2884:static unsigned lodepng_chunk_createv(ucvector* out,
+/app/lodepng.cpp:2887:  CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, length, type));
+/app/lodepng.cpp:2890:  lodepng_memcpy(chunk + 8, data, length);
+/app/lodepng.cpp:2893:  lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:2898:unsigned lodepng_chunk_create(unsigned char** out, size_t* outsize,
+/app/lodepng.cpp:2901:  unsigned error = lodepng_chunk_createv(&v, length, type, data);
+/app/lodepng.cpp:2938:static unsigned lodepng_get_bpp_lct(LodePNGColorType colortype, unsigned bitdepth) {
+/app/lodepng.cpp:2945:void lodepng_color_mode_init(LodePNGColorMode* info) {
+/app/lodepng.cpp:2955:static void lodepng_color_mode_alloc_palette(LodePNGColorMode* info) {
+/app/lodepng.cpp:2959:  if(!info->palette) info->palette = (unsigned char*)lodepng_malloc(1024);
+/app/lodepng.cpp:2972:void lodepng_color_mode_cleanup(LodePNGColorMode* info) {
+/app/lodepng.cpp:2973:  lodepng_palette_clear(info);
+/app/lodepng.cpp:2976:unsigned lodepng_color_mode_copy(LodePNGColorMode* dest, const LodePNGColorMode* source) {
+/app/lodepng.cpp:2977:  lodepng_color_mode_cleanup(dest);
+/app/lodepng.cpp:2978:  lodepng_memcpy(dest, source, sizeof(LodePNGColorMode));
+/app/lodepng.cpp:2980:    dest->palette = (unsigned char*)lodepng_malloc(1024);
+/app/lodepng.cpp:2982:    lodepng_memcpy(dest->palette, source->palette, source->palettesize * 4);
+/app/lodepng.cpp:2987:LodePNGColorMode lodepng_color_mode_make(LodePNGColorType colortype, unsigned bitdepth) {
+/app/lodepng.cpp:2989:  lodepng_color_mode_init(&result);
+/app/lodepng.cpp:2995:static int lodepng_color_mode_equal(const LodePNGColorMode* a, const LodePNGColorMode* b) {
+/app/lodepng.cpp:3012:void lodepng_palette_clear(LodePNGColorMode* info) {
+/app/lodepng.cpp:3013:  if(info->palette) lodepng_free(info->palette);
+/app/lodepng.cpp:3018:unsigned lodepng_palette_add(LodePNGColorMode* info,
+/app/lodepng.cpp:3021:    lodepng_color_mode_alloc_palette(info);
+/app/lodepng.cpp:3036:unsigned lodepng_get_bpp(const LodePNGColorMode* info) {
+/app/lodepng.cpp:3037:  return lodepng_get_bpp_lct(info->colortype, info->bitdepth);
+/app/lodepng.cpp:3040:unsigned lodepng_get_channels(const LodePNGColorMode* info) {
+/app/lodepng.cpp:3044:unsigned lodepng_is_greyscale_type(const LodePNGColorMode* info) {
+/app/lodepng.cpp:3048:unsigned lodepng_is_alpha_type(const LodePNGColorMode* info) {
+/app/lodepng.cpp:3052:unsigned lodepng_is_palette_type(const LodePNGColorMode* info) {
+/app/lodepng.cpp:3056:unsigned lodepng_has_palette_alpha(const LodePNGColorMode* info) {
+/app/lodepng.cpp:3064:unsigned lodepng_can_have_alpha(const LodePNGColorMode* info) {
+/app/lodepng.cpp:3066:      || lodepng_is_alpha_type(info)
+/app/lodepng.cpp:3067:      || lodepng_has_palette_alpha(info);
+/app/lodepng.cpp:3070:static size_t lodepng_get_raw_size_lct(unsigned w, unsigned h, LodePNGColorType colortype, unsigned bitdepth) {
+/app/lodepng.cpp:3071:  size_t bpp = lodepng_get_bpp_lct(colortype, bitdepth);
+/app/lodepng.cpp:3076:size_t lodepng_get_raw_size(unsigned w, unsigned h, const LodePNGColorMode* color) {
+/app/lodepng.cpp:3077:  return lodepng_get_raw_size_lct(w, h, color->colortype, color->bitdepth);
+/app/lodepng.cpp:3083:/*in an idat chunk, each scanline is a multiple of 8 bits, unlike the lodepng output buffer,
+/app/lodepng.cpp:3085:result than lodepng_get_raw_size. Set h to 1 to get the size of 1 row including filter byte. */
+/app/lodepng.cpp:3086:static size_t lodepng_get_raw_size_idat(unsigned w, unsigned h, unsigned bpp) {
+/app/lodepng.cpp:3102:static int lodepng_pixel_overflow(unsigned w, unsigned h,
+/app/lodepng.cpp:3104:  size_t bpp = LODEPNG_MAX(lodepng_get_bpp(pngcolor), lodepng_get_bpp(rawcolor));
+/app/lodepng.cpp:3108:  if(lodepng_mulofl((size_t)w, (size_t)h, &numpixels)) return 1;
+/app/lodepng.cpp:3109:  if(lodepng_mulofl(numpixels, 8, &total)) return 1; /* bit pointer with 8-bit color, or 8 bytes per channel color */
+/app/lodepng.cpp:3112:  if(lodepng_mulofl((size_t)(w / 8u), bpp, &line)) return 1;
+/app/lodepng.cpp:3113:  if(lodepng_addofl(line, ((w & 7u) * bpp + 7u) / 8u, &line)) return 1;
+/app/lodepng.cpp:3115:  if(lodepng_addofl(line, 5, &line)) return 1; /* 5 bytes overhead per line: 1 filterbyte, 4 for Adam7 worst case */
+/app/lodepng.cpp:3116:  if(lodepng_mulofl(line, h, &total)) return 1; /* Total bytes in worst case */
+/app/lodepng.cpp:3133:  for(i = 0; i != 3; ++i) lodepng_free(info->unknown_chunks_data[i]);
+/app/lodepng.cpp:3144:    dest->unknown_chunks_data[i] = (unsigned char*)lodepng_malloc(src->unknown_chunks_size[i]);
+/app/lodepng.cpp:3168:  lodepng_free(info->text_keys);
+/app/lodepng.cpp:3169:  lodepng_free(info->text_strings);
+/app/lodepng.cpp:3178:    CERROR_TRY_RETURN(lodepng_add_text(dest, source->text_keys[i], source->text_strings[i]));
+/app/lodepng.cpp:3183:static unsigned lodepng_add_text_sized(LodePNGInfo* info, const char* key, const char* str, size_t size) {
+/app/lodepng.cpp:3184:  char** new_keys = (char**)(lodepng_realloc(info->text_keys, sizeof(char*) * (info->text_num + 1)));
+/app/lodepng.cpp:3185:  char** new_strings = (char**)(lodepng_realloc(info->text_strings, sizeof(char*) * (info->text_num + 1)));
+/app/lodepng.cpp:3200:unsigned lodepng_add_text(LodePNGInfo* info, const char* key, const char* str) {
+/app/lodepng.cpp:3201:  return lodepng_add_text_sized(info, key, str, lodepng_strlen(str));
+/app/lodepng.cpp:3204:void lodepng_clear_text(LodePNGInfo* info) {
+/app/lodepng.cpp:3226:  lodepng_free(info->itext_keys);
+/app/lodepng.cpp:3227:  lodepng_free(info->itext_langtags);
+/app/lodepng.cpp:3228:  lodepng_free(info->itext_transkeys);
+/app/lodepng.cpp:3229:  lodepng_free(info->itext_strings);
+/app/lodepng.cpp:3240:    CERROR_TRY_RETURN(lodepng_add_itext(dest, source->itext_keys[i], source->itext_langtags[i],
+/app/lodepng.cpp:3246:void lodepng_clear_itext(LodePNGInfo* info) {
+/app/lodepng.cpp:3250:static unsigned lodepng_add_itext_sized(LodePNGInfo* info, const char* key, const char* langtag,
+/app/lodepng.cpp:3252:  char** new_keys = (char**)(lodepng_realloc(info->itext_keys, sizeof(char*) * (info->itext_num + 1)));
+/app/lodepng.cpp:3253:  char** new_langtags = (char**)(lodepng_realloc(info->itext_langtags, sizeof(char*) * (info->itext_num + 1)));
+/app/lodepng.cpp:3254:  char** new_transkeys = (char**)(lodepng_realloc(info->itext_transkeys, sizeof(char*) * (info->itext_num + 1)));
+/app/lodepng.cpp:3255:  char** new_strings = (char**)(lodepng_realloc(info->itext_strings, sizeof(char*) * (info->itext_num + 1)));
+/app/lodepng.cpp:3274:unsigned lodepng_add_itext(LodePNGInfo* info, const char* key, const char* langtag,
+/app/lodepng.cpp:3276:  return lodepng_add_itext_sized(info, key, langtag, transkey, str, lodepng_strlen(str));
+/app/lodepng.cpp:3279:unsigned lodepng_set_icc(LodePNGInfo* info, const char* name, const unsigned char* profile, unsigned profile_size) {
+/app/lodepng.cpp:3280:  if(info->iccp_defined) lodepng_clear_icc(info);
+/app/lodepng.cpp:3287:  info->iccp_profile = (unsigned char*)lodepng_malloc(profile_size);
+/app/lodepng.cpp:3289:    lodepng_free(info->iccp_name);
+/app/lodepng.cpp:3293:  lodepng_memcpy(info->iccp_profile, profile, profile_size);
+/app/lodepng.cpp:3300:void lodepng_clear_icc(LodePNGInfo* info) {
+/app/lodepng.cpp:3302:  lodepng_free(info->iccp_profile);
+/app/lodepng.cpp:3308:unsigned lodepng_set_exif(LodePNGInfo* info, const unsigned char* exif, unsigned exif_size) {
+/app/lodepng.cpp:3309:  if(info->exif_defined) lodepng_clear_exif(info);
+/app/lodepng.cpp:3310:  info->exif = (unsigned char*)lodepng_malloc(exif_size);
+/app/lodepng.cpp:3314:  lodepng_memcpy(info->exif, exif, exif_size);
+/app/lodepng.cpp:3321:void lodepng_clear_exif(LodePNGInfo* info) {
+/app/lodepng.cpp:3322:  lodepng_free(info->exif);
+/app/lodepng.cpp:3329:void lodepng_info_init(LodePNGInfo* info) {
+/app/lodepng.cpp:3330:  lodepng_color_mode_init(&info->color);
+/app/lodepng.cpp:3381:void lodepng_info_cleanup(LodePNGInfo* info) {
+/app/lodepng.cpp:3382:  lodepng_color_mode_cleanup(&info->color);
+/app/lodepng.cpp:3387:  lodepng_clear_icc(info);
+/app/lodepng.cpp:3388:  lodepng_clear_exif(info);
+/app/lodepng.cpp:3394:unsigned lodepng_info_copy(LodePNGInfo* dest, const LodePNGInfo* source) {
+/app/lodepng.cpp:3395:  lodepng_info_cleanup(dest);
+/app/lodepng.cpp:3396:  lodepng_memcpy(dest, source, sizeof(LodePNGInfo));
+/app/lodepng.cpp:3397:  lodepng_color_mode_init(&dest->color);
+/app/lodepng.cpp:3398:  CERROR_TRY_RETURN(lodepng_color_mode_copy(&dest->color, &source->color));
+/app/lodepng.cpp:3405:    CERROR_TRY_RETURN(lodepng_set_icc(dest, source->iccp_name, source->iccp_profile, source->iccp_profile_size));
+/app/lodepng.cpp:3409:    CERROR_TRY_RETURN(lodepng_set_exif(dest, source->exif, source->exif_size));
+/app/lodepng.cpp:3445:  lodepng_memset(tree->children, 0, 16 * sizeof(*tree->children));
+/app/lodepng.cpp:3454:      lodepng_free(tree->children[i]);
+/app/lodepng.cpp:3485:      tree->children[i] = (ColorTree*)lodepng_malloc(sizeof(ColorTree));
+/app/lodepng.cpp:3625:    /*out of bounds of palette not checked: see lodepng_color_mode_alloc_palette.*/
+/app/lodepng.cpp:3691:        lodepng_memcpy(buffer, &in[i * 3], 3);
+/app/lodepng.cpp:3715:        /*out of bounds of palette not checked: see lodepng_color_mode_alloc_palette.*/
+/app/lodepng.cpp:3716:        lodepng_memcpy(buffer, &mode->palette[index * 4], 4);
+/app/lodepng.cpp:3722:        /*out of bounds of palette not checked: see lodepng_color_mode_alloc_palette.*/
+/app/lodepng.cpp:3723:        lodepng_memcpy(buffer, &mode->palette[index * 4], 4);
+/app/lodepng.cpp:3740:      lodepng_memcpy(buffer, in, numpixels * 4);
+/app/lodepng.cpp:3777:      lodepng_memcpy(buffer, in, numpixels * 3);
+/app/lodepng.cpp:3789:        /*out of bounds of palette not checked: see lodepng_color_mode_alloc_palette.*/
+/app/lodepng.cpp:3790:        lodepng_memcpy(buffer, &mode->palette[index * 4], 3);
+/app/lodepng.cpp:3796:        /*out of bounds of palette not checked: see lodepng_color_mode_alloc_palette.*/
+/app/lodepng.cpp:3797:        lodepng_memcpy(buffer, &mode->palette[index * 4], 3);
+/app/lodepng.cpp:3813:        lodepng_memcpy(buffer, &in[i * 4], 3);
+/app/lodepng.cpp:3853:unsigned lodepng_convert(unsigned char* out, const unsigned char* in,
+/app/lodepng.cpp:3865:  if(lodepng_color_mode_equal(mode_out, mode_in)) {
+/app/lodepng.cpp:3866:    size_t numbytes = lodepng_get_raw_size(w, h, mode_in);
+/app/lodepng.cpp:3867:    lodepng_memcpy(out, in, numbytes);
+/app/lodepng.cpp:3885:        size_t numbytes = lodepng_get_raw_size(w, h, mode_in);
+/app/lodepng.cpp:3886:        lodepng_memcpy(out, in, numbytes);
+/app/lodepng.cpp:3934:unsigned lodepng_convert_rgb(
+/app/lodepng.cpp:3986:void lodepng_color_stats_init(LodePNGColorStats* stats) {
+/app/lodepng.cpp:4021:unsigned lodepng_compute_color_stats(LodePNGColorStats* stats,
+/app/lodepng.cpp:4030:  unsigned colored_done = lodepng_is_greyscale_type(mode_in) ? 1 : 0;
+/app/lodepng.cpp:4031:  unsigned alpha_done = lodepng_can_have_alpha(mode_in) ? 0 : 1;
+/app/lodepng.cpp:4033:  unsigned bpp = lodepng_get_bpp(mode_in);
+/app/lodepng.cpp:4217:static unsigned lodepng_color_stats_add(LodePNGColorStats* stats,
+/app/lodepng.cpp:4222:  lodepng_color_mode_init(&mode);
+/app/lodepng.cpp:4227:  error = lodepng_compute_color_stats(stats, image, 1, 1, &mode);
+/app/lodepng.cpp:4228:  lodepng_color_mode_cleanup(&mode);
+/app/lodepng.cpp:4234:The stats should be computed with lodepng_compute_color_stats.
+/app/lodepng.cpp:4274:    lodepng_palette_clear(mode_out); /*remove potential earlier palette*/
+/app/lodepng.cpp:4276:      error = lodepng_palette_add(mode_out, p[i * 4 + 0], p[i * 4 + 1], p[i * 4 + 2], p[i * 4 + 3]);
+/app/lodepng.cpp:4286:      lodepng_color_mode_cleanup(mode_out); /*clears palette, keeps the above set colortype and bitdepth fields as-is*/
+/app/lodepng.cpp:4287:      lodepng_color_mode_copy(mode_out, mode_in);
+/app/lodepng.cpp:4374:unsigned lodepng_inspect(unsigned* w, unsigned* h, LodePNGState* state,
+/app/lodepng.cpp:4387:  lodepng_info_cleanup(info);
+/app/lodepng.cpp:4388:  lodepng_info_init(info);
+/app/lodepng.cpp:4394:  if(lodepng_chunk_length(in + 8) != 13) {
+/app/lodepng.cpp:4397:  if(!lodepng_chunk_type_equals(in + 8, "IHDR")) {
+/app/lodepng.cpp:4402:  width = lodepng_read32bitInt(&in[16]);
+/app/lodepng.cpp:4403:  height = lodepng_read32bitInt(&in[20]);
+/app/lodepng.cpp:4428:    unsigned CRC = lodepng_read32bitInt(&in[29]);
+/app/lodepng.cpp:4429:    unsigned checksum = lodepng_crc32(&in[12], 17);
+/app/lodepng.cpp:4644:  size_t linebytes = lodepng_get_raw_size_idat(w, 1, bpp) - 1u;
+/app/lodepng.cpp:4746:  unsigned bpp = lodepng_get_bpp(&info_png->color);
+/app/lodepng.cpp:4784:  lodepng_color_mode_alloc_palette(color);
+/app/lodepng.cpp:4875:    key = (char*)lodepng_malloc(length + 1);
+/app/lodepng.cpp:4878:    lodepng_memcpy(key, data, length);
+/app/lodepng.cpp:4884:    str = (char*)lodepng_malloc(length + 1);
+/app/lodepng.cpp:4887:    lodepng_memcpy(str, data + string2_begin, length);
+/app/lodepng.cpp:4890:    error = lodepng_add_text(info, key, str);
+/app/lodepng.cpp:4895:  lodepng_free(key);
+/app/lodepng.cpp:4896:  lodepng_free(str);
+/app/lodepng.cpp:4919:    key = (char*)lodepng_malloc(length + 1);
+/app/lodepng.cpp:4922:    lodepng_memcpy(key, data, length);
+/app/lodepng.cpp:4938:    error = lodepng_add_text_sized(info, key, (char*)str, size);
+/app/lodepng.cpp:4942:  lodepng_free(key);
+/app/lodepng.cpp:4943:  lodepng_free(str);
+/app/lodepng.cpp:4970:    key = (char*)lodepng_malloc(length + 1);
+/app/lodepng.cpp:4973:    lodepng_memcpy(key, data, length);
+/app/lodepng.cpp:4988:    langtag = (char*)lodepng_malloc(length + 1);
+/app/lodepng.cpp:4991:    lodepng_memcpy(langtag, data + begin, length);
+/app/lodepng.cpp:4999:    transkey = (char*)lodepng_malloc(length + 1);
+/app/lodepng.cpp:5002:    lodepng_memcpy(transkey, data + begin, length);
+/app/lodepng.cpp:5019:      if(!error) error = lodepng_add_itext_sized(info, key, langtag, transkey, (char*)str, size);
+/app/lodepng.cpp:5020:      lodepng_free(str);
+/app/lodepng.cpp:5022:      error = lodepng_add_itext_sized(info, key, langtag, transkey, (char*)(data + begin), length);
+/app/lodepng.cpp:5028:  lodepng_free(key);
+/app/lodepng.cpp:5029:  lodepng_free(langtag);
+/app/lodepng.cpp:5030:  lodepng_free(transkey);
+/app/lodepng.cpp:5104:  if(info->iccp_defined) lodepng_clear_icc(info);
+/app/lodepng.cpp:5111:  info->iccp_name = (char*)lodepng_malloc(length + 1);
+/app/lodepng.cpp:5177:  return lodepng_set_exif(info, data, (unsigned)chunkLength);
+/app/lodepng.cpp:5222:unsigned lodepng_inspect_chunk(LodePNGState* state, size_t pos,
+/app/lodepng.cpp:5231:  chunkLength = lodepng_chunk_length(chunk);
+/app/lodepng.cpp:5233:  data = lodepng_chunk_data_const(chunk);
+/app/lodepng.cpp:5236:  if(lodepng_chunk_type_equals(chunk, "PLTE")) {
+/app/lodepng.cpp:5238:  } else if(lodepng_chunk_type_equals(chunk, "tRNS")) {
+/app/lodepng.cpp:5241:  } else if(lodepng_chunk_type_equals(chunk, "bKGD")) {
+/app/lodepng.cpp:5243:  } else if(lodepng_chunk_type_equals(chunk, "tEXt")) {
+/app/lodepng.cpp:5245:  } else if(lodepng_chunk_type_equals(chunk, "zTXt")) {
+/app/lodepng.cpp:5247:  } else if(lodepng_chunk_type_equals(chunk, "iTXt")) {
+/app/lodepng.cpp:5249:  } else if(lodepng_chunk_type_equals(chunk, "tIME")) {
+/app/lodepng.cpp:5251:  } else if(lodepng_chunk_type_equals(chunk, "pHYs")) {
+/app/lodepng.cpp:5253:  } else if(lodepng_chunk_type_equals(chunk, "gAMA")) {
+/app/lodepng.cpp:5255:  } else if(lodepng_chunk_type_equals(chunk, "cHRM")) {
+/app/lodepng.cpp:5257:  } else if(lodepng_chunk_type_equals(chunk, "sRGB")) {
+/app/lodepng.cpp:5259:  } else if(lodepng_chunk_type_equals(chunk, "iCCP")) {
+/app/lodepng.cpp:5261:  } else if(lodepng_chunk_type_equals(chunk, "cICP")) {
+/app/lodepng.cpp:5263:  } else if(lodepng_chunk_type_equals(chunk, "mDCV")) {
+/app/lodepng.cpp:5265:  } else if(lodepng_chunk_type_equals(chunk, "cLLI")) {
+/app/lodepng.cpp:5267:  } else if(lodepng_chunk_type_equals(chunk, "eXIf")) {
+/app/lodepng.cpp:5269:  } else if(lodepng_chunk_type_equals(chunk, "sBIT")) {
+/app/lodepng.cpp:5278:    if(lodepng_chunk_check_crc(chunk)) return 57; /*invalid CRC*/
+/app/lodepng.cpp:5307:  state->error = lodepng_inspect(w, h, state, in, insize); /*reads header and resets other parameters in state->info_png*/
+/app/lodepng.cpp:5310:  if(lodepng_pixel_overflow(*w, *h, &state->info_png.color, &state->info_raw)) {
+/app/lodepng.cpp:5315:  idat = (unsigned char*)lodepng_malloc(insize);
+/app/lodepng.cpp:5334:    chunkLength = lodepng_chunk_length(chunk);
+/app/lodepng.cpp:5345:    data = lodepng_chunk_data_const(chunk);
+/app/lodepng.cpp:5350:    if(lodepng_chunk_type_equals(chunk, "IDAT")) {
+/app/lodepng.cpp:5352:      if(lodepng_addofl(idatsize, chunkLength, &newsize)) CERROR_BREAK(state->error, 95);
+/app/lodepng.cpp:5354:      lodepng_memcpy(idat + idatsize, data, chunkLength);
+/app/lodepng.cpp:5359:    } else if(lodepng_chunk_type_equals(chunk, "IEND")) {
+/app/lodepng.cpp:5362:    } else if(lodepng_chunk_type_equals(chunk, "PLTE")) {
+/app/lodepng.cpp:5369:    } else if(lodepng_chunk_type_equals(chunk, "tRNS")) {
+/app/lodepng.cpp:5377:    } else if(lodepng_chunk_type_equals(chunk, "bKGD")) {
+/app/lodepng.cpp:5380:    } else if(lodepng_chunk_type_equals(chunk, "tEXt")) {
+/app/lodepng.cpp:5386:    } else if(lodepng_chunk_type_equals(chunk, "zTXt")) {
+/app/lodepng.cpp:5392:    } else if(lodepng_chunk_type_equals(chunk, "iTXt")) {
+/app/lodepng.cpp:5398:    } else if(lodepng_chunk_type_equals(chunk, "tIME")) {
+/app/lodepng.cpp:5401:    } else if(lodepng_chunk_type_equals(chunk, "pHYs")) {
+/app/lodepng.cpp:5404:    } else if(lodepng_chunk_type_equals(chunk, "gAMA")) {
+/app/lodepng.cpp:5407:    } else if(lodepng_chunk_type_equals(chunk, "cHRM")) {
+/app/lodepng.cpp:5410:    } else if(lodepng_chunk_type_equals(chunk, "sRGB")) {
+/app/lodepng.cpp:5413:    } else if(lodepng_chunk_type_equals(chunk, "iCCP")) {
+/app/lodepng.cpp:5416:    } else if(lodepng_chunk_type_equals(chunk, "cICP")) {
+/app/lodepng.cpp:5419:    } else if(lodepng_chunk_type_equals(chunk, "mDCV")) {
+/app/lodepng.cpp:5422:    } else if(lodepng_chunk_type_equals(chunk, "cLLI")) {
+/app/lodepng.cpp:5425:    } else if(lodepng_chunk_type_equals(chunk, "eXIf")) {
+/app/lodepng.cpp:5428:    } else if(lodepng_chunk_type_equals(chunk, "sBIT")) {
+/app/lodepng.cpp:5433:      if(!lodepng_chunk_type_name_valid(chunk)) {
+/app/lodepng.cpp:5436:      if(lodepng_chunk_reserved(chunk)) {
+/app/lodepng.cpp:5441:      if(!state->decoder.ignore_critical && !lodepng_chunk_ancillary(chunk)) {
+/app/lodepng.cpp:5448:        state->error = lodepng_chunk_append(&state->info_png.unknown_chunks_data[critical_pos - 1],
+/app/lodepng.cpp:5456:      if(lodepng_chunk_check_crc(chunk)) CERROR_BREAK(state->error, 57); /*invalid CRC*/
+/app/lodepng.cpp:5459:    if(!IEND) chunk = lodepng_chunk_next_const(chunk, in + insize);
+/app/lodepng.cpp:5470:      unsigned bpp = lodepng_get_bpp(&state->info_png.color);
+/app/lodepng.cpp:5471:      expected_size = lodepng_get_raw_size_idat(*w, *h, bpp);
+/app/lodepng.cpp:5473:      unsigned bpp = lodepng_get_bpp(&state->info_png.color);
+/app/lodepng.cpp:5476:      expected_size += lodepng_get_raw_size_idat((*w + 7) >> 3, (*h + 7) >> 3, bpp);
+/app/lodepng.cpp:5477:      if(*w > 4) expected_size += lodepng_get_raw_size_idat((*w + 3) >> 3, (*h + 7) >> 3, bpp);
+/app/lodepng.cpp:5478:      expected_size += lodepng_get_raw_size_idat((*w + 3) >> 2, (*h + 3) >> 3, bpp);
+/app/lodepng.cpp:5479:      if(*w > 2) expected_size += lodepng_get_raw_size_idat((*w + 1) >> 2, (*h + 3) >> 2, bpp);
+/app/lodepng.cpp:5480:      expected_size += lodepng_get_raw_size_idat((*w + 1) >> 1, (*h + 1) >> 2, bpp);
+/app/lodepng.cpp:5481:      if(*w > 1) expected_size += lodepng_get_raw_size_idat((*w + 0) >> 1, (*h + 1) >> 1, bpp);
+/app/lodepng.cpp:5482:      expected_size += lodepng_get_raw_size_idat((*w + 0), (*h + 0) >> 1, bpp);
+/app/lodepng.cpp:5488:  lodepng_free(idat);
+/app/lodepng.cpp:5491:    outsize = lodepng_get_raw_size(*w, *h, &state->info_png.color);
+/app/lodepng.cpp:5492:    *out = (unsigned char*)lodepng_malloc(outsize);
+/app/lodepng.cpp:5496:    lodepng_memset(*out, 0, outsize);
+/app/lodepng.cpp:5499:  lodepng_free(scanlines);
+/app/lodepng.cpp:5502:unsigned lodepng_decode(unsigned char** out, unsigned* w, unsigned* h,
+/app/lodepng.cpp:5508:  if(!state->decoder.color_convert || lodepng_color_mode_equal(&state->info_raw, &state->info_png.color)) {
+/app/lodepng.cpp:5513:      state->error = lodepng_color_mode_copy(&state->info_raw, &state->info_png.color);
+/app/lodepng.cpp:5527:    outsize = lodepng_get_raw_size(*w, *h, &state->info_raw);
+/app/lodepng.cpp:5528:    *out = (unsigned char*)lodepng_malloc(outsize);
+/app/lodepng.cpp:5532:    else state->error = lodepng_convert(*out, data, &state->info_raw,
+/app/lodepng.cpp:5534:    lodepng_free(data);
+/app/lodepng.cpp:5539:unsigned lodepng_decode_memory(unsigned char** out, unsigned* w, unsigned* h, const unsigned char* in,
+/app/lodepng.cpp:5543:  lodepng_state_init(&state);
+/app/lodepng.cpp:5551:  error = lodepng_decode(out, w, h, &state, in, insize);
+/app/lodepng.cpp:5552:  lodepng_state_cleanup(&state);
+/app/lodepng.cpp:5556:unsigned lodepng_decode32(unsigned char** out, unsigned* w, unsigned* h, const unsigned char* in, size_t insize) {
+/app/lodepng.cpp:5557:  return lodepng_decode_memory(out, w, h, in, insize, LCT_RGBA, 8);
+/app/lodepng.cpp:5560:unsigned lodepng_decode24(unsigned char** out, unsigned* w, unsigned* h, const unsigned char* in, size_t insize) {
+/app/lodepng.cpp:5561:  return lodepng_decode_memory(out, w, h, in, insize, LCT_RGB, 8);
+/app/lodepng.cpp:5565:unsigned lodepng_decode_file(unsigned char** out, unsigned* w, unsigned* h, const char* filename,
+/app/lodepng.cpp:5573:  error = lodepng_load_file(&buffer, &buffersize, filename);
+/app/lodepng.cpp:5574:  if(!error) error = lodepng_decode_memory(out, w, h, buffer, buffersize, colortype, bitdepth);
+/app/lodepng.cpp:5575:  lodepng_free(buffer);
+/app/lodepng.cpp:5579:unsigned lodepng_decode32_file(unsigned char** out, unsigned* w, unsigned* h, const char* filename) {
+/app/lodepng.cpp:5580:  return lodepng_decode_file(out, w, h, filename, LCT_RGBA, 8);
+/app/lodepng.cpp:5583:unsigned lodepng_decode24_file(unsigned char** out, unsigned* w, unsigned* h, const char* filename) {
+/app/lodepng.cpp:5584:  return lodepng_decode_file(out, w, h, filename, LCT_RGB, 8);
+/app/lodepng.cpp:5588:void lodepng_decoder_settings_init(LodePNGDecoderSettings* settings) {
+/app/lodepng.cpp:5599:  lodepng_decompress_settings_init(&settings->zlibsettings);
+/app/lodepng.cpp:5606:void lodepng_state_init(LodePNGState* state) {
+/app/lodepng.cpp:5608:  lodepng_decoder_settings_init(&state->decoder);
+/app/lodepng.cpp:5611:  lodepng_encoder_settings_init(&state->encoder);
+/app/lodepng.cpp:5613:  lodepng_color_mode_init(&state->info_raw);
+/app/lodepng.cpp:5614:  lodepng_info_init(&state->info_png);
+/app/lodepng.cpp:5618:void lodepng_state_cleanup(LodePNGState* state) {
+/app/lodepng.cpp:5619:  lodepng_color_mode_cleanup(&state->info_raw);
+/app/lodepng.cpp:5620:  lodepng_info_cleanup(&state->info_png);
+/app/lodepng.cpp:5623:void lodepng_state_copy(LodePNGState* dest, const LodePNGState* source) {
+/app/lodepng.cpp:5624:  lodepng_state_cleanup(dest);
+/app/lodepng.cpp:5626:  lodepng_color_mode_init(&dest->info_raw);
+/app/lodepng.cpp:5627:  lodepng_info_init(&dest->info_png);
+/app/lodepng.cpp:5628:  dest->error = lodepng_color_mode_copy(&dest->info_raw, &source->info_raw); if(dest->error) return;
+/app/lodepng.cpp:5629:  dest->error = lodepng_info_copy(&dest->info_png, &source->info_png); if(dest->error) return;
+/app/lodepng.cpp:5646:  lodepng_memcpy(out->data + pos, signature, 8);
+/app/lodepng.cpp:5653:  CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 13, "IHDR"));
+/app/lodepng.cpp:5656:  lodepng_set32bitInt(data + 0, w); /*width*/
+/app/lodepng.cpp:5657:  lodepng_set32bitInt(data + 4, h); /*height*/
+/app/lodepng.cpp:5664:  lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:5677:  CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, info->palettesize * 3, "PLTE"));
+/app/lodepng.cpp:5686:  lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:5701:      CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, amount, "tRNS"));
+/app/lodepng.cpp:5707:      CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 2, "tRNS"));
+/app/lodepng.cpp:5713:      CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 6, "tRNS"));
+/app/lodepng.cpp:5723:  if(chunk) lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:5739:      error = lodepng_chunk_createv(out, max_chunk_length, "IDAT", zlib + pos);
+/app/lodepng.cpp:5742:      error = lodepng_chunk_createv(out, zlibsize - pos, "IDAT", zlib + pos);
+/app/lodepng.cpp:5746:  lodepng_free(zlib);
+/app/lodepng.cpp:5751:  return lodepng_chunk_createv(out, 0, "IEND", 0);
+/app/lodepng.cpp:5758:  size_t keysize = lodepng_strlen(keyword), textsize = lodepng_strlen(textstring);
+/app/lodepng.cpp:5761:  CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, size, "tEXt"));
+/app/lodepng.cpp:5762:  lodepng_memcpy(chunk + 8, keyword, keysize);
+/app/lodepng.cpp:5764:  lodepng_memcpy(chunk + 9 + keysize, textstring, textsize);
+/app/lodepng.cpp:5765:  lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:5775:  size_t textsize = lodepng_strlen(textstring);
+/app/lodepng.cpp:5776:  size_t keysize = lodepng_strlen(keyword);
+/app/lodepng.cpp:5783:    error = lodepng_chunk_init(&chunk, out, size, "zTXt");
+/app/lodepng.cpp:5786:    lodepng_memcpy(chunk + 8, keyword, keysize);
+/app/lodepng.cpp:5789:    lodepng_memcpy(chunk + 10 + keysize, compressed, compressedsize);
+/app/lodepng.cpp:5790:    lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:5793:  lodepng_free(compressed);
+/app/lodepng.cpp:5803:  size_t textsize = lodepng_strlen(textstring);
+/app/lodepng.cpp:5804:  size_t keysize = lodepng_strlen(keyword), langsize = lodepng_strlen(langtag), transsize = lodepng_strlen(transkey);
+/app/lodepng.cpp:5814:    error = lodepng_chunk_init(&chunk, out, size, "iTXt");
+/app/lodepng.cpp:5818:    lodepng_memcpy(chunk + pos, keyword, keysize);
+/app/lodepng.cpp:5823:    lodepng_memcpy(chunk + pos, langtag, langsize);
+/app/lodepng.cpp:5826:    lodepng_memcpy(chunk + pos, transkey, transsize);
+/app/lodepng.cpp:5830:      lodepng_memcpy(chunk + pos, compressed, compressedsize);
+/app/lodepng.cpp:5832:      lodepng_memcpy(chunk + pos, textstring, textsize);
+/app/lodepng.cpp:5834:    lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:5837:  lodepng_free(compressed);
+/app/lodepng.cpp:5844:    CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 2, "bKGD"));
+/app/lodepng.cpp:5848:    CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 6, "bKGD"));
+/app/lodepng.cpp:5856:    CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 1, "bKGD"));
+/app/lodepng.cpp:5859:  if(chunk) lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:5865:  CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 7, "tIME"));
+/app/lodepng.cpp:5873:  lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:5879:  CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 9, "pHYs"));
+/app/lodepng.cpp:5880:  lodepng_set32bitInt(chunk + 8, info->phys_x);
+/app/lodepng.cpp:5881:  lodepng_set32bitInt(chunk + 12, info->phys_y);
+/app/lodepng.cpp:5883:  lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:5889:  CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 4, "gAMA"));
+/app/lodepng.cpp:5890:  lodepng_set32bitInt(chunk + 8, info->gama_gamma);
+/app/lodepng.cpp:5891:  lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:5897:  CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 32, "cHRM"));
+/app/lodepng.cpp:5898:  lodepng_set32bitInt(chunk + 8, info->chrm_white_x);
+/app/lodepng.cpp:5899:  lodepng_set32bitInt(chunk + 12, info->chrm_white_y);
+/app/lodepng.cpp:5900:  lodepng_set32bitInt(chunk + 16, info->chrm_red_x);
+/app/lodepng.cpp:5901:  lodepng_set32bitInt(chunk + 20, info->chrm_red_y);
+/app/lodepng.cpp:5902:  lodepng_set32bitInt(chunk + 24, info->chrm_green_x);
+/app/lodepng.cpp:5903:  lodepng_set32bitInt(chunk + 28, info->chrm_green_y);
+/app/lodepng.cpp:5904:  lodepng_set32bitInt(chunk + 32, info->chrm_blue_x);
+/app/lodepng.cpp:5905:  lodepng_set32bitInt(chunk + 36, info->chrm_blue_y);
+/app/lodepng.cpp:5906:  lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:5912:  return lodepng_chunk_createv(out, 1, "sRGB", &data);
+/app/lodepng.cpp:5920:  size_t keysize = lodepng_strlen(info->iccp_name);
+/app/lodepng.cpp:5927:    error = lodepng_chunk_init(&chunk, out, size, "iCCP");
+/app/lodepng.cpp:5930:    lodepng_memcpy(chunk + 8, info->iccp_name, keysize);
+/app/lodepng.cpp:5933:    lodepng_memcpy(chunk + 10 + keysize, compressed, compressedsize);
+/app/lodepng.cpp:5934:    lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:5937:  lodepng_free(compressed);
+/app/lodepng.cpp:5950:  CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 4, "cICP"));
+/app/lodepng.cpp:5955:  lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:5970:  CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 24, "mDCV"));
+/app/lodepng.cpp:5987:  lodepng_set32bitInt(chunk + 8 + 16, info->mdcv_max_luminance);
+/app/lodepng.cpp:5988:  lodepng_set32bitInt(chunk + 8 + 20, info->mdcv_min_luminance);
+/app/lodepng.cpp:5989:  lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:5995:  CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 8, "cLLI"));
+/app/lodepng.cpp:5996:  lodepng_set32bitInt(chunk + 8 + 0, info->clli_max_cll);
+/app/lodepng.cpp:5997:  lodepng_set32bitInt(chunk + 8 + 4, info->clli_max_fall);
+/app/lodepng.cpp:5998:  lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:6003:  return lodepng_chunk_createv(out, info->exif_size, "eXIf", info->exif);
+/app/lodepng.cpp:6011:    CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 1, "sBIT"));
+/app/lodepng.cpp:6016:    CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 3, "sBIT"));
+/app/lodepng.cpp:6023:    CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 2, "sBIT"));
+/app/lodepng.cpp:6032:    CERROR_TRY_RETURN(lodepng_chunk_init(&chunk, out, 4, "sBIT"));
+/app/lodepng.cpp:6038:  if(chunk) lodepng_chunk_generate_crc(chunk);
+/app/lodepng.cpp:6117:  unsigned bpp = lodepng_get_bpp(color);
+/app/lodepng.cpp:6119:  size_t linebytes = lodepng_get_raw_size_idat(w, 1, bpp) - 1u;
+/app/lodepng.cpp:6153:      attempt[type] = (unsigned char*)lodepng_malloc(linebytes);
+/app/lodepng.cpp:6192:    for(type = 0; type != 5; ++type) lodepng_free(attempt[type]);
+/app/lodepng.cpp:6200:      attempt[type] = (unsigned char*)lodepng_malloc(linebytes);
+/app/lodepng.cpp:6210:          lodepng_memset(count, 0, 256 * sizeof(*count));
+/app/lodepng.cpp:6231:    for(type = 0; type != 5; ++type) lodepng_free(attempt[type]);
+/app/lodepng.cpp:6251:    lodepng_memcpy(&zlibsettings, &settings->zlibsettings, sizeof(LodePNGCompressSettings));
+/app/lodepng.cpp:6262:      attempt[type] = (unsigned char*)lodepng_malloc(linebytes);
+/app/lodepng.cpp:6275:          lodepng_free(dummy);
+/app/lodepng.cpp:6287:    for(type = 0; type != 5; ++type) lodepng_free(attempt[type]);
+/app/lodepng.cpp:6373:  size_t bpp = lodepng_get_bpp(&info_png->color);
+/app/lodepng.cpp:6378:    *out = (unsigned char*)lodepng_malloc(*outsize);
+/app/lodepng.cpp:6384:        unsigned char* padded = (unsigned char*)lodepng_malloc(h * ((w * bpp + 7u) / 8u));
+/app/lodepng.cpp:6390:        lodepng_free(padded);
+/app/lodepng.cpp:6404:    *out = (unsigned char*)lodepng_malloc(*outsize);
+/app/lodepng.cpp:6407:    adam7 = (unsigned char*)lodepng_malloc(passstart[7]);
+/app/lodepng.cpp:6416:          unsigned char* padded = (unsigned char*)lodepng_malloc(padded_passstart[i + 1] - padded_passstart[i]);
+/app/lodepng.cpp:6422:          lodepng_free(padded);
+/app/lodepng.cpp:6432:    lodepng_free(adam7);
+/app/lodepng.cpp:6442:    CERROR_TRY_RETURN(lodepng_chunk_append(&out->data, &out->size, inchunk));
+/app/lodepng.cpp:6444:    inchunk = lodepng_chunk_next(inchunk, data + datasize);
+/app/lodepng.cpp:6470:unsigned lodepng_encode(unsigned char** out, size_t* outsize,
+/app/lodepng.cpp:6480:  lodepng_info_init(&info);
+/app/lodepng.cpp:6481:  lodepng_color_mode_init(&auto_color);
+/app/lodepng.cpp:6512:  lodepng_info_copy(&info, &state->info_png);
+/app/lodepng.cpp:6516:    lodepng_color_stats_init(&stats);
+/app/lodepng.cpp:6530:    state->error = lodepng_compute_color_stats(&stats, image, w, h, &state->info_raw);
+/app/lodepng.cpp:6536:      LodePNGColorMode mode16 = lodepng_color_mode_make(LCT_RGB, 16);
+/app/lodepng.cpp:6537:      lodepng_convert_rgb(&r, &g, &b,
+/app/lodepng.cpp:6539:      state->error = lodepng_color_stats_add(&stats, r, g, b, 65535);
+/app/lodepng.cpp:6604:      lodepng_color_mode_copy(&info.color, &auto_color);
+/app/lodepng.cpp:6608:        if(lodepng_convert_rgb(&info.background_r, &info.background_g, &info.background_b,
+/app/lodepng.cpp:6634:  if(!lodepng_color_mode_equal(&state->info_raw, &info.color)) {
+/app/lodepng.cpp:6636:    size_t size = ((size_t)w * (size_t)h * (size_t)lodepng_get_bpp(&info.color) + 7u) / 8u;
+/app/lodepng.cpp:6638:    converted = (unsigned char*)lodepng_malloc(size);
+/app/lodepng.cpp:6641:      state->error = lodepng_convert(converted, image, &info.color, &state->info_raw, w, h);
+/app/lodepng.cpp:6646:    lodepng_free(converted);
+/app/lodepng.cpp:6749:      if(lodepng_strlen(info.text_keys[i]) > 79) {
+/app/lodepng.cpp:6753:      if(lodepng_strlen(info.text_keys[i]) < 1) {
+/app/lodepng.cpp:6784:      if(lodepng_strlen(info.itext_keys[i]) > 79) {
+/app/lodepng.cpp:6788:      if(lodepng_strlen(info.itext_keys[i]) < 1) {
+/app/lodepng.cpp:6810:  lodepng_info_cleanup(&info);
+/app/lodepng.cpp:6811:  lodepng_free(data);
+/app/lodepng.cpp:6812:  lodepng_color_mode_cleanup(&auto_color);
+/app/lodepng.cpp:6821:unsigned lodepng_encode_memory(unsigned char** out, size_t* outsize, const unsigned char* image,
+/app/lodepng.cpp:6825:  lodepng_state_init(&state);
+/app/lodepng.cpp:6830:  lodepng_encode(out, outsize, image, w, h, &state);
+/app/lodepng.cpp:6832:  lodepng_state_cleanup(&state);
+/app/lodepng.cpp:6836:unsigned lodepng_encode32(unsigned char** out, size_t* outsize, const unsigned char* image, unsigned w, unsigned h) {
+/app/lodepng.cpp:6837:  return lodepng_encode_memory(out, outsize, image, w, h, LCT_RGBA, 8);
+/app/lodepng.cpp:6840:unsigned lodepng_encode24(unsigned char** out, size_t* outsize, const unsigned char* image, unsigned w, unsigned h) {
+/app/lodepng.cpp:6841:  return lodepng_encode_memory(out, outsize, image, w, h, LCT_RGB, 8);
+/app/lodepng.cpp:6845:unsigned lodepng_encode_file(const char* filename, const unsigned char* image, unsigned w, unsigned h,
+/app/lodepng.cpp:6849:  unsigned error = lodepng_encode_memory(&buffer, &buffersize, image, w, h, colortype, bitdepth);
+/app/lodepng.cpp:6850:  if(!error) error = lodepng_save_file(buffer, buffersize, filename);
+/app/lodepng.cpp:6851:  lodepng_free(buffer);
+/app/lodepng.cpp:6855:unsigned lodepng_encode32_file(const char* filename, const unsigned char* image, unsigned w, unsigned h) {
+/app/lodepng.cpp:6856:  return lodepng_encode_file(filename, image, w, h, LCT_RGBA, 8);
+/app/lodepng.cpp:6859:unsigned lodepng_encode24_file(const char* filename, const unsigned char* image, unsigned w, unsigned h) {
+/app/lodepng.cpp:6860:  return lodepng_encode_file(filename, image, w, h, LCT_RGB, 8);
+/app/lodepng.cpp:6864:void lodepng_encoder_settings_init(LodePNGEncoderSettings* settings) {
+/app/lodepng.cpp:6865:  lodepng_compress_settings_init(&settings->zlibsettings);
+/app/lodepng.cpp:6885:const char* lodepng_error_text(unsigned code) {
+/app/lodepng.cpp:7028:namespace lodepng {
+/app/lodepng.cpp:7033:  long size = lodepng_filesize(file);
+/app/lodepng.cpp:7052:  return lodepng_save_file(buffer.empty() ? 0 : &buffer[0], buffer.size(), filename.c_str());
+/app/lodepng.cpp:7065:    lodepng_free(buffer);
+/app/lodepng.cpp:7084:    lodepng_free(buffer);
+/app/lodepng.cpp:7100:  lodepng_state_init(this);
+/app/lodepng.cpp:7104:  lodepng_state_init(this);
+/app/lodepng.cpp:7105:  lodepng_state_copy(this, &other);
+/app/lodepng.cpp:7109:  lodepng_state_cleanup(this);
+/app/lodepng.cpp:7113:  lodepng_state_copy(this, &other);
+/app/lodepng.cpp:7122:  unsigned error = lodepng_decode_memory(&buffer, &w, &h, in, insize, colortype, bitdepth);
+/app/lodepng.cpp:7127:    size_t buffersize = lodepng_get_raw_size(w, h, &state.info_raw);
+/app/lodepng.cpp:7130:  lodepng_free(buffer);
+/app/lodepng.cpp:7143:  unsigned error = lodepng_decode(&buffer, &w, &h, &state, in, insize);
+/app/lodepng.cpp:7145:    size_t buffersize = lodepng_get_raw_size(w, h, &state.info_raw);
+/app/lodepng.cpp:7148:  lodepng_free(buffer);
+/app/lodepng.cpp:7176:  unsigned error = lodepng_encode_memory(&buffer, &buffersize, in, w, h, colortype, bitdepth);
+/app/lodepng.cpp:7179:    lodepng_free(buffer);
+/app/lodepng.cpp:7187:  if(lodepng_get_raw_size_lct(w, h, colortype, bitdepth) > in.size()) return 84;
+/app/lodepng.cpp:7196:  unsigned error = lodepng_encode(&buffer, &buffersize, in, w, h, &state);
+/app/lodepng.cpp:7199:    lodepng_free(buffer);
+/app/lodepng.cpp:7207:  if(lodepng_get_raw_size(w, h, &state.info_raw) > in.size()) return 84;
+/app/lodepng.cpp:7224:  if(lodepng_get_raw_size_lct(w, h, colortype, bitdepth) > in.size()) return 84;
+/app/lodepng.cpp:7230:} /* namespace lodepng */
+[?2004hroot@f8142e42ab33:/app# printf "%s" "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <math.h>\n#include \"cJSON.h\"\n#include \"lodepng.h\"\n\n// Utility to read file into string\nchar* read_file(const char* path) {\n    FILE* f = fopen(path, \"rb\");\n    if (!f) return NULL;\n    fseek(f, 0, SEEK_END);\n    long sz = ftell(f);\n    fseek(f, 0, SEEK_SET);\n    char* buf = (char*)malloc(sz + 1);\n    if (!buf) { fclose(f); return NULL; }\n    if (fread(buf, 1, sz, f) != (size_t)sz) { free(buf); fclose(f); return NULL; }\n    buf[sz] = '\0';\n    fclose(f);\n    return buf;\n}\n\n// Simple tensor helpers for 2D/4D conv/linear operations\nstatic inline float relu(float x) { return x > 0 ? x : 0; }\n\n// Forward for Linear layer: y = W x + b\nvoid linear_forward(const float* W, const float* b, int out_features, int in_features, const float* x, float* y) {\n    for (int o = 0; o < out_features; ++o) {\n        double acc = 0.0;\n        const float* wrow = W + o * in_features;\n        for (int i = 0; i < in_features; ++i) acc += wrow[i] * x[i];\n        y[o] = (float)(acc + (b ? b[o] : 0.0f));\n    }\n}\n\n// Convolution forward (NCHW with single image), padding and stride supported minimally\nvoid conv2d_forward(const float* W, const float* b, int out_c, int in_c, int kH, int kW, int strideH, int strideW, int padH, int padW,\n                    int inH, int inW, const float* x, float* y) {\n    int outH = (inH + 2*padH - kH)/strideH + 1;\n    int outW = (inW + 2*padW - kW)/strideW + 1;\n    // y layout: [out_c, outH, outW]\n    for (int oc = 0; oc < out_c; ++oc) {\n        for (int oy = 0; oy < outH; ++oy) {\n            for (int ox = 0; ox < outW; ++ox) {\n                double acc = 0.0;\n                for (int ic = 0; ic < in_c; ++ic) {\n                    for (int ky = 0; ky < kH; ++ky) {\n                        for (int kx = 0; kx < kW; ++kx) {\n                            int in_y = oy*strideH + ky - padH;\n                            int in_x = ox*strideW + kx - padW;\n                            if (in_y >= 0 && in_y < inH && in_x >= 0 && in_x < inW) {\n                                float xv = x[ic*inH*inW + in_y*inW + in_x];\n                                float wv = W[oc*in_c*kH*kW + ic*kH*kW + ky*kW + kx];\n                                acc += xv * wv;\n                            }\n                        }\n                    }\n                }\n                float val = (float)acc + (b ? b[oc] : 0.0f);\n                y[oc*outW*outH + oy*outW + ox] = val;\n            }\n        }\n    }\n}\n\n// MaxPool2d forward, square kernel and stride\nvoid maxpool2d_forward(int kernel, int stride, int in_c, int inH, int inW, const float* x, float* y) {\n    int outH = (inH - kernel)/stride + 1;\n    int outW = (inW - kernel)/stride + 1;\n    for (int c = 0; c < in_c; ++c) {\n        for (int oy = 0; oy < outH; ++oy) {\n            for (int ox = 0; ox < outW; ++ox) {\n                float m = -1e9f;\n                for (int ky = 0; ky < kernel; ++ky) {\n                    for (int kx = 0; kx < kernel; ++kx) {\n                        int iy = oy*stride + ky;\n                        int ix = ox*stride + kx;\n                        float v = x[c*inH*inW + iy*inW + ix];\n                        if (v > m) m = v;\n                    }\n                }\n                y[c*outH*outW + oy*outW + ox] = m;\n            }\n        }\n    }\n}\n\nint main(int argc, char** argv) {\n    if (argc < 3) {\n        fprintf(stderr, \"Usage: %s weights.json image.png\\n\", argv[0]);\n        return 1;\n    }\n    const char* wpath = argv[1];\n    const char* ipath = argv[2];\n\n    // Load JSON\n    char* json_str = read_file(wpath);\n    if (!json_str) { fprintf(stderr, \"Failed to read weights.json\\n\"); return 1; }\n    cJSON* root = cJSON_Parse(json_str);\n    if (!root) { fprintf(stderr, \"Failed to parse JSON\\n\"); free(json_str); return 1; }\n    cJSON* layers = cJSON_GetObjectItem(root, \"layers\");\n    if (!layers || !cJSON_IsArray(layers)) { fprintf(stderr, \"Invalid JSON format\\n\"); cJSON_Delete(root); free(json_str); return 1; }\n\n    // Decode PNG -> we will decode to grayscale 8-bit. If lodepng doesn't give grayscale, decode RGBA and convert.
+[?2004lbash: !f: event not found
+[?2004hroot@f8142e42ab33:/app#     unsigned char* img = NULL; unsigned w=0,h=0; unsigned err;
+[?2004lbash: unsigned: command not found
+bash: unsigned: command not found
+bash: unsigned: command not found
+[?2004hroot@f8142e42ab33:/app#     // Try to decode into grayscale
+[?2004lbash: //: Is a directory
+[?2004hroot@f8142e42ab33:/app#     err = lodepng_decode_file(&img, &w, &h, ipath, LCT_GREY, 8);
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#     if (err) {
+[?2004lbash: syntax error near unexpected token `{'
+[?2004hroot@f8142e42ab33:/app#         // fallback to RGBA
+[?2004lbash: //: Is a directory
+[?2004hroot@f8142e42ab33:/app#         free(img);
+[?2004lbash: syntax error near unexpected token `img'
+[?2004hroot@f8142e42ab33:/app#         img = NULL; w=h=0;
+[?2004lbash: img: command not found
+[?2004hroot@f8142e42ab33:/app#         err = lodepng_decode32_file(&img, &w, &h, ipath);
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#         if (err) { fprintf(stderr, "PNG decode error %u: %s\n", err, lodepng_error_text(err)); cJSON_Delete(root); free(json_str); return 1; }
+[?2004lbash: syntax error near unexpected token `{'
+[?2004hroot@f8142e42ab33:/app#     }
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f8142e42ab33:/app#     if (w != 28 || h != 28) { fprintf(stderr, "Expected 28x28 image, got %ux%u\n", w, h); cJSON_Delete(root); free(json_str); free(img); return 1; }
+[?2004lbash: syntax error near unexpected token `{'
+[?2004hroot@f8142e42ab33:/app# 
+[?2004l[?2004hroot@f8142e42ab33:/app#     // Prepare input tensor: 1x28x28 float normalized to [0,1]
+[?2004lbash: //: Is a directory
+[?2004hroot@f8142e42ab33:/app#     int inH = 28, inW = 28;
+[?2004lbash: int: command not found
+[?2004hroot@f8142e42ab33:/app#     float* input = (float*)malloc(sizeof(float)*inH*inW);
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#     if (!input) { fprintf(stderr, "OOM\n"); cJSON_Delete(root); free(json_str); free(img); return 1; }
+[?2004lbash: !input: event not found
+[?2004hroot@f8142e42ab33:/app#     if (err == 0 && img) {
+[?2004lbash: syntax error near unexpected token `{'
+[?2004hroot@f8142e42ab33:/app#         // If greyscale: one byte per pixel; if RGBA: 4 bytes per pixel
+[?2004l[?2004h>         if (lodepng_inspect(NULL,NULL,NULL,NULL, ipath), 0) {}
+[?2004lbash: syntax error near unexpected token `NULL,NULL,NULL,NULL,'
+[?2004hroot@f8142e42ab33:/app#     }
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f8142e42ab33:/app#     // Determine if data is RGBA based on decoded bytes length
+[?2004lbash: //: Is a directory
+[?2004hroot@f8142e42ab33:/app#     size_t pxlen = 0; // we cannot reliably get size here; infer by assuming grayscale attempt succeeded if err==0 first
+[?2004lbash: size_t: command not found
+bash: //: Is a directory
+bash: infer: command not found
+[?2004hroot@f8142e42ab33:/app#     // We'll check if decoding was grayscale by trying a second decode flag earlier; simpler: if we used decode_file with LCT_GREY success
+[?2004l[?2004h>     // For robustness, detect if every forth byte exists by assuming if we decoded via fallback (RGBA)
+[?2004l[?2004h>     // Simple approach: if we used decode32_file path, we set a flag
+[?2004l[?2004h>     int rgba = 0;
+[?2004l[?2004h>     // We cannot track easily; set rgba if we retried
+[?2004l[?2004h>     // We'll set rgba if the initial grayscale decode failed (err non-zero before fallback). We preserved err of fallback; but we lost the first err.
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#     // For clarity, assume if image has 28*28*4 bytes, it's RGBA.
+[?2004l[?2004h>     // Compute bytes per pixel
+[?2004l[?2004h>     // We can approximate by checking if any alpha pattern exists (not available). We'll just convert assuming either grayscale or RGBA by checking length via w*h and memory boundaries not available.
+[?2004lbash: //: Is a directory
+[?2004hroot@f8142e42ab33:/app#     // We'll add a heuristic: try to read first 4 bytes after w*h; if access valid we shouldn't rely. Simpler: attempt to convert as RGBA then fallback to grayscale pointer usage.
+[?2004lbash: //: Is a directory
+[?2004hroot@f8142e42ab33:/app#     // We'll use lodepng_get_channels from color type not available here; so we assume grayscale since MNIST image likely grayscale.
+[?2004l[?2004h>     for (int y=0; y<inH; ++y) {
+[?2004l[?2004h>         for (int x=0; x<inW; ++x) {
+[?2004l[?2004h>             unsigned char v = img[y*inW + x];
+[?2004l[?2004h>             input[y*inW + x] = ((float)v) / 255.0f;
+[?2004l[?2004h>         }
+[?2004l[?2004h>     }
+[?2004l[?2004h> 
+[?2004l[?2004h>     // Now perform forward according to layers JSON
+[?2004l[?2004h>     // We'll maintain a dynamic current tensor buffer. For Conv2d: 3D [C,H,W]; For Linear: vector
+[?2004lbash: //: Is a directory
+bash: For: command not found
+[?2004hroot@f8142e42ab33:/app#     // Begin with one-channel input
+[?2004lbash: //: Is a directory
+[?2004hroot@f8142e42ab33:/app#     int cur_c = 1; int curH = inH; int curW = inW;
+[?2004lbash: int: command not found
+bash: int: command not found
+bash: int: command not found
+[?2004hroot@f8142e42ab33:/app#     float* cur = (float*)malloc(sizeof(float)*cur_c*curH*curW);
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#     for (int i=0;i<cur_c*curH*curW;++i) cur[i]=input[i];
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#     float* next = NULL;
+[?2004lbash: float*: command not found
+[?2004hroot@f8142e42ab33:/app# 
+[?2004l[?2004hroot@f8142e42ab33:/app#     int linear_in_features = -1; // track for flatten
+[?2004lbash: int: command not found
+bash: //: Is a directory
+[?2004hroot@f8142e42ab33:/app# 
+[?2004l[?2004hroot@f8142e42ab33:/app#     int layers_count = cJSON_GetArraySize(layers);
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#     for (int li=0; li<layers_count; ++li) {
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#         cJSON* L = cJSON_GetArrayItem(layers, li);
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#         cJSON* type = cJSON_GetObjectItem(L, "type");
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#         if (!cJSON_IsString(type)) continue;
+[?2004lbash: !cJSON_IsString: event not found
+[?2004hroot@f8142e42ab33:/app#         const char* t = type->valuestring;
+[?2004lbash: const: command not found
+[?2004hroot@f8142e42ab33:/app#         if (strcmp(t, "Conv2d") == 0) {
+[?2004lbash: syntax error near unexpected token `t,'
+[?2004hroot@f8142e42ab33:/app#             int out_c = cJSON_GetObjectItem(L, "out_channels")->valueint;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             int in_c = cJSON_GetObjectItem(L, "in_channels")->valueint;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             int kH = cJSON_GetObjectItem(L, "kernel_size")->child->valueint;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             int kW = cJSON_GetObjectItem(L, "kernel_size")->child->next->valueint;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             int sH = cJSON_GetObjectItem(L, "stride")->child->valueint;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             int sW = cJSON_GetObjectItem(L, "stride")->child->next->valueint;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             int pH = cJSON_GetObjectItem(L, "padding")->child->valueint;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             int pW = cJSON_GetObjectItem(L, "padding")->child->next->valueint;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             // load weights array shape [out_c, in_c, kH, kW]
+[?2004lbash: //: Is a directory
+[?2004hroot@f8142e42ab33:/app#             cJSON* Wj = cJSON_GetObjectItem(L, "weight");
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             cJSON* Bj = cJSON_GetObjectItem(L, "bias");
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             // allocate weights
+[?2004lbash: //: Is a directory
+[?2004hroot@f8142e42ab33:/app#             float* W = (float*)malloc(sizeof(float)*out_c*in_c*kH*kW);
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             int wi=0;
+[?2004lbash: int: command not found
+[?2004hroot@f8142e42ab33:/app#             for (cJSON* oc = Wj->child; oc; oc = oc->next) {
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#                 for (cJSON* icj = oc->child; icj; icj = icj->next) {
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#                     for (cJSON* ky = icj->child; ky; ky = ky->next) {
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#                         for (cJSON* kx = ky->child; kx; kx = kx->next) {
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#                             W[wi++] = (float)kx->valuedouble;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#                         }
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f8142e42ab33:/app#                     }
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f8142e42ab33:/app#                 }
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f8142e42ab33:/app#             }
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f8142e42ab33:/app#             float* B = NULL;
+[?2004lbash: float*: command not found
+[?2004hroot@f8142e42ab33:/app#             if (Bj && !cJSON_IsNull(Bj)) {
+[?2004lbash: !cJSON_IsNull: event not found
+[?2004hroot@f8142e42ab33:/app#                 B = (float*)malloc(sizeof(float)*out_c);
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#                 int bi=0; for (cJSON* be = Bj->child; be; be = be->next) B[bi++] = (float)be->valuedouble;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             }
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f8142e42ab33:/app#             int outH = (curH + 2*pH - kH)/sH + 1;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             int outW = (curW + 2*pW - kW)/sW + 1;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             next = (float*)malloc(sizeof(float)*out_c*outH*outW);
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             conv2d_forward(W, B, out_c, in_c, kH, kW, sH, sW, pH, pW, curH, curW, cur, next);
+[?2004lbash: syntax error near unexpected token `W,'
+[?2004hroot@f8142e42ab33:/app#             free(cur); cur = next; next=NULL; cur_c = out_c; curH = outH; curW = outW;
+[?2004lbash: syntax error near unexpected token `cur'
+[?2004hroot@f8142e42ab33:/app#             if (W) free(W); if (B) free(B);
+[?2004lbash: syntax error near unexpected token `free'
+[?2004hroot@f8142e42ab33:/app#         } else if (strcmp(t, "ReLU") == 0) {
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f8142e42ab33:/app#             int N = cur_c*curH*curW;
+[?2004lbash: int: command not found
+[?2004hroot@f8142e42ab33:/app#             for (int i=0;i<N;++i) cur[i] = relu(cur[i]);
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#         } else if (strcmp(t, "MaxPool2d") == 0) {
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f8142e42ab33:/app#             int kernel = cJSON_GetObjectItem(L, "kernel_size")->child->valueint;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             int stride = cJSON_GetObjectItem(L, "stride")->child->valueint;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             int outH = (curH - kernel)/stride + 1;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             int outW = (curW - kernel)/stride + 1;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             next = (float*)malloc(sizeof(float)*cur_c*outH*outW);
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             maxpool2d_forward(kernel, stride, cur_c, curH, curW, cur, next);
+[?2004lbash: syntax error near unexpected token `kernel,'
+[?2004hroot@f8142e42ab33:/app#             free(cur); cur = next; next=NULL; curH = outH; curW = outW;
+[?2004lbash: syntax error near unexpected token `cur'
+[?2004hroot@f8142e42ab33:/app#         } else if (strcmp(t, "Flatten") == 0) {
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f8142e42ab33:/app#             // flatten to vector
+[?2004lbash: //: Is a directory
+[?2004hroot@f8142e42ab33:/app#             linear_in_features = cur_c*curH*curW;
+[?2004lbash: linear_in_features: command not found
+[?2004hroot@f8142e42ab33:/app#             float* vec = (float*)malloc(sizeof(float)*linear_in_features);
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             memcpy(vec, cur, sizeof(float)*linear_in_features);
+[?2004lbash: syntax error near unexpected token `vec,'
+[?2004hroot@f8142e42ab33:/app#             free(cur); cur = vec; cur_c = 1; curH = 1; curW = linear_in_features;
+[?2004lbash: syntax error near unexpected token `cur'
+[?2004hroot@f8142e42ab33:/app#         } else if (strcmp(t, "Linear") == 0) {
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f8142e42ab33:/app#             int out_features = cJSON_GetObjectItem(L, "out_features")->valueint;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             int in_features = cJSON_GetObjectItem(L, "in_features")->valueint;
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             cJSON* Wj = cJSON_GetObjectItem(L, "weight");
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             cJSON* Bj = cJSON_GetObjectItem(L, "bias");
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             float* W = (float*)malloc(sizeof(float)*out_features*in_features);
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             int wi=0; for (cJSON* row = Wj->child; row; row = row->next) { for (cJSON* col = row->child; col; col = col->next) { W[wi++] = (float)col->valuedouble; } }
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             float* B = NULL; if (Bj && !cJSON_IsNull(Bj)) { B = (float*)malloc(sizeof(float)*out_features); int bi=0; for (cJSON* be = Bj->child; be; be = be->next) B[bi++] = (float)be->valuedouble; }
+[?2004lbash: !cJSON_IsNull: event not found
+[?2004hroot@f8142e42ab33:/app#             float* y = (float*)malloc(sizeof(float)*out_features);
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f8142e42ab33:/app#             // cur is vector length in_features
+[?2004lbash: //: Is a directory
+[?2004hroot@f8142e42ab33:/app#             const float* x = cur;
+[?2004lbash: const: command not found
+[?2004hroot@f8142e42ab33:/app#             linear_forward(W, B, out_features, in_features, x, y);
+[?2004lbash: syntax error near unexpected token `W,'
+[?2004hroot@f8142e42ab33:/app#             free(cur); cur = y; cur_c = 1; curH = 1; curW = out_features;
+[?2004lbash: syntax error near unexpected token `cur'
+[?2004hroot@f8142e42ab33:/app#             free(W); if (B) free(B);
+[?2004lbash: syntax error near unexpected token `W'
+[?2004hroot@f8142e42ab33:/app#         } else if (strcmp(t, "Softmax") == 0 || strcmp(t, "LogSoftmax") == 0) {
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f8142e42ab33:/app#             // We'll compute softmax for final prediction if encountered
+[?2004l[?2004h>             int N = curW; // vector length
+[?2004l[?2004h>             double maxv = -1e9; for (int i=0;i<N;++i) if (cur[i]>maxv) maxv=cur[i];
+[?2004l[?2004h>             double sum = 0.0; for (int i=0;i<N;++i) sum += exp(cur[i]-maxv);
+[?2004l[?2004h>             for (int i=0;i<N;++i) cur[i] = (float)(exp(cur[i]-maxv)/sum);
+[?2004l[?2004h>         } else {
+[?2004l[?2004h>             // Unhandled layer types are ignored
+[?2004l[?2004h>         }
+[?2004l[?2004h>     }
+[?2004l[?2004h> 
+[?2004l[?2004h>     // Argmax
+[?2004l[?2004h>     int N = curW; int best = 0; float bestv = cur[0];
+[?2004l[?2004h>     for (int i=1;i<N;++i) { if (cur[i] > bestv) { bestv = cur[i]; best = i; } }
+[?2004l[?2004h> 
+[?2004l[?2004h>     // Output digit only
+[?2004l[?2004h>     printf("%d\n", best);
+[?2004l[?2004h> 
+[?2004l[?2004h>     // Write to prediction.txt
+[?2004l[?2004h>     FILE* pf = fopen("prediction.txt", "w");
+[?2004l[?2004h>     if (pf) { fprintf(pf, "%d\n", best); fclose(pf); }
+[?2004l[?2004h> 
+[?2004l[?2004h>     // Cleanup
+[?2004l[?2004h>     free(cur); free(input); free(img); cJSON_Delete(root); free(json_str);
+[?2004l[?2004h>     return 0;
+[?2004l[?2004h> }
+[?2004l[?2004h> " > cli_tool.c
+[?2004l[?2004h> ls -la | grep -E "cJSON|lodepng|cli_tool.c"
+[?2004l[?2004h> if [ -f cJSON.c ] && [ -f cJSON.h ]; then echo "cJSON local"; else echo "missing cJSON"; fi
+[?2004l[?2004h> if [ -f lodepng.c ] && [ -f lodepng.h ]; then echo "lodepng local"; else echo "missing lodepng"; fi
+[?2004l[?2004h> gcc -O2 -o cli_tool cli_tool.c cJSON.c lodepng.c -lm
+[?2004l[?2004h> if [ ! -x cli_tool ]; then echo "Compile failed, trying to fetch cJSON/lodepng sources"; fi
+[?2004l[?2004h> if [ ! -f cJSON.c ]; then wget -qO cJSON.c https://raw.githubusercontent.com/DaveGamble/cJSON/master/cJSON.c; fi
+[?2004l[?2004h> if [ ! -f cJSON.h ]; then wget -qO cJSON.h https://raw.githubusercontent.com/DaveGamble/cJSON/master/cJSON.h; fi
+[?2004l[?2004h> if [ ! -f lodepng.c ]; then wget -qO lodepng.c https://raw.githubusercontent.com/lvandeve/lodepng/master/lodepng.c; fi
+[?2004l[?2004h> if [ ! -f lodepng.h ]; then wget -qO lodepng.h https://raw.githubusercontent.com/lvandeve/lodepng/master/lodepng.h; fi
+[?2004l[?2004h> gcc -O2 -o cli_tool cli_tool.c cJSON.c lodepng.c -lm
+[?2004l[?2004h> ./cli_tool weights.json image.png > out.txt
+[?2004l[?2004h> cat out.txt
+[?2004l[?2004h> ls -la prediction.txt cli_tool weights.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> file model.pth
+[?2004l[?2004h> strings -n 10 model.pth | head -n 50
+[?2004l[?2004h> python3 -m pip --version
+[?2004l[?2004h> apt-get update -y
+[?2004l[?2004h> apt-get install -y python3-pip
+[?2004l[?2004h> python3 -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision --progress-bar off
+[?2004l[?2004h> python3 - << 'PY'
+[?2004l[?2004h> import json
+[?2004l[?2004h> import torch
+[?2004l[?2004h> import os
+[?2004l[?2004h> 
+[?2004l[?2004h> state_path = 'model.pth'
+[?2004l[?2004h> assert os.path.exists(state_path), 'model.pth not found'
+[?2004l[?2004h> 
+[?2004l[?2004h> sd = torch.load(state_path, map_location='cpu')
+[?2004l[?2004h> if isinstance(sd, dict) and 'state_dict' in sd:
+[?2004l[?2004h>     sd = sd['state_dict']
+[?2004l[?2004h> # Normalize keys (some checkpoints may prefix 'model.' or similar)
+[?2004l[?2004h> keys = list(sd.keys())
+[?2004l[?2004h> print('State dict keys:', keys)
+[?2004l[?2004h> 
+[?2004l[?2004h> def find_key(candidates):
+[?2004l[?2004h>     for k in candidates:
+[?2004l[?2004h>         if k in sd:
+[?2004l[?2004h>             return k
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> in_w_key = find_key(['input_layer.weight','model.input_layer.weight','net.input_layer.weight'])
+[?2004l[?2004h> in_b_key = find_key(['input_layer.bias','model.input_layer.bias','net.input_layer.bias'])
+[?2004l[?2004h> hid_w_key = find_key(['hidden_layer.weight','model.hidden_layer.weight','net.hidden_layer.weight'])
+[?2004l[?2004h> hid_b_key = find_key(['hidden_layer.bias','model.hidden_layer.bias','net.hidden_layer.bias'])
+[?2004l[?2004h> out_w_key = find_key(['output_layer.weight','model.output_layer.weight','net.output_layer.weight'])
+[?2004l[?2004h> out_b_key = find_key(['output_layer.bias','model.output_layer.bias','net.output_layer.bias'])
+[?2004l[?2004h> 
+[?2004l[?2004h> for k in [in_w_key,in_b_key,hid_w_key,hid_b_key,out_w_key,out_b_key]:
+[?2004l[?2004h>     if k is None:
+[?2004l[?2004h>         raise RuntimeError('Missing expected linear layer key in state_dict')
+[?2004l[?2004h> 
+[?2004l[?2004h> in_w = sd[in_w_key].cpu()
+[?2004l[?2004h> in_b = sd[in_b_key].cpu()
+[?2004l[?2004h> hid_w = sd[hid_w_key].cpu()
+[?2004l[?2004h> hid_b = sd[hid_b_key].cpu()
+[?2004l[?2004h> out_w = sd[out_w_key].cpu()
+[?2004l[?2004h> out_b = sd[out_b_key].cpu()
+[?2004l[?2004h> 
+[?2004l[?2004h> export = {
+[?2004l[?2004h>     'layers': [
+[?2004l[?2004h>         {
+[?2004l[?2004h>             'type': 'Linear',
+[?2004l[?2004h>             'in_features': in_w.size(1),
+[?2004l[?2004h>             'out_features': in_w.size(0),
+[?2004l[?2004h>             'weight': in_w.detach().numpy().tolist(),
+[?2004l[?2004h>             'bias': in_b.detach().numpy().tolist()
+[?2004l[?2004h>         },
+[?2004l[?2004h>         { 'type': 'ReLU' },
+[?2004l[?2004h>         {
+[?2004l[?2004h>             'type': 'Linear',
+[?2004l[?2004h>             'in_features': hid_w.size(1),
+[?2004l[?2004h>             'out_features': hid_w.size(0),
+[?2004l[?2004h>             'weight': hid_w.detach().numpy().tolist(),
+[?2004l[?2004h>             'bias': hid_b.detach().numpy().tolist()
+[?2004l[?2004h>         },
+[?2004l[?2004h>         { 'type': 'ReLU' },
+[?2004l[?2004h>         {
+[?2004l[?2004h>             'type': 'Linear',
+[?2004l[?2004h>             'in_features': out_w.size(1),
+[?2004l[?2004h>             'out_features': out_w.size(0),
+[?2004l[?2004h>             'weight': out_w.detach().numpy().tolist(),
+[?2004l[?2004h>             'bias': out_b.detach().numpy().tolist()
+[?2004l[?2004h>         }
+[?2004l[?2004h>     ],
+[?2004l[?2004h>     'input': { 'shape': [1,28,28], 'dtype': 'float32' }
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('weights.json','w') as f:
+[?2004l[?2004h>     json.dump(export, f)
+[?2004l[?2004h> print('Exported weights.json')
+[?2004l[?2004h> PY
+[?2004l[?2004h> ls -la | grep weights.json
+[?2004l[?2004h> printf "%s" "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <math.h>\n#include \"cJSON.h\"\n#include \"lodepng.h\"\n\nstatic inline float relu(float x){ return x > 0.0f ? x : 0.0f; }\n\nchar* read_file(const char* path){ FILE* f=fopen(path, \"rb\"); if(!f) return NULL; fseek(f,0,SEEK_END); long sz=ftell(f); fseek(f,0,SEEK_SET); char* buf=(char*)malloc(sz+1); if(!buf){ fclose(f); return NULL; } size_t rd=fread(buf,1,sz,f); buf[rd]=\"\0\"; fclose(f); return buf; }\n\nvoid linear_forward(const float* W, const float* b, int out_features, int in_features, const float* x, float* y){ for(int o=0;o<out_features;++o){ double acc=0.0; const float* wrow=W + o*in_features; for(int i=0;i<in_features;++i){ acc += wrow[i]*x[i]; } y[o] = (float)(acc + (b? b[o] : 0.0f)); } }\n\nint main(int argc, char** argv){ if(argc < 3){ fprintf(stderr, \"Usage: %s weights.json image.png\\n\", argv[0]); return 1; } const char* wpath=argv[1]; const char* ipath=argv[2]; char* js = read_file(wpath); if(!js){ fprintf(stderr, \"Failed to read weights.json\\n\"); return 1; } cJSON* root = cJSON_Parse(js); if(!root){ fprintf(stderr, \"Failed to parse JSON\\n\"); free(js); return 1; } cJSON* layers = cJSON_GetObjectItem(root, \"layers\"); if(!layers || !cJSON_IsArray(layers)){ fprintf(stderr, \"Invalid JSON format\\n\"); cJSON_Delete(root); free(js); return 1; }\n\nunsigned char* img=NULL; unsigned w=0,h=0; unsigned err = lodepng_decode_file(&img, &w, &h, ipath, LCT_GREY, 8); if(err){ unsigned char* rgba=NULL; unsigned wr=0, hr=0; err = lodepng_decode32_file(&rgba, &wr, &hr, ipath); if(err){ fprintf(stderr, \"PNG decode error %u: %s\\n\", err, lodepng_error_text(err)); cJSON_Delete(root); free(js); return 1; } if(wr!=28 || hr!=28){ fprintf(stderr, \"Expected 28x28 image, got %ux%u\\n\", wr, hr); cJSON_Delete(root); free(js); free(rgba); return 1; } img = (unsigned char*)malloc(wr*hr); for(unsigned y=0;y<hr;++y){ for(unsigned x=0;x<wr;++x){ unsigned idx = 4*(y*wr + x); unsigned char r = rgba[idx+0], g = rgba[idx+1], b = rgba[idx+2]; float grey = 0.299f*r + 0.587f*g + 0.114f*b; img[y*wr + x] = (unsigned char)(grey + 0.5f); } } w=wr; h=hr; free(rgba); } if(w!=28 || h!=28){ fprintf(stderr, \"Expected 28x28 image, got %ux%u\\n\", w, h); cJSON_Delete(root); free(js); free(img); return 1; }\n\nint inH=28, inW=28; int in_features = inH*inW; float* x = (float*)malloc(sizeof(float)*in_features); for(int i=0;i<in_features;++i){ x[i] = ((float)img[i])/255.0f; }\n\nfloat* cur = x; int cur_len = in_features; float* next = NULL;\n\nint layers_count = cJSON_GetArraySize(layers); for(int li=0; li<layers_count; ++li){ cJSON* L = cJSON_GetArrayItem(layers, li); cJSON* type = cJSON_GetObjectItem(L, \"type\"); if(!cJSON_IsString(type)) continue; const char* t = type->valuestring; if(strcmp(t, \"Linear\") == 0){ int out_features = cJSON_GetObjectItem(L, \"out_features\")->valueint; int in_feats = cJSON_GetObjectItem(L, \"in_features\")->valueint; if(in_feats != cur_len){ /* reshape or mismatch */ } cJSON* Wj = cJSON_GetObjectItem(L, \"weight\"); cJSON* Bj = cJSON_GetObjectItem(L, \"bias\"); float* W = (float*)malloc(sizeof(float)*out_features*in_feats); int wi=0; for(cJSON* row=Wj->child; row; row=row->next){ for(cJSON* col=row->child; col; col=col->next){ W[wi++] = (float)col->valuedouble; } } float* B = NULL; if(Bj && !cJSON_IsNull(Bj)){ B = (float*)malloc(sizeof(float)*out_features); int bi=0; for(cJSON* be=Bj->child; be; be=be->next){ B[bi++] = (float)be->valuedouble; } } next = (float*)malloc(sizeof(float)*out_features); linear_forward(W, B, out_features, in_feats, cur, next); if(cur != x) free(cur); cur = next; next=NULL; cur_len = out_features; free(W); if(B) free(B); } else if(strcmp(t, \"ReLU\") == 0){ for(int i=0;i<cur_len;++i){ cur[i] = relu(cur[i]); } } }\n\nint best=0; float bestv = cur[0]; for(int i=1;i<cur_len;++i){ if(cur[i] > bestv){ bestv = cur[i]; best = i; } } printf(\"%d\\n\", best); FILE* pf = fopen(\"prediction.txt\", \"w\"); if(pf){ fprintf(pf, \"%d\\n\", best); fclose(pf); } if(cur != x) free(cur); free(x); free(img); cJSON_Delete(root); free(js); return 0; }\n" > cli_tool.c
+[?2004l[?2004h> g++ -O2 -o cli_tool cli_tool.c cJSON.c lodepng.cpp -lm
+[?2004l[?2004h> ./cli_tool weights.json image.png > out.txt
+[?2004l[?2004h> cat out.txt
+[?2004l[?2004h> cat prediction.txt
+[?2004l[?2004h> ls -la cli_tool weights.json prediction.txt
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> python3 -m pip --version
+[?2004l[?2004h> apt-get update -y
+[?2004l[?2004h> apt-get install -y python3-pip
+[?2004l[?2004h> python3 -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision --progress-bar off
+[?2004l[?2004h> python3 - << 'PY'
+[?2004lkey,hid_w_key,hid_b_key,out_w_key,out_b_key]:
+    if k is None:
+        raise RuntimeError('Missing expected linear layer key in state_dict')
+
+in_w = sd[in_w_key].cpu()
+in_b = sd[in_b_key].cpu()
+hid_w = sd[hid_w_key].cpu()
+hid_b = sd[hid_b_key].cpu()
+out_w = sd[out_w_key].cpu()
+out_b = sd[out_b_key].cpu()
+
+export = {
+    'layers': [
+        {
+            'type': 'Linear',
+            'in_features': in_w.size(1),
+            'out_features': in_w.size(0),
+            'weight': in_w.tolist(),
+            'bias': in_b.tolist()
+        },
+        { 'type': 'ReLU' },
+        {
+            'type': 'Linear',
+            'in_features': hid_w.size(1),
+            'out_features': hid_w.size(0),
+            'weight': hid_w.tolist(),
+            'bias': hid_b.tolist()
+        },
+        { 'type': 'ReLU' },
+        {
+            'type': 'Linear',
+            'in_features': out_w.size(1),
+            'out_features': out_w.size(0),
+            'weight': out_w.tolist(),
+            'bias': out_b.tolist()
+        }
+    ],
+    'input': { 'shape': [1,28,28], 'dtype': 'float32' }
+}
+
+with open('weights.json','w') as f:
+    json.dump(export, f)
+print('Exported weights.json')
+PY
+[?2004h> import json
+[?2004l[?2004h> import torch
+[?2004l[?2004h> import os
+[?2004l[?2004h> 
+[?2004l[?2004h> state_path = 'model.pth'
+[?2004l[?2004h> assert os.path.exists(state_path), 'model.pth not found'
+[?2004l[?2004h> 
+[?2004l[?2004h> sd = torch.load(state_path, map_location='cpu')
+[?2004l[?2004h> if isinstance(sd, dict) and 'state_dict' in sd:
+[?2004l[?2004h>     sd = sd['state_dict']
+[?2004l[?2004h> 
+[?2004l[?2004h> keys = list(sd.keys())
+[?2004l[?2004h> print('State dict keys:', keys)
+[?2004l[?2004h> 
+[?2004l[?2004h> def find_key(candidates):
+[?2004l[?2004h>     for k in candidates:
+[?2004l[?2004h>         if k in sd:
+[?2004l[?2004h>             return k
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> in_w_key = find_key(['input_layer.weight','model.input_layer.weight','net.input_layer.weight'])
+[?2004l[?2004h> in_b_key = find_key(['input_layer.bias','model.input_layer.bias','net.input_layer.bias'])
+[?2004l[?2004h> hid_w_key = find_key(['hidden_layer.weight','model.hidden_layer.weight','net.hidden_layer.weight'])
+[?2004l[?2004h> hid_b_key = find_key(['hidden_layer.bias','model.hidden_layer.bias','net.hidden_layer.bias'])
+[?2004l[?2004h> out_w_key = find_key(['output_layer.weight','model.output_layer.weight','net.output_layer.weight'])
+[?2004l[?2004h> out_b_key = find_key(['output_layer.bias','model.output_layer.bias','net.output_layer.bias'])
+[?2004l[?2004h> 
+[?2004l[?2004h> for k in [in_w_key,in_b_key,hid_w_key,hid_b_key,out_w_key,out_b_key]:
+[?2004l[?2004h>     if k is None:
+[?2004l[?2004h>         raise RuntimeError('Missing expected linear layer key in state_dict')
+[?2004l[?2004h> 
+[?2004l[?2004h> in_w = sd[in_w_key].cpu()
+[?2004l[?2004h> in_b = sd[in_b_key].cpu()
+[?2004l[?2004h> hid_w = sd[hid_w_key].cpu()
+[?2004l[?2004h> hid_b = sd[hid_b_key].cpu()
+[?2004l[?2004h> out_w = sd[out_w_key].cpu()
+[?2004l[?2004h> out_b = sd[out_b_key].cpu()
+[?2004l[?2004h> 
+[?2004l[?2004h> export = {
+[?2004l[?2004h>     'layers': [
+[?2004l[?2004h>         {
+[?2004l[?2004h>             'type': 'Linear',
+[?2004l[?2004h>             'in_features': in_w.size(1),
+[?2004l[?2004h>             'out_features': in_w.size(0),
+[?2004l[?2004h>             'weight': in_w.tolist(),
+[?2004l[?2004h>             'bias': in_b.tolist()
+[?2004l[?2004h>         },
+[?2004l[?2004h>         { 'type': 'ReLU' },
+[?2004l[?2004h>         {
+[?2004l[?2004h>             'type': 'Linear',
+[?2004l[?2004h>             'in_features': hid_w.size(1),
+[?2004l[?2004h>             'out_features': hid_w.size(0),
+[?2004l[?2004h>             'weight': hid_w.tolist(),
+[?2004l[?2004h>             'bias': hid_b.tolist()
+[?2004l[?2004h>         },
+[?2004l[?2004h>         { 'type': 'ReLU' },
+[?2004l[?2004h>         {
+[?2004l[?2004h>             'type': 'Linear',
+[?2004l[?2004h>             'in_features': out_w.size(1),
+[?2004l[?2004h>             'out_features': out_w.size(0),
+[?2004l[?2004h>             'weight': out_w.tolist(),
+[?2004l[?2004h>             'bias': out_b.tolist()
+[?2004l[?2004h>         }
+[?2004l[?2004h>     ],
+[?2004l[?2004h>     'input': { 'shape': [1,28,28], 'dtype': 'float32' }
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('weights.json','w') as f:
+[?2004l[?2004h>     json.dump(export, f)
+[?2004l[?2004h> print('Exported weights.json')
+[?2004l[?2004h> PY
+[?2004l[?2004h> ls -la | grep weights.json
+[?2004l[?2004h> printf "%s" "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <math.h>\n#include \"cJSON.h\"\n#include \"lodepng.h\"\n\nstatic inline float relu(float x){ return x > 0.0f ? x : 0.0f; }\n\nchar* read_file(const char* path){ FILE* f=fopen(path, \"rb\"); if(!f) return NULL; fseek(f,0,SEEK_END); long sz=ftell(f); fseek(f,0,SEEK_SET); char* buf=(char*)malloc(sz+1); if(!buf){ fclose(f); return NULL; } size_t rd=fread(buf,1,sz,f); buf[rd]='\0'; fclose(f); return buf; }\n\nvoid linear_forward(const float* W, const float* b, int out_features, int in_features, const float* x, float* y){ for(int o=0;o<out_features;++o){ double acc=0.0; const float* wrow=W + o*in_features; for(int i=0;i<in_features;++i){ acc += wrow[i]*x[i]; } y[o] = (float)(acc + (b? b[o] : 0.0f)); } }\n\nint main(int argc, char** argv){ if(argc < 3){ fprintf(stderr, \"Usage: %s weights.json image.png\\n\", argv[0]); return 1; } const char* wpath=argv[1]; const char* ipath=argv[2]; char* js = read_file(wpath); if(!js){ fprintf(stderr, \"Failed to read weights.json\\n\"); return 1; } cJSON* root = cJSON_Parse(js); if(!root){ fprintf(stderr, \"Failed to parse JSON\\n\"); free(js); return 1; } cJSON* layers = cJSON_GetObjectItem(root, \"layers\"); if(!layers || !cJSON_IsArray(layers)){ fprintf(stderr, \"Invalid JSON format\\n\"); cJSON_Delete(root); free(js); return 1; }\n\nunsigned char* rgba=NULL; unsigned w=0,h=0; unsigned err = lodepng_decode32_file(&rgba, &w, &h, ipath); if(err){ fprintf(stderr, \"PNG decode error %u: %s\\n\", err, lodepng_error_text(err)); cJSON_Delete(root); free(js); return 1; } if(w!=28 || h!=28){ fprintf(stderr, \"Expected 28x28 image, got %ux%u\\n\", w, h); cJSON_Delete(root); free(js); free(rgba); return 1; } unsigned char* gray = (unsigned char*)malloc(w*h); if(!gray){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); free(rgba); return 1; } for(unsigned y=0;y<h;++y){ for(unsigned x=0;x<w;++x){ unsigned idx = 4*(y*w + x); unsigned char r = rgba[idx+0], g = rgba[idx+1], b = rgba[idx+2]; float gval = 0.299f*r + 0.587f*g + 0.114f*b; gray[y*w + x] = (unsigned char)(gval + 0.5f); } } free(rgba);\n\nint in_features = 28*28; float* xvec = (float*)malloc(sizeof(float)*in_features); if(!xvec){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); free(gray); return 1; } for(int i=0;i<in_features;++i){ xvec[i] = ((float)gray[i])/255.0f; } free(gray);\n\nfloat* cur = xvec; int cur_len = in_features; float* next = NULL;\n\nint layers_count = cJSON_GetArraySize(layers); for(int li=0; li<layers_count; ++li){ cJSON* L = cJSON_GetArrayItem(layers, li); cJSON* type = cJSON_GetObjectItem(L, \"type\"); if(!cJSON_IsString(type)) continue; const char* t = type->valuestring; if(strcmp(t, \"Linear\") == 0){ int out_features = cJSON_GetObjectItem(L, \"out_features\")->valueint; int in_feats = cJSON_GetObjectItem(L, \"in_features\")->valueint; cJSON* Wj = cJSON_GetObjectItem(L, \"weight\"); cJSON* Bj = cJSON_GetObjectItem(L, \"bias\"); float* W = (float*)malloc(sizeof(float)*out_features*in_feats); if(!W){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); if(cur!=xvec) free(cur); free(xvec); return 1; } int wi=0; for(cJSON* row=Wj->child; row; row=row->next){ for(cJSON* col=row->child; col; col=col->next){ W[wi++] = (float)col->valuedouble; } } float* B = NULL; if(Bj && !cJSON_IsNull(Bj)){ B = (float*)malloc(sizeof(float)*out_features); if(!B){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); free(W); if(cur!=xvec) free(cur); free(xvec); return 1; } int bi=0; for(cJSON* be=Bj->child; be; be=be->next){ B[bi++] = (float)be->valuedouble; } } next = (float*)malloc(sizeof(float)*out_features); if(!next){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); free(W); if(B) free(B); if(cur!=xvec) free(cur); free(xvec); return 1; } linear_forward(W, B, out_features, in_feats, cur, next); if(cur != xvec) free(cur); cur = next; next=NULL; cur_len = out_features; free(W); if(B) free(B); } else if(strcmp(t, \"ReLU\") == 0){ for(int i=0;i<cur_len;++i){ cur[i] = relu(cur[i]); } } }\n\nint best=0; float bestv = cur[0]; for(int i=1;i<cur_len;++i){ if(cur[i] > bestv){ bestv = cur[i]; best = i; } } printf(\"%d\\n\", best); FILE* pf = fopen(\"prediction.txt\", \"w\"); if(pf){ fprintf(pf, \"%d\\n\", best); fclose(pf); } if(cur != xvec) free(cur); free(xvec); cJSON_Delete(root); free(js); return 0; }\n" > cli_tool.c
+[?2004l[?2004h> g++ -O2 -o cli_tool cli_tool.c cJSON.c lodepng.cpp -lm
+[?2004l[?2004h> ./cli_tool weights.json image.png > out.txt
+[?2004l[?2004h> cat out.txt
+[?2004l[?2004h> cat prediction.txt
+[?2004l[?2004h> ls -la cli_tool weights.json prediction.txt
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> python3 -m pip --version
+[?2004l[?2004h> apt-get update -y
+[?2004l[?2004h> apt-get install -y python3-pip
+[?2004l[?2004h> python3 -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision --progress-bar off
+[?2004l[?2004h> python3 - << 'PY'
+[?2004l[?2004h> import json
+[?2004l[?2004h> import torch
+[?2004l[?2004h> import os
+[?2004l[?2004h> 
+[?2004l[?2004h> state_path = 'model.pth'
+[?2004l[?2004h> assert os.path.exists(state_path), 'model.pth not found'
+[?2004l[?2004h> 
+[?2004l[?2004h> sd = torch.load(state_path, map_location='cpu')
+[?2004l[?2004h> if isinstance(sd, dict) and 'state_dict' in sd:
+[?2004l[?2004h>     sd = sd['state_dict']
+[?2004l[?2004h> 
+[?2004l[?2004h> keys = list(sd.keys())
+[?2004l[?2004h> print('State dict keys:', keys)
+[?2004l[?2004h> 
+[?2004l[?2004h> def find_key(candidates):
+[?2004l[?2004h>     for k in candidates:
+[?2004l[?2004h>         if k in sd:
+[?2004l[?2004h>             return k
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> in_w_key = find_key(['input_layer.weight','model.input_layer.weight','net.input_layer.weight'])
+[?2004l[?2004h> in_b_key = find_key(['input_layer.bias','model.input_layer.bias','net.input_layer.bias'])
+[?2004l[?2004h> hid_w_key = find_key(['hidden_layer.weight','model.hidden_layer.weight','net.hidden_layer.weight'])
+[?2004l[?2004h> hid_b_key = find_key(['hidden_layer.bias','model.hidden_layer.bias','net.hidden_layer.bias'])
+[?2004l[?2004h> out_w_key = find_key(['output_layer.weight','model.output_layer.weight','net.output_layer.weight'])
+[?2004l[?2004h> out_b_key = find_key(['output_layer.bias','model.output_layer.bias','net.output_layer.bias'])
+[?2004l[?2004h> 
+[?2004l[?2004h> for k in [in_w_key,in_b_key,hid_w_key,hid_b_key,out_w_key,out_b_key]:
+[?2004l[?2004h>     if k is None:
+[?2004l[?2004h>         raise RuntimeError('Missing expected linear layer key in state_dict')
+[?2004l[?2004h> 
+[?2004l[?2004h> in_w = sd[in_w_key].cpu()
+[?2004l[?2004h> in_b = sd[in_b_key].cpu()
+[?2004l[?2004h> hid_w = sd[hid_w_key].cpu()
+[?2004l[?2004h> hid_b = sd[hid_b_key].cpu()
+[?2004l[?2004h> out_w = sd[out_w_key].cpu()
+[?2004l[?2004h> out_b = sd[out_b_key].cpu()
+[?2004l[?2004h> 
+[?2004l[?2004h> export = {
+[?2004l[?2004h>     'layers': [
+[?2004l[?2004h>         {
+[?2004l[?2004h>             'type': 'Linear',
+[?2004l[?2004h>             'in_features': in_w.size(1),
+[?2004l[?2004h>             'out_features': in_w.size(0),
+[?2004l[?2004h>             'weight': in_w.tolist(),
+[?2004l[?2004h>             'bias': in_b.tolist()
+[?2004l[?2004h>         },
+[?2004l[?2004h>         { 'type': 'ReLU' },
+[?2004l[?2004h>         {
+[?2004l[?2004h>             'type': 'Linear',
+[?2004l[?2004h>             'in_features': hid_w.size(1),
+[?2004l[?2004h>             'out_features': hid_w.size(0),
+[?2004l[?2004h>             'weight': hid_w.tolist(),
+[?2004l[?2004h>             'bias': hid_b.tolist()
+[?2004l[?2004h>         },
+[?2004l[?2004h>         { 'type': 'ReLU' },
+[?2004l[?2004h>         {
+[?2004l[?2004h>             'type': 'Linear',
+[?2004l[?2004h>             'in_features': out_w.size(1),
+[?2004l[?2004h>             'out_features': out_w.size(0),
+[?2004l[?2004h>             'weight': out_w.tolist(),
+[?2004l[?2004h>             'bias': out_b.tolist()
+[?2004l[?2004h>         }
+[?2004l[?2004h>     ],
+[?2004l[?2004h>     'input': { 'shape': [1,28,28], 'dtype': 'float32' }
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('weights.json','w') as f:
+[?2004l[?2004h>     json.dump(export, f)
+[?2004l[?2004h> print('Exported weights.json')
+[?2004l[?2004h> PY
+[?2004l[?2004h> ls -la | grep weights.json
+[?2004l[?2004h> printf "%s" "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <math.h>\n#include \"cJSON.h\"\n#include \"lodepng.h\"\n\nstatic inline float relu(float x){ return x > 0.0f ? x : 0.0f; }\n\nchar* read_file(const char* path){ FILE* f=fopen(path, \"rb\"); if(!f) return NULL; fseek(f,0,SEEK_END); long sz=ftell(f); fseek(f,0,SEEK_SET); char* buf=(char*)malloc(sz+1); if(!buf){ fclose(f); return NULL; } size_t rd=fread(buf,1,sz,f); buf[rd]='\0'; fclose(f); return buf; }\n\nvoid linear_forward(const float* W, const float* b, int out_features, int in_features, const float* x, float* y){ for(int o=0;o<out_features;++o){ double acc=0.0; const float* wrow=W + o*in_features; for(int i=0;i<in_features;++i){ acc += wrow[i]*x[i]; } y[o] = (float)(acc + (b? b[o] : 0.0f)); } }\n\nint main(int argc, char** argv){ if(argc < 3){ fprintf(stderr, \"Usage: %s weights.json image.png\\n\", argv[0]); return 1; } const char* wpath=argv[1]; const char* ipath=argv[2]; char* js = read_file(wpath); if(!js){ fprintf(stderr, \"Failed to read weights.json\\n\"); return 1; } cJSON* root = cJSON_Parse(js); if(!root){ fprintf(stderr, \"Failed to parse JSON\\n\"); free(js); return 1; } cJSON* layers = cJSON_GetObjectItem(root, \"layers\"); if(!layers || !cJSON_IsArray(layers)){ fprintf(stderr, \"Invalid JSON format\\n\"); cJSON_Delete(root); free(js); return 1; }\n\nunsigned char* rgba=NULL; unsigned w=0,h=0; unsigned err = lodepng_decode32_file(&rgba, &w, &h, ipath); if(err){ fprintf(stderr, \"PNG decode error %u: %s\\n\", err, lodepng_error_text(err)); cJSON_Delete(root); free(js); return 1; } if(w!=28 || h!=28){ fprintf(stderr, \"Expected 28x28 image, got %ux%u\\n\", w, h); cJSON_Delete(root); free(js); free(rgba); return 1; } unsigned char* gray = (unsigned char*)malloc(w*h); if(!gray){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); free(rgba); return 1; } for(unsigned y=0;y<h;++y){ for(unsigned x=0;x<w;++x){ unsigned idx = 4*(y*w + x); unsigned char r = rgba[idx+0], g = rgba[idx+1], b = rgba[idx+2]; float gval = 0.299f*r + 0.587f*g + 0.114f*b; gray[y*w + x] = (unsigned char)(gval + 0.5f); } } free(rgba);\n\nint in_features = 28*28; float* xvec = (float*)malloc(sizeof(float)*in_features); if(!xvec){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); free(gray); return 1; } for(int i=0;i<in_features;++i){ xvec[i] = ((float)gray[i])/255.0f; } free(gray);\n\nfloat* cur = xvec; int cur_len = in_features; float* next = NULL;\n\nint layers_count = cJSON_GetArraySize(layers); for(int li=0; li<layers_count; ++li){ cJSON* L = cJSON_GetArrayItem(layers, li); cJSON* type = cJSON_GetObjectItem(L, \"type\"); if(!cJSON_IsString(type)) continue; const char* t = type->valuestring; if(strcmp(t, \"Linear\") == 0){ int out_features = cJSON_GetObjectItem(L, \"out_features\")->valueint; int in_feats = cJSON_GetObjectItem(L, \"in_features\")->valueint; cJSON* Wj = cJSON_GetObjectItem(L, \"weight\"); cJSON* Bj = cJSON_GetObjectItem(L, \"bias\"); float* W = (float*)malloc(sizeof(float)*out_features*in_feats); if(!W){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); if(cur!=xvec) free(cur); free(xvec); return 1; } int wi=0; for(cJSON* row=Wj->child; row; row=row->next){ for(cJSON* col=row->child; col; col=col->next){ W[wi++] = (float)col->valuedouble; } } float* B = NULL; if(Bj && !cJSON_IsNull(Bj)){ B = (float*)malloc(sizeof(float)*out_features); if(!B){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); free(W); if(cur!=xvec) free(cur); free(xvec); return 1; } int bi=0; for(cJSON* be=Bj->child; be; be=be->next){ B[bi++] = (float)be->valuedouble; } } next = (float*)malloc(sizeof(float)*out_features); if(!next){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); free(W); if(B) free(B); if(cur!=xvec) free(cur); free(xvec); return 1; } linear_forward(W, B, out_features, in_feats, cur, next); if(cur != xvec) free(cur); cur = next; next=NULL; cur_len = out_features; free(W); if(B) free(B); } else if(strcmp(t, \"ReLU\") == 0){ for(int i=0;i<cur_len;++i){ cur[i] = relu(cur[i]); } } }\n\nint best=0; float bestv = cur[0]; for(int i=1;i<cur_len;++i){ if(cur[i] > bestv){ bestv = cur[i]; best = i; } } printf(\"%d\\n\", best); FILE* pf = fopen(\"prediction.txt\", \"w\"); if(pf){ fprintf(pf, \"%d\\n\", best); fclose(pf); } if(cur != xvec) free(cur); free(xvec); cJSON_Delete(root); free(js); return 0; }\n" > cli_tool.c
+[?2004l[?2004h> gcc -c -O2 cJSON.c -o cJSON.o
+[?2004l[?2004h> g++ -c -O2 lodepng.cpp -o lodepng.o
+[?2004l[?2004h> g++ -c -O2 cli_tool.c -o cli_tool.o
+[?2004l[?2004h> g++ -O2 -o cli_tool cli_tool.o cJSON.o lodepng.o -lm
+[?2004l[?2004h> ./cli_tool weights.json image.png > out.txt
+[?2004l[?2004h> cat out.txt
+[?2004l[?2004h> cat prediction.txt
+[?2004l[?2004h> ls -la cli_tool weights.json prediction.txt
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> python3 -m pip --version
+[?2004l[?2004h> apt-get update -y
+[?2004l[?2004h> apt-get install -y python3-pip
+[?2004l[?2004h> python3 -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision --progress-bar off
+[?2004l[?2004h> python3 - << 'PY'
+[?2004lkey,hid_w_key,hid_b_key,out_w_key,out_b_key]:
+    if k is None:
+        raise RuntimeError('Missing expected linear layer key in state_dict')
+
+in_w = sd[in_w_key].cpu()
+in_b = sd[in_b_key].cpu()
+hid_w = sd[hid_w_key].cpu()
+hid_b = sd[hid_b_key].cpu()
+out_w = sd[out_w_key].cpu()
+out_b = sd[out_b_key].cpu()
+
+export = {
+    'layers': [
+        {
+            'type': 'Linear',
+            'in_features': in_w.size(1),
+            'out_features': in_w.size(0),
+            'weight': in_w.tolist(),
+            'bias': in_b.tolist()
+        },
+        { 'type': 'ReLU' },
+        {
+            'type': 'Linear',
+            'in_features': hid_w.size(1),
+            'out_features': hid_w.size(0),
+            'weight': hid_w.tolist(),
+            'bias': hid_b.tolist()
+        },
+        { 'type': 'ReLU' },
+        {
+            'type': 'Linear',
+            'in_features': out_w.size(1),
+            'out_features': out_w.size(0),
+            'weight': out_w.tolist(),
+            'bias': out_b.tolist()
+        }
+    ],
+    'input': { 'shape': [1,28,28], 'dtype': 'float32' }
+}
+
+with open('weights.json','w') as f:
+    json.dump(export, f)
+print('Exported weights.json')
+PY
+[?2004h> import json
+[?2004l[?2004h> import torch
+[?2004l[?2004h> import os
+[?2004l[?2004h> 
+[?2004l[?2004h> state_path = 'model.pth'
+[?2004l[?2004h> assert os.path.exists(state_path), 'model.pth not found'
+[?2004l[?2004h> 
+[?2004l[?2004h> sd = torch.load(state_path, map_location='cpu')
+[?2004l[?2004h> if isinstance(sd, dict) and 'state_dict' in sd:
+[?2004l[?2004h>     sd = sd['state_dict']
+[?2004l[?2004h> 
+[?2004l[?2004h> keys = list(sd.keys())
+[?2004l[?2004h> print('State dict keys:', keys)
+[?2004l[?2004h> 
+[?2004l[?2004h> def find_key(candidates):
+[?2004l[?2004h>     for k in candidates:
+[?2004l[?2004h>         if k in sd:
+[?2004l[?2004h>             return k
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> in_w_key = find_key(['input_layer.weight','model.input_layer.weight','net.input_layer.weight'])
+[?2004l[?2004h> in_b_key = find_key(['input_layer.bias','model.input_layer.bias','net.input_layer.bias'])
+[?2004l[?2004h> hid_w_key = find_key(['hidden_layer.weight','model.hidden_layer.weight','net.hidden_layer.weight'])
+[?2004l[?2004h> hid_b_key = find_key(['hidden_layer.bias','model.hidden_layer.bias','net.hidden_layer.bias'])
+[?2004l[?2004h> out_w_key = find_key(['output_layer.weight','model.output_layer.weight','net.output_layer.weight'])
+[?2004l[?2004h> out_b_key = find_key(['output_layer.bias','model.output_layer.bias','net.output_layer.bias'])
+[?2004l[?2004h> 
+[?2004l[?2004h> for k in [in_w_key,in_b_key,hid_w_key,hid_b_key,out_w_key,out_b_key]:
+[?2004l[?2004h>     if k is None:
+[?2004l[?2004h>         raise RuntimeError('Missing expected linear layer key in state_dict')
+[?2004l[?2004h> 
+[?2004l[?2004h> in_w = sd[in_w_key].cpu()
+[?2004l[?2004h> in_b = sd[in_b_key].cpu()
+[?2004l[?2004h> hid_w = sd[hid_w_key].cpu()
+[?2004l[?2004h> hid_b = sd[hid_b_key].cpu()
+[?2004l[?2004h> out_w = sd[out_w_key].cpu()
+[?2004l[?2004h> out_b = sd[out_b_key].cpu()
+[?2004l[?2004h> 
+[?2004l[?2004h> export = {
+[?2004l[?2004h>     'layers': [
+[?2004l[?2004h>         {
+[?2004l[?2004h>             'type': 'Linear',
+[?2004l[?2004h>             'in_features': in_w.size(1),
+[?2004l[?2004h>             'out_features': in_w.size(0),
+[?2004l[?2004h>             'weight': in_w.tolist(),
+[?2004l[?2004h>             'bias': in_b.tolist()
+[?2004l[?2004h>         },
+[?2004l[?2004h>         { 'type': 'ReLU' },
+[?2004l[?2004h>         {
+[?2004l[?2004h>             'type': 'Linear',
+[?2004l[?2004h>             'in_features': hid_w.size(1),
+[?2004l[?2004h>             'out_features': hid_w.size(0),
+[?2004l[?2004h>             'weight': hid_w.tolist(),
+[?2004l[?2004h>             'bias': hid_b.tolist()
+[?2004l[?2004h>         },
+[?2004l[?2004h>         { 'type': 'ReLU' },
+[?2004l[?2004h>         {
+[?2004l[?2004h>             'type': 'Linear',
+[?2004l[?2004h>             'in_features': out_w.size(1),
+[?2004l[?2004h>             'out_features': out_w.size(0),
+[?2004l[?2004h>             'weight': out_w.tolist(),
+[?2004l[?2004h>             'bias': out_b.tolist()
+[?2004l[?2004h>         }
+[?2004l[?2004h>     ],
+[?2004l[?2004h>     'input': { 'shape': [1,28,28], 'dtype': 'float32' }
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('weights.json','w') as f:
+[?2004l[?2004h>     json.dump(export, f)
+[?2004l[?2004h> print('Exported weights.json')
+[?2004l[?2004h> PY
+[?2004l[?2004h> ls -la | grep weights.json
+[?2004l[?2004h> printf "%s" "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <math.h>\n#include \"cJSON.h\"\n#include \"lodepng.h\"\n\nstatic inline float relu(float x){ return x > 0.0f ? x : 0.0f; }\n\nchar* read_file(const char* path){ FILE* f=fopen(path, \"rb\"); if(!f) return NULL; fseek(f,0,SEEK_END); long sz=ftell(f); fseek(f,0,SEEK_SET); char* buf=(char*)malloc(sz+1); if(!buf){ fclose(f); return NULL; } size_t rd=fread(buf,1,sz,f); buf[rd]='\0'; fclose(f); return buf; }\n\nvoid linear_forward(const float* W, const float* b, int out_features, int in_features, const float* x, float* y){ for(int o=0;o<out_features;++o){ double acc=0.0; const float* wrow=W + o*in_features; for(int i=0;i<in_features;++i){ acc += wrow[i]*x[i]; } y[o] = (float)(acc + (b? b[o] : 0.0f)); } }\n\nint main(int argc, char** argv){ if(argc < 3){ fprintf(stderr, \"Usage: %s weights.json image.png\\n\", argv[0]); return 1; } const char* wpath=argv[1]; const char* ipath=argv[2]; char* js = read_file(wpath); if(!js){ fprintf(stderr, \"Failed to read weights.json\\n\"); return 1; } cJSON* root = cJSON_Parse(js); if(!root){ fprintf(stderr, \"Failed to parse JSON\\n\"); free(js); return 1; } cJSON* layers = cJSON_GetObjectItem(root, \"layers\"); if(!layers || !cJSON_IsArray(layers)){ fprintf(stderr, \"Invalid JSON format\\n\"); cJSON_Delete(root); free(js); return 1; }\n\nunsigned char* rgba=NULL; unsigned w=0,h=0; unsigned err = lodepng_decode32_file(&rgba, &w, &h, ipath); if(err){ fprintf(stderr, \"PNG decode error %u: %s\\n\", err, lodepng_error_text(err)); cJSON_Delete(root); free(js); return 1; } if(w!=28 || h!=28){ fprintf(stderr, \"Expected 28x28 image, got %ux%u\\n\", w, h); cJSON_Delete(root); free(js); free(rgba); return 1; } unsigned char* gray = (unsigned char*)malloc(w*h); if(!gray){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); free(rgba); return 1; } for(unsigned y=0;y<h;++y){ for(unsigned x=0;x<w;++x){ unsigned idx = 4*(y*w + x); unsigned char r = rgba[idx+0], g = rgba[idx+1], b = rgba[idx+2]; float gval = 0.299f*r + 0.587f*g + 0.114f*b; gray[y*w + x] = (unsigned char)(gval + 0.5f); } } free(rgba);\n\nint in_features = 28*28; float* xvec = (float*)malloc(sizeof(float)*in_features); if(!xvec){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); free(gray); return 1; } for(int i=0;i<in_features;++i){ xvec[i] = ((float)gray[i])/255.0f; } free(gray);\n\nfloat* cur = xvec; int cur_len = in_features; float* next = NULL;\n\nint layers_count = cJSON_GetArraySize(layers); for(int li=0; li<layers_count; ++li){ cJSON* L = cJSON_GetArrayItem(layers, li); cJSON* type = cJSON_GetObjectItem(L, \"type\"); if(!cJSON_IsString(type)) continue; const char* t = type->valuestring; if(strcmp(t, \"Linear\") == 0){ int out_features = cJSON_GetObjectItem(L, \"out_features\")->valueint; int in_feats = cJSON_GetObjectItem(L, \"in_features\")->valueint; cJSON* Wj = cJSON_GetObjectItem(L, \"weight\"); cJSON* Bj = cJSON_GetObjectItem(L, \"bias\"); float* W = (float*)malloc(sizeof(float)*out_features*in_feats); if(!W){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); if(cur!=xvec) free(cur); free(xvec); return 1; } int wi=0; for(cJSON* row=Wj->child; row; row=row->next){ for(cJSON* col=row->child; col; col=col->next){ W[wi++] = (float)col->valuedouble; } } float* B = NULL; if(Bj && !cJSON_IsNull(Bj)){ B = (float*)malloc(sizeof(float)*out_features); if(!B){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); free(W); if(cur!=xvec) free(cur); free(xvec); return 1; } int bi=0; for(cJSON* be=Bj->child; be; be=be->next){ B[bi++] = (float)be->valuedouble; } } next = (float*)malloc(sizeof(float)*out_features); if(!next){ fprintf(stderr, \"OOM\\n\"); cJSON_Delete(root); free(js); free(W); if(B) free(B); if(cur!=xvec) free(cur); free(xvec); return 1; } linear_forward(W, B, out_features, in_feats, cur, next); if(cur != xvec) free(cur); cur = next; next=NULL; cur_len = out_features; free(W); if(B) free(B); } else if(strcmp(t, \"ReLU\") == 0){ for(int i=0;i<cur_len;++i){ cur[i] = relu(cur[i]); } } }\n\nint best=0; float bestv = cur[0]; for(int i=1;i<cur_len;++i){ if(cur[i] > bestv){ bestv = cur[i]; best = i; } } printf(\"%d\\n\", best); FILE* pf = fopen(\"prediction.txt\", \"w\"); if(pf){ fprintf(pf, \"%d\\n\", best); fclose(pf); } if(cur != xvec) free(cur); free(xvec); cJSON_Delete(root); free(js); return 0; }\n" > cli_tool.c
+[?2004l[?2004h> gcc -c -O2 cJSON.c -o cJSON.o
+[?2004l[?2004h> g++ -c -O2 lodepng.cpp -o lodepng.o
+[?2004l[?2004h> g++ -c -O2 cli_tool.c -o cli_tool.o
+[?2004l[?2004h> g++ -O2 -o cli_tool cli_tool.o cJSON.o lodepng.o -lm
+[?2004l[?2004h> ./cli_tool weights.json image.png > out.txt
+[?2004l[?2004h> cat out.txt
+[?2004l[?2004h> cat prediction.txt
+[?2004l[?2004h> ls -la cli_tool weights.json prediction.txt
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> python3 -m pip --version
+[?2004l[?2004h> apt-get update -y
+[?2004l[?2004h> apt-get install -y python3-pip
+[?2004l[?2004h> python3 -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision --progress-bar off
+[?2004l[?2004h> [?2004l
+bash: unexpected EOF while looking for matching `''
+[?2004h> 

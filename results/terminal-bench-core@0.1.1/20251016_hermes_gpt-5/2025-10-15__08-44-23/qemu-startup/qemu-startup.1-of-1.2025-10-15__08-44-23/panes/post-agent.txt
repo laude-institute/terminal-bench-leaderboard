@@ -1,0 +1,235 @@
+root@b3698ae001a1:/app# asciinema rec --stdin /logs/agent.cast
+asciinema: recording asciicast to /logs/agent.cast
+asciinema: press <ctrl-d> or type "exit" when you're done
+root@b3698ae001a1:/app# clear
+root@b3698ae001a1:/app# ls -la
+total 980176
+drwxr-xr-x 1 root root       4096 Oct 15 09:51 .
+drwxr-xr-x 1 root root       4096 Oct 15 09:51 ..
+-rw-r--r-- 1 root root     197120 Oct 15 09:51 alpine-disk.qcow2
+-rw-r--r-- 1 root root 1003487232 Dec  7  2023 alpine.iso
+root@b3698ae001a1:/app# ISO=""; if [ -f alpine.iso ]; then ISO="$PWD/alpine.iso"; else for p in "$PWD" /app /assets /; do f=$(find "$p" -maxdepth 3 -type f -ina
+me 'alpine*.iso' 2>/dev/null | head -n1); if [ -n "$f" ]; then ISO="$f"; break; fi; done; fi; if [ -z "$ISO" ]; then echo "alpine.iso not found" >&2; exit 1; el
+se echo "Using ISO: $ISO"; fi
+Using ISO: /app/alpine.iso
+root@b3698ae001a1:/app# if ! command -v qemu-system-x86_64 >/dev/null 2>&1; then apt-get update && apt-get install -y qemu-system-x86; fi
+root@b3698ae001a1:/app# rm -f /tmp/alpine_console_ready /tmp/alpine_wait.log
+root@b3698ae001a1:/app# qemu-system-x86_64 -m 512 -smp 2 -cdrom "$ISO" -boot d -nographic -serial telnet:127.0.0.1:6665,server,nowait -daemonize
+qemu-system-x86_64: -nographic cannot be used with -daemonize
+root@b3698ae001a1:/app# nohup bash -lc 'while ! { exec 3<>/dev/tcp/127.0.0.1/6665; } 2>/dev/null; do sleep 0.5; done; sed -n "/login:/q" <&3; exec 3>&-; printf
+"ready" > /tmp/alpine_console_ready' >/tmp/alpine_wait.log 2>&1 &
+[1] 135
+root@b3698ae001a1:/app# for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+root@b3698ae001a1:/app# for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+root@b3698ae001a1:/app# for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+root@b3698ae001a1:/app# for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+root@b3698ae001a1:/app# for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+if [ -f /tmp/alpine_console_ready ]; then echo "Alpine serial console is ready on telnet 127.0.0.1 6665 (login prompt present)."; else echo "Timed out waiting f
+or login prompt; check /tmp/alpine_wait.log" >&2; fi
+root@b3698ae001a1:/app# if [ -f /tmp/alpine_console_ready ]; then echo "Alpine serial console is ready on telnet 127.0.0.1 6665 (login prompt present)."; else e
+cho "Timed out waiting for login prompt; check /tmp/alpine_wait.log" >&2; fi
+Timed out waiting for login prompt; check /tmp/alpine_wait.log
+root@b3698ae001a1:/app# pkill -f '/dev/tcp/127.0.0.1/6665' 2>/dev/null || true
+root@b3698ae001a1:/app# pkill -f 'qemu-system-x86_64' 2>/dev/null || true
+root@b3698ae001a1:/app# rm -f /tmp/alpine_console_ready /tmp/alpine_wait.log /tmp/alp_root
+root@b3698ae001a1:/app# umount -l /mnt/alpineiso 2>/dev/null || true
+root@b3698ae001a1:/app# mkdir -p /mnt/alpineiso /tmp/alpineiso
+root@b3698ae001a1:/app# bash -lc 'if mount -o loop,ro /app/alpine.iso /mnt/alpineiso 2>/dev/null; then ROOT=/mnt/alpineiso; echo "$ROOT" > /tmp/alp_root; else a
+pt-get update && apt-get install -y libarchive-tools && rm -rf /tmp/alpineiso && mkdir -p /tmp/alpineiso && bsdtar -C /tmp/alpineiso -xf /app/alpine.iso && echo
+ "/tmp/alpineiso" > /tmp/alp_root; fi'
+Hit:1 http://deb.debian.org/debian bullseye InRelease
+Hit:2 http://deb.debian.org/debian-security bullseye-security InRelease
+Hit:3 http://deb.debian.org/debian bullseye-updates InRelease
+Reading package lists... Done
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  libarchive13
+Suggested packages:
+  lrzip
+The following NEW packages will be installed:
+  libarchive-tools libarchive13
+0 upgraded, 2 newly installed, 0 to remove and 1 not upgraded.
+Need to get 422 kB of archives.
+After this operation, 1087 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian-security bullseye-security/main amd64 libarchive13 amd64 3.4.3-2+deb11u2 [343 kB]
+Get:2 http://deb.debian.org/debian-security bullseye-security/main amd64 libarchive-tools amd64 3.4.3-2+deb11u2 [79.6 kB]
+Fetched 422 kB in 0s (3552 kB/s)
+debconf: delaying package configuration, since apt-utils is not installed
+Selecting previously unselected package libarchive13:amd64.
+(Reading database ... 22331 files and directories currently installed.)
+Preparing to unpack .../libarchive13_3.4.3-2+deb11u2_amd64.deb ...
+Unpacking libarchive13:amd64 (3.4.3-2+deb11u2) ...
+Selecting previously unselected package libarchive-tools.
+Preparing to unpack .../libarchive-tools_3.4.3-2+deb11u2_amd64.deb ...
+Unpacking libarchive-tools (3.4.3-2+deb11u2) ...
+Setting up libarchive13:amd64 (3.4.3-2+deb11u2) ...
+Setting up libarchive-tools (3.4.3-2+deb11u2) ...
+Processing triggers for libc-bin (2.31-13+deb11u13) ...
+root@b3698ae001a1:/app# ROOT=$(cat /tmp/alp_root); echo "Using ISO root: $ROOT"; ls -l "$ROOT/boot" 2>/dev/null || true
+Using ISO root: /tmp/alpineiso
+total 221312
+-r--r--r-- 1 root root   5751847 Dec  7  2023 System.map-lts
+-r--r--r-- 1 root root     61440 Dec  4  2023 amd-ucode.img
+-r--r--r-- 1 root root    261013 Dec  7  2023 config-lts
+dr-xr-xr-x 2 root root      4096 Dec  7  2023 dtbs-lts
+dr-xr-xr-x 2 root root      4096 Dec  7  2023 grub
+-r--r--r-- 1 root root  20486092 Dec  7  2023 initramfs-lts
+-r--r--r-- 1 root root   7367952 Nov 15  2023 intel-ucode.img
+-r--r--r-- 1 root root 180789248 Dec  7  2023 modloop-lts
+dr-xr-xr-x 2 root root      4096 Dec  7  2023 syslinux
+-r--r--r-- 1 root root  11879168 Dec  7  2023 vmlinuz-lts
+root@b3698ae001a1:/app# KERNEL=$(find "$(cat /tmp/alp_root)/boot" -maxdepth 1 -type f -name 'vmlinuz*' | head -n1); INITRD=$(find "$(cat /tmp/alp_root)/boot" -m
+axdepth 1 -type f -name 'initramfs*' | head -n1); if [ -z "$KERNEL" ] || [ -z "$INITRD" ]; then echo "Kernel or initramfs not found inside ISO" >&2; exit 1; els
+e echo "Kernel: $KERNEL"; echo "Initrd: $INITRD"; fi
+Kernel: /tmp/alpineiso/boot/vmlinuz-lts
+Initrd: /tmp/alpineiso/boot/initramfs-lts
+root@b3698ae001a1:/app# qemu-system-x86_64 -m 768 -smp 2 -kernel "$KERNEL" -initrd "$INITRD" -append "console=ttyS0,115200 root=/dev/ram0 alpine_dev=cdrom modul
+es=loop,squashfs,sd-mod,usb-storage printk.time=0" -drive file=/app/alpine.iso,media=cdrom,readonly=on -display none -serial telnet:127.0.0.1:6665,server,nowait
+ -daemonize
+root@b3698ae001a1:/app# nohup bash -lc 'until exec 3<>/dev/tcp/127.0.0.1/6665; do sleep 0.5; done; for i in $(seq 1 300); do printf "\r\n" >&3; out=$(timeout 1s
+ cat <&3 | tr -d "\r"); echo "$out" >> /tmp/alpine_wait.log; if printf "%s" "$out" | grep -q "login:"; then printf ready > /tmp/alpine_console_ready; break; fi;
+ sleep 1; done; exec 3>&-' >/tmp/alpine_wait.log 2>&1 &
+[2] 1805
+root@b3698ae001a1:/app# for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+root@b3698ae001a1:/app# for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+root@b3698ae001a1:/app# for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+if [ -f /tmp/alpine_console_ready ]; then echo "Alpine serial console is ready on telnet 127.0.0.1 6665 (login prompt present)."; else echo "Timed out waiting f
+or login prompt; check /tmp/alpine_wait.log" >&2; fi
+root@b3698ae001a1:/app# if [ -f /tmp/alpine_console_ready ]; then echo "Alpine serial console is ready on telnet 127.0.0.1 6665 (login prompt present)."; else e
+cho "Timed out waiting for login prompt; check /tmp/alpine_wait.log" >&2; fi
+Timed out waiting for login prompt; check /tmp/alpine_wait.log
+root@b3698ae001a1:/app# ss -ltnp | grep 6665 || true
+bash: ss: command not found
+root@b3698ae001a1:/app# ps -ef | grep -w qemu-system-x86_64 | grep -v grep || true
+bash: ps: command not found
+root@b3698ae001a1:/app# tail -n 200 /tmp/alpine_wait.log 2>/dev/null || true
+nohup: ignoring input
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+root@b3698ae001a1:/app# bash -lc 'exec 3<>/dev/tcp/127.0.0.1/6665; printf "\r\n" >&3; out=$(timeout 5s cat <&3 | tr -d "\r"); echo "$out" >> /tmp/alpine_wait.lo
+g; if printf "%s" "$out" | grep -q "login:"; then printf ready > /tmp/alpine_console_ready; fi; exec 3>&-'
+nohup bash -lc 'until exec 3<>/dev/tcp/127.0.0.1/6665; do sleep 0.5; done; for i in $(seq 1 600); do printf "\r\n" >&3; out=$(timeout 1s cat <&3 | tr -d "\r");
+echo "$out" >> /tmp/alpine_wait.log; if printf "%s" "$out" | grep -q "login:"; then printf ready > /tmp/alpine_console_ready; break; fi; sleep 0.5; done; exec 3
+>&-' >/tmp/alpine_wait.log 2>&1 &
+for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+root@b3698ae001a1:/app# nohup bash -lc 'until exec 3<>/dev/tcp/127.0.0.1/6665; do sleep 0.5; done; for i in $(seq 1 600); do printf "\r\n" >&3; out=$(timeout 1s
+ cat <&3 | tr -d "\r"); echo "$out" >> /tmp/alpine_wait.log; if printf "%s" "$out" | grep -q "login:"; then printf ready > /tmp/alpine_console_ready; break; fi;
+ sleep 0.5; done; exec 3>&-' >/tmp/alpine_wait.log 2>&1 &
+[3] 2873
+root@b3698ae001a1:/app# for i in $(seq 1 60); do [ -f /tmp/alpine_console_ready ] && exit 0; sleep 1; done
+

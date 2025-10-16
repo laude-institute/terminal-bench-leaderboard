@@ -1,0 +1,1110 @@
+[?2004hroot@591d65ab93af:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@591d65ab93af:/app# clear
+[?2004l[H[J[3J[?2004hroot@591d65ab93af:/app# ls -la
+[?2004ltotal 16
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 .
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 ..
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 data
+-rw-rw-r-- 1 root root 3420 Oct  8 15:44 schema.json
+[?2004hroot@591d65ab93af:/app# cat schema.json
+[?2004l{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["metadata", "organization", "statistics"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["version", "timestamp", "generator"],
+      "properties": {
+        "version": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "generator": { "type": "string" }
+      }
+    },
+    "organization": {
+      "type": "object",
+      "required": ["name", "founded", "departments"],
+      "properties": {
+        "name": { "type": "string" },
+        "founded": { "type": "string", "format": "date" },
+        "departments": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "budget", "employees", "projects"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "budget": { "type": "number", "minimum": 0 },
+              "employees": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "object",
+                  "required": ["id", "name", "position", "skills", "years_of_service"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "name": { "type": "string" },
+                    "position": { "type": "string" },
+                    "skills": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": { "type": "string" }
+                    },
+                    "years_of_service": { "type": "integer", "minimum": 0 }
+                  }
+                }
+              },
+              "projects": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["name", "status", "members", "deadline"],
+                  "properties": {
+                    "name": { "type": "string" },
+                    "status": { 
+                      "type": "string",
+                      "enum": ["Planning", "In Progress", "Testing", "Completed", "On Hold"]
+                    },
+                    "members": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "deadline": { "type": "string", "format": "date" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "required": [
+        "averageDepartmentBudget", 
+        "totalEmployees", 
+        "skillDistribution", 
+        "departmentSizes", 
+        "projectStatusDistribution",
+        "averageYearsOfService"
+      ],
+      "properties": {
+        "averageDepartmentBudget": { "type": "number" },
+        "totalEmployees": { "type": "integer" },
+        "skillDistribution": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "departmentSizes": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "projectStatusDistribution": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "averageYearsOfService": { "type": "number" }
+      }
+    }
+  }
+}[?2004hroot@591d65ab93af:/app# head -n 5 departments.csv
+[?2004lhead: cannot open 'departments.csv' for reading: No such file or directory
+[?2004hroot@591d65ab93af:/app# head -n 5 employees.csv
+[?2004lhead: cannot open 'employees.csv' for reading: No such file or directory
+[?2004hroot@591d65ab93af:/app# head -n 5 projects.csv
+[?2004lhead: cannot open 'projects.csv' for reading: No such file or directory
+[?2004hroot@591d65ab93af:/app# cat > process_csv_to_json.py << 'EOF'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import csv, json, sys, os, datetime
+[?2004l[?2004h> from collections import defaultdict
+[?2004l[?2004h> 
+[?2004l[?2004h> SCHEMA_PATH = 'schema.json'
+[?2004l[?2004h> DEPARTMENTS_CSV = 'departments.csv'
+[?2004l[?2004h> EMPLOYEES_CSV = 'employees.csv'
+[?2004l[?2004h> PROJECTS_CSV = 'projects.csv'
+[?2004l[?2004h> OUTPUT_JSON = 'organization.json'
+[?2004l[?2004h> 
+[?2004l[?2004h> # Helper to read CSV into list of dicts
+[?2004l[?2004h> def read_csv(path):
+[?2004l[?2004h>     with open(path, newline='', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         return [dict(row) for row in reader]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Attempt to load schema (used to align field names if needed)
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as sf:
+[?2004l[?2004h>         schema = json.load(sf)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     schema = None
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load data
+[?2004l[?2004h> departments = read_csv(DEPARTMENTS_CSV)
+[?2004l[?2004h> employees = read_csv(EMPLOYEES_CSV)
+[?2004l[?2004h> projects = read_csv(PROJECTS_CSV)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Normalize keys: unify common id fields
+[?2004l[?2004h> # Try to infer department id key
+[?2004l[?2004h> def infer_key(row, candidates):
+[?2004l[?2004h>     for c in candidates:
+[?2004l[?2004h>         if c in row:
+[?2004l[?2004h>             return c
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> dep_id_key = infer_key(departments[0] if departments else {}, ['department_id','dept_id','id','deptID'])
+[?2004l[?2004h> emp_dept_key = infer_key(employees[0] if employees else {}, ['department_id','dept_id','deptID','dept','department'])
+[?2004l[?2004h> emp_id_key = infer_key(employees[0] if employees else {}, ['employee_id','emp_id','id','employeeID'])
+[?2004l[?2004h> proj_dept_key = infer_key(projects[0] if projects else {}, ['department_id','dept_id','deptID','department'])
+[?2004l[?2004h> proj_id_key = infer_key(projects[0] if projects else {}, ['project_id','proj_id','id','projectID'])
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build department index
+[?2004l[?2004h> dept_index = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     dept_id = d.get(dep_id_key) if dep_id_key else d.get('id')
+[?2004l[?2004h>     dept_index[str(dept_id)] = d
+[?2004l[?2004h> 
+[?2004l[?2004h> # Attach employees and projects to departments
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     d['employees'] = []
+[?2004l[?2004h>     d['projects'] = []
+[?2004l[?2004h> 
+[?2004l[?2004h> # Index by department
+[?2004l[?2004h> for e in employees:
+[?2004l[?2004h>     key = e.get(emp_dept_key)
+[?2004l[?2004h>     if key is not None and str(key) in dept_index:
+[?2004l[?2004h>         dept_index[str(key)]['employees'].append(e)
+[?2004l[?2004h> 
+[?2004l[?2004h> for p in projects:
+[?2004l[?2004h>     key = p.get(proj_dept_key)
+[?2004l[?2004h>     if key is not None and str(key) in dept_index:
+[?2004l[?2004h>         dept_index[str(key)]['projects'].append(p)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Compute statistics
+[?2004l[?2004h> stats = {}
+[?2004l[?2004h> stats['total_departments'] = len(departments)
+[?2004l[?2004h> stats['total_employees'] = len(employees)
+[?2004l[?2004h> stats['total_projects'] = len(projects)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Employees per department
+[?2004l[?2004h> stats['employees_per_department'] = {str(d.get(dep_id_key) if dep_id_key else d.get('id')): len(d.get('employees', [])) for d in departments}
+[?2004l[?2004h> # Projects per department
+[?2004l[?2004h> stats['projects_per_department'] = {str(d.get(dep_id_key) if dep_id_key else d.get('id')): len(d.get('projects', [])) for d in departments}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Salary stats if salary field exists
+[?2004l[?2004h> salary_key = infer_key(employees[0] if employees else {}, ['salary','compensation','annual_salary'])
+[?2004l[?2004h> if salary_key:
+[?2004l[?2004h>     vals = []
+[?2004l[?2004h>     for e in employees:
+[?2004l[?2004h>         v = e.get(salary_key)
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             vals.append(float(v))
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             pass
+[?2004l[?2004h>     if vals:
+[?2004l[?2004h>         stats['salary'] = {
+[?2004l[?2004h>             'min': min(vals),
+[?2004l[?2004h>             'max': max(vals),
+[?2004l[?2004h>             'average': sum(vals)/len(vals)
+[?2004l[?2004h>         }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Project budget stats if budget exists
+[?2004l[?2004h> budget_key = infer_key(projects[0] if projects else {}, ['budget','project_budget','cost'])
+[?2004l[?2004h> if budget_key:
+[?2004l[?2004h>     bvals = []
+[?2004l[?2004h>     for p in projects:
+[?2004l[?2004h>         v = p.get(budget_key)
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             bvals.append(float(v))
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             pass
+[?2004l[?2004h>     if bvals:
+[?2004l[?2004h>         stats['project_budget'] = {
+[?2004l[?2004h>             'min': min(bvals),
+[?2004l[?2004h>             'max': max(bvals),
+[?2004l[?2004h>             'total': sum(bvals)
+[?2004l[?2004h>         }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'generated_at': datetime.datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'source_files': [DEPARTMENTS_CSV, EMPLOYEES_CSV, PROJECTS_CSV],
+[?2004l[?2004h>     'schema_present': schema is not None
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Attempt to map to schema keys if schema defines a top-level structure
+[?2004l[?2004h> org = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'departments': departments,
+[?2004l[?2004h>     'statistics': stats
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # If schema specifies a top-level key like 'organization', wrap accordingly
+[?2004l[?2004h> try:
+[?2004l[?2004h>     if isinstance(schema, dict):
+[?2004l[?2004h>         # Look for a title or properties hint
+[?2004l[?2004h>         top_keys = schema.get('properties', {})
+[?2004l[?2004h>         # Prefer a property named 'organization' if present
+[?2004l[?2004h>         if 'organization' in top_keys:
+[?2004l[?2004h>             org = {
+[?2004l[?2004h>                 'organization': {
+[?2004l[?2004h>                     'metadata': metadata,
+[?2004l[?2004h>                     'departments': departments,
+[?2004l[?2004h>                     'statistics': stats
+[?2004l[?2004h>                 }
+[?2004l[?2004h>             }
+[?2004l[?2004h>         # Or if schema enforces specific field names, align
+[?2004l[?2004h>         elif all(k in ['metadata','departments','statistics'] for k in top_keys.keys()):
+[?2004l[?2004h>             # already matching
+[?2004l[?2004h>             pass
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     pass
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_JSON, 'w', encoding='utf-8') as out:
+[?2004l[?2004h>     json.dump(org, out, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print(f"Wrote {OUTPUT_JSON}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@591d65ab93af:/app# chmod +x process_csv_to_json.py
+[?2004l[?2004hroot@591d65ab93af:/app# python3 process_csv_to_json.py
+[?2004lTraceback (most recent call last):
+  File [35m"/app/process_csv_to_json.py"[0m, line [35m25[0m, in [35m<module>[0m
+    departments = read_csv(DEPARTMENTS_CSV)
+  File [35m"/app/process_csv_to_json.py"[0m, line [35m13[0m, in [35mread_csv[0m
+    with [31mopen[0m[1;31m(path, newline='', encoding='utf-8')[0m as f:
+         [31m~~~~[0m[1;31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+[1;35mFileNotFoundError[0m: [35m[Errno 2] No such file or directory: 'departments.csv'[0m
+[?2004hroot@591d65ab93af:/app# ls -la
+[?2004ltotal 24
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 .
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 ..
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 data
+-rwxr-xr-x 1 root root 4794 Oct 14 11:33 process_csv_to_json.py
+-rw-rw-r-- 1 root root 3420 Oct  8 15:44 schema.json
+[?2004hroot@591d65ab93af:/app# cat organization.json
+[?2004lcat: organization.json: No such file or directory
+[?2004hroot@591d65ab93af:/app# ls -la
+[?2004ltotal 24
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 .
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 ..
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 data
+-rwxr-xr-x 1 root root 4794 Oct 14 11:33 process_csv_to_json.py
+-rw-rw-r-- 1 root root 3420 Oct  8 15:44 schema.json
+[?2004hroot@591d65ab93af:/app# ls -la data
+[?2004ltotal 20
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 .
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 ..
+-rw-rw-r-- 1 root root  154 Oct  8 15:44 departments.csv
+-rw-rw-r-- 1 root root  992 Oct  8 15:44 employees.csv
+-rw-rw-r-- 1 root root  440 Oct  8 15:44 projects.csv
+[?2004hroot@591d65ab93af:/app# head -n 5 data/departments.csv
+[?2004lid,name,budget
+D001,Engineering,1500000
+D002,Marketing,800000
+D003,Human Resources,400000
+D004,Research & Development,2000000
+[?2004hroot@591d65ab93af:/app# head -n 5 data/employees.csv
+[?2004lid,name,position,skills,years_of_service,department_id
+D001-E001,Cristiano Ronaldo,Manager,Python;Leadership;Project Management,10,D001
+D001-E002,Bernardo Silva,Senior Developer,JavaScript;Python;Cloud Services,7,D001
+D001-E003,Sergio Ramos,Team Lead,Java;C++;DevOps,12,D001
+D002-E001,Kylian Mbappe,Designer,UI/UX Design;Communication;Marketing,5,D002
+[?2004hroot@591d65ab93af:/app# head -n 5 data/projects.csv
+[?2004lname,status,member_ids,deadline,department_id
+Madrid,In Progress,D001-E001;D001-E002;D001-E003,2025-06-30,D001
+Ferrari,Completed,D001-E002;D001-E003,2025-03-15,D001
+RedBull,Planning,D002-E001;D002-E002,2025-09-10,D002
+McLaren,In Progress,D003-E001;D003-E002,2025-07-20,D003
+[?2004hroot@591d65ab93af:/app# cat > process_csv_to_json.py << 'EOF'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import csv, json, os, datetime
+[?2004l[?2004h> from collections import defaultdict
+[?2004l[?2004h> 
+[?2004l[?2004h> DATA_DIR = 'data'
+[?2004l[?2004h> SCHEMA_PATH = 'schema.json'
+[?2004l[?2004h> DEPARTMENTS_CSV = os.path.join(DATA_DIR, 'departments.csv')
+[?2004l[?2004h> EMPLOYEES_CSV = os.path.join(DATA_DIR, 'employees.csv')
+[?2004l[?2004h> PROJECTS_CSV = os.path.join(DATA_DIR, 'projects.csv')
+[?2004l[?2004h> OUTPUT_JSON = 'organization.json'
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv(path):
+[?2004l[?2004h>     with open(path, newline='', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         return [dict(row) for row in reader]
+[?2004l[?2004h> 
+[?2004l[?2004h> def find_key(row, candidates):
+[?2004l[?2004h>     for c in candidates:
+[?2004l[?2004h>         if c in row and row[c] is not None:
+[?2004l[?2004h>             return c
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> def coerce_float(x, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if isinstance(x, str):
+[?2004l[?2004h>             x = x.replace(',', '').strip()
+[?2004l[?2004h>         return float(x)
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def coerce_int(x, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if isinstance(x, str):
+[?2004l[?2004h>             x = x.replace(',', '').strip()
+[?2004l[?2004h>         return int(float(x))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if s is None:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     if isinstance(s, list):
+[?2004l[?2004h>         return s
+[?2004l[?2004h>     parts = [p.strip() for p in str(s).replace('|', ',').replace(';', ',').split(',')]
+[?2004l[?2004h>     return [p for p in parts if p]
+[?2004l[?2004h> 
+[?2004l[?2004h> def normalize_status(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return 'Planning'
+[?2004l[?2004h>     t = str(s).strip().lower().replace('_', ' ').replace('-', ' ')
+[?2004l[?2004h>     mapping = {
+[?2004l[?2004h>         'planning': 'Planning',
+[?2004l[?2004h>         'plan': 'Planning',
+[?2004l[?2004h>         'in progress': 'In Progress',
+[?2004l[?2004h>         'inprogress': 'In Progress',
+[?2004l[?2004h>         'progress': 'In Progress',
+[?2004l[?2004h>         'testing': 'Testing',
+[?2004l[?2004h>         'qa': 'Testing',
+[?2004l[?2004h>         'completed': 'Completed',
+[?2004l[?2004h>         'complete': 'Completed',
+[?2004l[?2004h>         'done': 'Completed',
+[?2004l[?2004h>         'on hold': 'On Hold',
+[?2004l[?2004h>         'onhold': 'On Hold',
+[?2004l[?2004h>         'hold': 'On Hold'
+[?2004l[?2004h>     }
+[?2004l[?2004h>     return mapping.get(t, s if s in ['Planning','In Progress','Testing','Completed','On Hold'] else 'Planning')
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load data
+[?2004l[?2004h> departments_raw = read_csv(DEPARTMENTS_CSV)
+[?2004l[?2004h> employees_raw = read_csv(EMPLOYEES_CSV)
+[?2004l[?2004h> projects_raw = read_csv(PROJECTS_CSV)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Infer department fields
+[?2004l[?2004h> dep_sample = departments_raw[0] if departments_raw else {}
+[?2004l[?2004h> dep_id_k = find_key(dep_sample, ['department_id','dept_id','id'])
+[?2004l[?2004h> dep_name_k = find_key(dep_sample, ['department_name','name'])
+[?2004l[?2004h> dep_budget_k = find_key(dep_sample, ['budget','dept_budget'])
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> dept_map = {}
+[?2004l[?2004h> for d in departments_raw:
+[?2004l[?2004h>     dep_id = str(d.get(dep_id_k) or d.get('id') or d.get('dept_id') or '').strip()
+[?2004l[?2004h>     name = (d.get(dep_name_k) or d.get('name') or f'Department {dep_id}').strip()
+[?2004l[?2004h>     budget = coerce_float(d.get(dep_budget_k))
+[?2004l[?2004h>     dept_obj = {
+[?2004l[?2004h>         'id': dep_id,
+[?2004l[?2004h>         'name': name,
+[?2004l[?2004h>         'budget': budget,
+[?2004l[?2004h>         'employees': [],
+[?2004l[?2004h>         'projects': []
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept_obj)
+[?2004l[?2004h>     dept_map[dep_id] = dept_obj
+[?2004l[?2004h> 
+[?2004l[?2004h> # Infer employee fields
+[?2004l[?2004h> emp_sample = employees_raw[0] if employees_raw else {}
+[?2004l[?2004h> emp_id_k = find_key(emp_sample, ['employee_id','emp_id','id'])
+[?2004l[?2004h> emp_name_k = find_key(emp_sample, ['employee_name','name','full_name'])
+[?2004l[?2004h> emp_position_k = find_key(emp_sample, ['position','title','role','job_title'])
+[?2004l[?2004h> emp_skills_k = find_key(emp_sample, ['skills','skillset','skill_list'])
+[?2004l[?2004h> emp_years_k = find_key(emp_sample, ['years_of_service','years','tenure','experience_years'])
+[?2004l[?2004h> emp_dept_k = find_key(emp_sample, ['department_id','dept_id','department','dept'])
+[?2004l[?2004h> 
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_raw:
+[?2004l[?2004h>     dep_fk = str(e.get(emp_dept_k) or '').strip()
+[?2004l[?2004h>     emp_obj = {
+[?2004l[?2004h>         'id': str(e.get(emp_id_k) or e.get('id') or '').strip(),
+[?2004l[?2004h>         'name': str(e.get(emp_name_k) or e.get('name') or '').strip(),
+[?2004l[?2004h>         'position': str(e.get(emp_position_k) or e.get('position') or 'Employee').strip(),
+[?2004l[?2004h>         'skills': split_list(e.get(emp_skills_k)) or ['General'],
+[?2004l[?2004h>         'years_of_service': coerce_int(e.get(emp_years_k), 0)
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp_obj)
+[?2004l[?2004h>     if dep_fk in dept_map:
+[?2004l[?2004h>         dept_map[dep_fk]['employees'].append(emp_obj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Infer project fields
+[?2004l[?2004h> proj_sample = projects_raw[0] if projects_raw else {}
+[?2004l[?2004h> proj_name_k = find_key(proj_sample, ['project_name','name','title'])
+[?2004l[?2004h> proj_status_k = find_key(proj_sample, ['status','state','phase'])
+[?2004l[?2004h> proj_members_k = find_key(proj_sample, ['members','team','team_members','assignees'])
+[?2004l[?2004h> proj_deadline_k = find_key(proj_sample, ['deadline','due_date','due','target_date'])
+[?2004l[?2004h> proj_dept_k = find_key(proj_sample, ['department_id','dept_id','department','dept'])
+[?2004l[?2004h> 
+[?2004l[?2004h> for p in projects_raw:
+[?2004l[?2004h>     dep_fk = str(p.get(proj_dept_k) or '').strip()
+[?2004l[?2004h>     proj_obj = {
+[?2004l[?2004h>         'name': str(p.get(proj_name_k) or p.get('name') or '').strip(),
+[?2004l[?2004h>         'status': normalize_status(p.get(proj_status_k)),
+[?2004l[?2004h>         'members': split_list(p.get(proj_members_k)),
+[?2004l[?2004h>         'deadline': str(p.get(proj_deadline_k) or '').strip()
+[?2004l[?2004h>     }
+[?2004l[?2004h>     if dep_fk in dept_map:
+[?2004l[?2004h>         dept_map[dep_fk]['projects'].append(proj_obj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Compute statistics
+[?2004l[?2004h> budgets = [d['budget'] for d in departments if isinstance(d.get('budget'), (int, float))]
+[?2004l[?2004h> averageDepartmentBudget = (sum(budgets) / len(budgets)) if budgets else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> totalEmployees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> skillDistribution = defaultdict(int)
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for sk in e.get('skills', []):
+[?2004l[?2004h>         if sk:
+[?2004l[?2004h>             skillDistribution[sk] += 1
+[?2004l[?2004h> skillDistribution = dict(skillDistribution)
+[?2004l[?2004h> 
+[?2004l[?2004h> departmentSizes = {d['id']: len(d.get('employees', [])) for d in departments}
+[?2004l[?2004h> 
+[?2004l[?2004h> projectStatusDistribution = defaultdict(int)
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for proj in d.get('projects', []):
+[?2004l[?2004h>         projectStatusDistribution[proj.get('status', 'Planning')] += 1
+[?2004l[?2004h> projectStatusDistribution = dict(projectStatusDistribution)
+[?2004l[?2004h> 
+[?2004l[?2004h> years_vals = [e['years_of_service'] for e in all_employees if isinstance(e.get('years_of_service'), int)]
+[?2004l[?2004h> averageYearsOfService = (sum(years_vals) / len(years_vals)) if years_vals else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> # Metadata
+[?2004l[?2004h> timestamp = datetime.datetime.utcnow().isoformat() + 'Z'
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': timestamp,
+[?2004l[?2004h>     'generator': 'csv-to-json-processor'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info
+[?2004l[?2004h> def find_org_name(rows):
+[?2004l[?2004h>     if not rows:
+[?2004l[?2004h>         return None
+[?2004l[?2004h>     keys = list(rows[0].keys())
+[?2004l[?2004h>     for k in keys:
+[?2004l[?2004h>         if k.lower() in ('organization','company','org','org_name'):
+[?2004l[?2004h>             for r in rows:
+[?2004l[?2004h>                 val = str(r.get(k) or '').strip()
+[?2004l[?2004h>                 if val:
+[?2004l[?2004h>                     return val
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> org_name = find_org_name(departments_raw) or find_org_name(employees_raw) or find_org_name(projects_raw) or 'Organization'
+[?2004l[?2004h> 
+[?2004l[?2004h> today = datetime.date.today()
+[?2004l[?2004h> max_years = max(years_vals) if years_vals else 0
+[?2004l[?2004h> try:
+[?2004l[?2004h>     founded_date = datetime.date(today.year - max_years if today.year - max_years > 0 else today.year, today.month, today.day)
+[?2004l[?2004h>     founded = founded_date.isoformat()
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     founded = today.isoformat()
+[?2004l[?2004h> 
+[?2004l[?2004h> organization = {
+[?2004l[?2004h>     'name': org_name,
+[?2004l[?2004h>     'founded': founded,
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': averageDepartmentBudget,
+[?2004l[?2004h>     'totalEmployees': totalEmployees,
+[?2004l[?2004h>     'skillDistribution': skillDistribution,
+[?2004l[?2004h>     'departmentSizes': departmentSizes,
+[?2004l[?2004h>     'projectStatusDistribution': projectStatusDistribution,
+[?2004l[?2004h>     'averageYearsOfService': averageYearsOfService
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> output = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_JSON, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(output, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print(f"Wrote {OUTPUT_JSON}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@591d65ab93af:/app# chmod +x process_csv_to_json.py
+[?2004l[?2004hroot@591d65ab93af:/app# python3 process_csv_to_json.py
+[?2004l/app/process_csv_to_json.py:163: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  timestamp = datetime.datetime.utcnow().isoformat() + 'Z'
+Wrote organization.json
+[?2004hroot@591d65ab93af:/app# ls -la
+[?2004ltotal 32
+drwxr-xr-x 1 root root 4096 Oct 14 11:34 .
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 ..
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 data
+-rw-r--r-- 1 root root 6476 Oct 14 11:34 organization.json
+-rwxr-xr-x 1 root root 7362 Oct 14 11:34 process_csv_to_json.py
+-rw-rw-r-- 1 root root 3420 Oct  8 15:44 schema.json
+[?2004hroot@591d65ab93af:/app# cat organization.json
+[?2004l{
+  "metadata": {
+    "version": "1.0.0",
+    "timestamp": "2025-10-14T11:34:48.891532Z",
+    "generator": "csv-to-json-processor"
+  },
+  "organization": {
+    "name": "Organization",
+    "founded": "2013-10-14",
+    "departments": [
+      {
+        "id": "D001",
+        "name": "Engineering",
+        "budget": 1500000.0,
+        "employees": [
+          {
+            "id": "D001-E001",
+            "name": "Cristiano Ronaldo",
+            "position": "Manager",
+            "skills": [
+              "Python",
+              "Leadership",
+              "Project Management"
+            ],
+            "years_of_service": 10
+          },
+          {
+            "id": "D001-E002",
+            "name": "Bernardo Silva",
+            "position": "Senior Developer",
+            "skills": [
+              "JavaScript",
+              "Python",
+              "Cloud Services"
+            ],
+            "years_of_service": 7
+          },
+          {
+            "id": "D001-E003",
+            "name": "Sergio Ramos",
+            "position": "Team Lead",
+            "skills": [
+              "Java",
+              "C++",
+              "DevOps"
+            ],
+            "years_of_service": 12
+          }
+        ],
+        "projects": [
+          {
+            "name": "Madrid",
+            "status": "In Progress",
+            "members": [],
+            "deadline": "2025-06-30"
+          },
+          {
+            "name": "Ferrari",
+            "status": "Completed",
+            "members": [],
+            "deadline": "2025-03-15"
+          }
+        ]
+      },
+      {
+        "id": "D002",
+        "name": "Marketing",
+        "budget": 800000.0,
+        "employees": [
+          {
+            "id": "D002-E001",
+            "name": "Kylian Mbappe",
+            "position": "Designer",
+            "skills": [
+              "UI/UX Design",
+              "Communication",
+              "Marketing"
+            ],
+            "years_of_service": 5
+          },
+          {
+            "id": "D002-E002",
+            "name": "Vinicius Junior",
+            "position": "Specialist",
+            "skills": [
+              "Content Creation",
+              "Marketing",
+              "Communication"
+            ],
+            "years_of_service": 3
+          }
+        ],
+        "projects": [
+          {
+            "name": "RedBull",
+            "status": "Planning",
+            "members": [],
+            "deadline": "2025-09-10"
+          }
+        ]
+      },
+      {
+        "id": "D003",
+        "name": "Human Resources",
+        "budget": 400000.0,
+        "employees": [
+          {
+            "id": "D003-E001",
+            "name": "Antonio Silva",
+            "position": "Director",
+            "skills": [
+              "Leadership",
+              "Communication",
+              "Project Management"
+            ],
+            "years_of_service": 8
+          },
+          {
+            "id": "D003-E002",
+            "name": "Diogo Dalot",
+            "position": "Coordinator",
+            "skills": [
+              "SQL",
+              "Data Analysis",
+              "Communication"
+            ],
+            "years_of_service": 4
+          }
+        ],
+        "projects": [
+          {
+            "name": "McLaren",
+            "status": "In Progress",
+            "members": [],
+            "deadline": "2025-07-20"
+          }
+        ]
+      },
+      {
+        "id": "D004",
+        "name": "Research & Development",
+        "budget": 2000000.0,
+        "employees": [
+          {
+            "id": "D004-E001",
+            "name": "Lewis Hamilton",
+            "position": "Senior Developer",
+            "skills": [
+              "Python",
+              "Machine Learning",
+              "Data Analysis"
+            ],
+            "years_of_service": 9
+          },
+          {
+            "id": "D004-E002",
+            "name": "Charles Leclerc",
+            "position": "Researcher",
+            "skills": [
+              "Research",
+              "Python",
+              "Data Analysis"
+            ],
+            "years_of_service": 6
+          },
+          {
+            "id": "D004-E003",
+            "name": "Max Verstappen",
+            "position": "Analyst",
+            "skills": [
+              "SQL",
+              "Data Analysis",
+              "Machine Learning"
+            ],
+            "years_of_service": 7
+          }
+        ],
+        "projects": [
+          {
+            "name": "Mercedes",
+            "status": "Testing",
+            "members": [],
+            "deadline": "2025-05-15"
+          },
+          {
+            "name": "Hala",
+            "status": "In Progress",
+            "members": [],
+            "deadline": "2025-08-25"
+          }
+        ]
+      },
+      {
+        "id": "D005",
+        "name": "Customer Support",
+        "budget": 600000.0,
+        "employees": [
+          {
+            "id": "D005-E001",
+            "name": "Jude Bellingham",
+            "position": "Team Lead",
+            "skills": [
+              "Customer Service",
+              "Leadership",
+              "Communication"
+            ],
+            "years_of_service": 5
+          },
+          {
+            "id": "D005-E002",
+            "name": "Luka Modric",
+            "position": "Specialist",
+            "skills": [
+              "Customer Service",
+              "Communication",
+              "Sales"
+            ],
+            "years_of_service": 11
+          }
+        ],
+        "projects": [
+          {
+            "name": "United",
+            "status": "On Hold",
+            "members": [],
+            "deadline": "2025-11-30"
+          }
+        ]
+      }
+    ]
+  },
+  "statistics": {
+    "averageDepartmentBudget": 1060000.0,
+    "totalEmployees": 12,
+    "skillDistribution": {
+      "Python": 4,
+      "Leadership": 3,
+      "Project Management": 2,
+      "JavaScript": 1,
+      "Cloud Services": 1,
+      "Java": 1,
+      "C++": 1,
+      "DevOps": 1,
+      "UI/UX Design": 1,
+      "Communication": 6,
+      "Marketing": 2,
+      "Content Creation": 1,
+      "SQL": 2,
+      "Data Analysis": 4,
+      "Machine Learning": 2,
+      "Research": 1,
+      "Customer Service": 2,
+      "Sales": 1
+    },
+    "departmentSizes": {
+      "D001": 3,
+      "D002": 2,
+      "D003": 2,
+      "D004": 3,
+      "D005": 2
+    },
+    "projectStatusDistribution": {
+      "In Progress": 3,
+      "Completed": 1,
+      "Planning": 1,
+      "Testing": 1,
+      "On Hold": 1
+    },
+    "averageYearsOfService": 7.25
+  }
+}[?2004hroot@591d65ab93af:/app# python3 process_csv_to_json.py
+[?2004l/app/process_csv_to_json.py:163: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  timestamp = datetime.datetime.utcnow().isoformat() + 'Z'
+Wrote organization.json
+[?2004hroot@591d65ab93af:/app# ls -la
+[?2004ltotal 32
+drwxr-xr-x 1 root root 4096 Oct 14 11:34 .
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 ..
+drwxr-xr-x 1 root root 4096 Oct 14 11:33 data
+-rw-r--r-- 1 root root 6476 Oct 14 11:35 organization.json
+-rwxr-xr-x 1 root root 7362 Oct 14 11:34 process_csv_to_json.py
+-rw-rw-r-- 1 root root 3420 Oct  8 15:44 schema.json
+[?2004hroot@591d65ab93af:/app# cat organization.json
+[?2004l{
+  "metadata": {
+    "version": "1.0.0",
+    "timestamp": "2025-10-14T11:35:05.436698Z",
+    "generator": "csv-to-json-processor"
+  },
+  "organization": {
+    "name": "Organization",
+    "founded": "2013-10-14",
+    "departments": [
+      {
+        "id": "D001",
+        "name": "Engineering",
+        "budget": 1500000.0,
+        "employees": [
+          {
+            "id": "D001-E001",
+            "name": "Cristiano Ronaldo",
+            "position": "Manager",
+            "skills": [
+              "Python",
+              "Leadership",
+              "Project Management"
+            ],
+            "years_of_service": 10
+          },
+          {
+            "id": "D001-E002",
+            "name": "Bernardo Silva",
+            "position": "Senior Developer",
+            "skills": [
+              "JavaScript",
+              "Python",
+              "Cloud Services"
+            ],
+            "years_of_service": 7
+          },
+          {
+            "id": "D001-E003",
+            "name": "Sergio Ramos",
+            "position": "Team Lead",
+            "skills": [
+              "Java",
+              "C++",
+              "DevOps"
+            ],
+            "years_of_service": 12
+          }
+        ],
+        "projects": [
+          {
+            "name": "Madrid",
+            "status": "In Progress",
+            "members": [],
+            "deadline": "2025-06-30"
+          },
+          {
+            "name": "Ferrari",
+            "status": "Completed",
+            "members": [],
+            "deadline": "2025-03-15"
+          }
+        ]
+      },
+      {
+        "id": "D002",
+        "name": "Marketing",
+        "budget": 800000.0,
+        "employees": [
+          {
+            "id": "D002-E001",
+            "name": "Kylian Mbappe",
+            "position": "Designer",
+            "skills": [
+              "UI/UX Design",
+              "Communication",
+              "Marketing"
+            ],
+            "years_of_service": 5
+          },
+          {
+            "id": "D002-E002",
+            "name": "Vinicius Junior",
+            "position": "Specialist",
+            "skills": [
+              "Content Creation",
+              "Marketing",
+              "Communication"
+            ],
+            "years_of_service": 3
+          }
+        ],
+        "projects": [
+          {
+            "name": "RedBull",
+            "status": "Planning",
+            "members": [],
+            "deadline": "2025-09-10"
+          }
+        ]
+      },
+      {
+        "id": "D003",
+        "name": "Human Resources",
+        "budget": 400000.0,
+        "employees": [
+          {
+            "id": "D003-E001",
+            "name": "Antonio Silva",
+            "position": "Director",
+            "skills": [
+              "Leadership",
+              "Communication",
+              "Project Management"
+            ],
+            "years_of_service": 8
+          },
+          {
+            "id": "D003-E002",
+            "name": "Diogo Dalot",
+            "position": "Coordinator",
+            "skills": [
+              "SQL",
+              "Data Analysis",
+              "Communication"
+            ],
+            "years_of_service": 4
+          }
+        ],
+        "projects": [
+          {
+            "name": "McLaren",
+            "status": "In Progress",
+            "members": [],
+            "deadline": "2025-07-20"
+          }
+        ]
+      },
+      {
+        "id": "D004",
+        "name": "Research & Development",
+        "budget": 2000000.0,
+        "employees": [
+          {
+            "id": "D004-E001",
+            "name": "Lewis Hamilton",
+            "position": "Senior Developer",
+            "skills": [
+              "Python",
+              "Machine Learning",
+              "Data Analysis"
+            ],
+            "years_of_service": 9
+          },
+          {
+            "id": "D004-E002",
+            "name": "Charles Leclerc",
+            "position": "Researcher",
+            "skills": [
+              "Research",
+              "Python",
+              "Data Analysis"
+            ],
+            "years_of_service": 6
+          },
+          {
+            "id": "D004-E003",
+            "name": "Max Verstappen",
+            "position": "Analyst",
+            "skills": [
+              "SQL",
+              "Data Analysis",
+              "Machine Learning"
+            ],
+            "years_of_service": 7
+          }
+        ],
+        "projects": [
+          {
+            "name": "Mercedes",
+            "status": "Testing",
+            "members": [],
+            "deadline": "2025-05-15"
+          },
+          {
+            "name": "Hala",
+            "status": "In Progress",
+            "members": [],
+            "deadline": "2025-08-25"
+          }
+        ]
+      },
+      {
+        "id": "D005",
+        "name": "Customer Support",
+        "budget": 600000.0,
+        "employees": [
+          {
+            "id": "D005-E001",
+            "name": "Jude Bellingham",
+            "position": "Team Lead",
+            "skills": [
+              "Customer Service",
+              "Leadership",
+              "Communication"
+            ],
+            "years_of_service": 5
+          },
+          {
+            "id": "D005-E002",
+            "name": "Luka Modric",
+            "position": "Specialist",
+            "skills": [
+              "Customer Service",
+              "Communication",
+              "Sales"
+            ],
+            "years_of_service": 11
+          }
+        ],
+        "projects": [
+          {
+            "name": "United",
+            "status": "On Hold",
+            "members": [],
+            "deadline": "2025-11-30"
+          }
+        ]
+      }
+    ]
+  },
+  "statistics": {
+    "averageDepartmentBudget": 1060000.0,
+    "totalEmployees": 12,
+    "skillDistribution": {
+      "Python": 4,
+      "Leadership": 3,
+      "Project Management": 2,
+      "JavaScript": 1,
+      "Cloud Services": 1,
+      "Java": 1,
+      "C++": 1,
+      "DevOps": 1,
+      "UI/UX Design": 1,
+      "Communication": 6,
+      "Marketing": 2,
+      "Content Creation": 1,
+      "SQL": 2,
+      "Data Analysis": 4,
+      "Machine Learning": 2,
+      "Research": 1,
+      "Customer Service": 2,
+      "Sales": 1
+    },
+    "departmentSizes": {
+      "D001": 3,
+      "D002": 2,
+      "D003": 2,
+      "D004": 3,
+      "D005": 2
+    },
+    "projectStatusDistribution": {
+      "In Progress": 3,
+      "Completed": 1,
+      "Planning": 1,
+      "Testing": 1,
+      "On Hold": 1
+    },
+    "averageYearsOfService": 7.25
+  }
+}[?2004hroot@591d65ab93af:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@591d65ab93af:/app# 

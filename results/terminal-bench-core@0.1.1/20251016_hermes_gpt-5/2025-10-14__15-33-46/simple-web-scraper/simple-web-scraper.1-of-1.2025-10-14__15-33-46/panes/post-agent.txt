@@ -1,0 +1,141 @@
+root@f656e2570110:/app# ls -la
+total 8
+drwxr-xr-x 2 root root 4096 Mar 28  2025 .
+drwxr-xr-x 1 root root 4096 Oct 14 17:12 ..
+root@f656e2570110:/app# curl -sS http://server:8000 | head -n 30
+<!DOCTYPE html><html><head><title>Book Store</title></head><body><h1>Simple Book Store</h1><div class='books-container'>
+            <div class="book">
+                <div class="book-title">The Great Gatsby</div>
+                <div class="book-author">by F. Scott Fitzgerald</div>
+                <div class="book-details">
+                    <span class="book-year">Published: 1925</span>
+                    <span class="book-rating">Rating: 4.2/5</span>
+                    <span class="book-price">$12.99</span>
+                </div>
+            </div>
+
+            <div class="book">
+                <div class="book-title">To Kill a Mockingbird</div>
+                <div class="book-author">by Harper Lee</div>
+                <div class="book-details">
+                    <span class="book-year">Published: 1960</span>
+                    <span class="book-rating">Rating: 4.8/5</span>
+                    <span class="book-price">$14.99</span>
+                </div>
+            </div>
+
+            <div class="book">
+                <div class="book-title">1984</div>
+                <div class="book-author">by George Orwell</div>
+                <div class="book-details">
+                    <span class="book-year">Published: 1949</span>
+                    <span class="book-rating">Rating: 4.6/5</span>
+                    <span class="book-price">$11.99</span>
+                </div>
+            </div>
+root@f656e2570110:/app# cat > scraper.py << 'PY'
+> #!/usr/bin/env python3
+> import requests
+> from bs4 import BeautifulSoup
+> import pandas as pd
+> import re
+>
+> def parse_book(div):
+>     def get_text(selector):
+>         el = div.select_one(selector)
+>         return el.get_text(strip=True) if el else None
+>
+>     title = get_text('.book-title')
+>     author = get_text('.book-author')
+>     if author and author.lower().startswith('by '):
+>         author = author[3:].strip()
+>
+>     year_text = get_text('.book-details .book-year') or get_text('.book-year')
+>     rating_text = get_text('.book-details .book-rating') or get_text('.book-rating')
+>     price_text = get_text('.book-details .book-price') or get_text('.book-price')
+>
+>     year = None
+>     if year_text:
+>         m = re.search(r'(\d{4})', year_text)
+>         if m:
+>             year = int(m.group(1))
+>
+>     rating = None
+>     if rating_text:
+>         m = re.search(r'([\d.]+)', rating_text)
+>         if m:
+>             rating = float(m.group(1))
+>
+>     price = None
+>     if price_text:
+>         m = re.search(r'([\d.]+)', price_text.replace(',', ''))
+>         if m:
+>             price = float(m.group(1))
+>
+>     return {
+>         "title": title,
+>         "author": author,
+>         "year": year,
+>         "rating": rating,
+>         "price": price
+>     }
+>
+> def main():
+>     url = "http://server:8000"
+>     resp = requests.get(url, timeout=10)
+>     resp.raise_for_status()
+>     soup = BeautifulSoup(resp.text, "html.parser")
+>
+>     books = []
+>     for div in soup.select('div.book'):
+>         data = parse_book(div)
+>         if data.get("title"):
+>             books.append(data)
+>
+>     df = pd.DataFrame(books, columns=["title", "author", "year", "rating", "price"])
+>     df.to_csv("books.csv", index=False)
+>
+>     total = len(df)
+>     avg_price = float(df["price"].dropna().mean()) if total > 0 else 0.0
+>
+>     highest = None
+>     if not df.empty and df["rating"].dropna().size > 0:
+>         ratings = pd.to_numeric(df["rating"], errors="coerce")
+>         idx = ratings.idxmax()
+>         highest = df.loc[idx]
+>
+>     lines = []
+>     lines.append(f"Total books scraped: {total}")
+>     if total > 0 and not pd.isna(avg_price):
+>         lines.append(f"Average book price: ${avg_price:.2f}")
+>     else:
+>         lines.append("Average book price: N/A")
+>     if highest is not None and not pd.isna(highest["rating"]):
+>         lines.append(f"Highest rated book: {highest['title']} ({highest['rating']}/5)")
+>     else:
+>         lines.append("Highest rated book: N/A")
+>
+>     with open("report.txt", "w") as f:
+>         f.write("\n".join(lines))
+>
+> if __name__ == "__main__":
+>     main()
+> PY
+root@f656e2570110:/app# python3 scraper.py
+root@f656e2570110:/app# ls -la
+total 20
+drwxr-xr-x 1 root root 4096 Oct 14 17:12 .
+drwxr-xr-x 1 root root 4096 Oct 14 17:12 ..
+-rw-r--r-- 1 root root  345 Oct 14 17:12 books.csv
+-rw-r--r-- 1 root root   99 Oct 14 17:12 report.txt
+-rw-r--r-- 1 root root 2500 Oct 14 17:12 scraper.py
+root@f656e2570110:/app# head -n 5 books.csv
+title,author,year,rating,price
+The Great Gatsby,F. Scott Fitzgerald,1925,4.2,12.99
+To Kill a Mockingbird,Harper Lee,1960,4.8,14.99
+1984,George Orwell,1949,4.6,11.99
+Pride and Prejudice,Jane Austen,1813,4.5,9.99
+root@f656e2570110:/app# cat report.txt
+Total books scraped: 7
+Average book price: $13.85
+Highest rated book: To Kill a Mockingbird (4.8/5)root@f656e2570110:/app#

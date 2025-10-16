@@ -1,0 +1,72 @@
+root@1b228e064f53:/app# bash /tests/run-tests.sh; tmux wait -S done
+Hit:1 http://security.ubuntu.com/ubuntu noble-security InRelease
+Hit:2 http://archive.ubuntu.com/ubuntu noble InRelease
+Hit:3 http://archive.ubuntu.com/ubuntu noble-updates InRelease
+Hit:4 http://archive.ubuntu.com/ubuntu noble-backports InRelease
+Reading package lists... Done
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+curl is already the newest version (8.5.0-2ubuntu10.6).
+0 upgraded, 0 newly installed, 0 to remove and 28 not upgraded.
+downloading uv 0.8.17 x86_64-unknown-linux-gnu
+no checksums to verify
+installing to /root/.local/bin
+  uv
+  uvx
+everything's installed!
+
+To add $HOME/.local/bin to your PATH, either restart your shell or run:
+
+    source $HOME/.local/bin/env (sh, bash, zsh)
+    source $HOME/.local/bin/env.fish (fish)
+Initialized project `app`
+Using CPython 3.12.3 interpreter at: /usr/bin/python3.12
+Creating virtual environment at: .venv
+Resolved 7 packages in 895ms
+Prepared 5 packages in 1.05s
+Installed 5 packages in 11ms
+ + iniconfig==2.1.0
+ + packaging==25.0
+ + pluggy==1.6.0
+ + pygments==2.19.2
+ + pytest==8.4.2
+===================================================================== test session starts ======================================================================
+platform linux -- Python 3.12.3, pytest-8.4.2, pluggy-1.6.0
+rootdir: /tests
+collected 3 items
+
+../tests/test_outputs.py ..F                                                                                                                             [100%]
+
+=========================================================================== FAILURES ===========================================================================
+______________________________________________________________________ test_gcov_enabled _______________________________________________________________________
+
+    def test_gcov_enabled():
+        """Test that gcov instrumentation is enabled in the SQLite binary."""
+        # Check for gcda files (they aren't created until the program runs)
+        # First run the sqlite3 program to generate coverage data
+        result = subprocess.run(
+            ["sqlite3", ":memory:", "SELECT 1;"], capture_output=True, text=True
+        )
+        assert result.returncode == 0, "Failed to run SQLite"
+
+        # Now check for gcda files in the sqlite directory
+        gcda_files = []
+        for root, _, files in os.walk("/app/sqlite"):
+            gcda_files.extend([os.path.join(root, f) for f in files if f.endswith(".gcda")])
+
+>       assert len(gcda_files) > 0, (
+            "No .gcda files found, gcov instrumentation may not be enabled"
+        )
+E       AssertionError: No .gcda files found, gcov instrumentation may not be enabled
+E       assert 0 > 0
+E        +  where 0 = len([])
+
+/tests/test_outputs.py:50: AssertionError
+============================================================================ PASSES ============================================================================
+=================================================================== short test summary info ====================================================================
+PASSED ../tests/test_outputs.py::test_sqlite_compiled
+PASSED ../tests/test_outputs.py::test_sqlite_in_path
+FAILED ../tests/test_outputs.py::test_gcov_enabled - AssertionError: No .gcda files found, gcov instrumentation may not be enabled
+================================================================= 1 failed, 2 passed in 0.04s ==================================================================
+root@1b228e064f53:/app#

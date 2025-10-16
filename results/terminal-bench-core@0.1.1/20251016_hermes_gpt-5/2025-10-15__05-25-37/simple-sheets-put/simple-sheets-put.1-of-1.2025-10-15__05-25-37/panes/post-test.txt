@@ -1,0 +1,426 @@
+root@d628b230a5b7:/app# curl -sS http://api:8000/docs/json -o docs.json
+root@d628b230a5b7:/app# python3 -c 'import json; d=json.load(open("docs.json")); print("\n".join(d.get("paths", {}).keys()))'
+/docs/json
+/docs/simple
+/spreadsheets/
+/spreadsheets/{spreadsheet_id}
+/spreadsheets/{spreadsheet_id}/sheets/
+/sheets/{sheet_id}/cells/{cell_id}
+/sheets/{sheet_id}
+/sheets/{sheet_id}/cells/batch
+root@d628b230a5b7:/app# python3 -c 'import json; d=json.load(open("docs.json")); print("\n".join([p for p in d.get("paths", {}).keys() if "spreadsheet" in p.low
+er()]))'
+/spreadsheets/
+/spreadsheets/{spreadsheet_id}
+/spreadsheets/{spreadsheet_id}/sheets/
+root@d628b230a5b7:/app# python3 -c 'import json; d=json.load(open("docs.json")); print("\n".join([p for p in d.get("paths", {}).keys() if "sheet" in p.lower()])
+)'
+/spreadsheets/
+/spreadsheets/{spreadsheet_id}
+/spreadsheets/{spreadsheet_id}/sheets/
+/sheets/{sheet_id}/cells/{cell_id}
+/sheets/{sheet_id}
+/sheets/{sheet_id}/cells/batch
+root@d628b230a5b7:/app# python3 -c 'import json; d=json.load(open("docs.json")); print("spreadsheets POST schema:"); print(json.dumps(d["paths"]["/spreadsheets/
+"]["post"]["requestBody"]["content"]["application/json"]["schema"], indent=2))'
+spreadsheets POST schema:
+{
+  "$ref": "#/components/schemas/SpreadsheetCreate"
+}
+root@d628b230a5b7:/app# python3 -c 'import json; d=json.load(open("docs.json")); print("sheets POST schema:"); print(json.dumps(d["paths"]["/spreadsheets/{sprea
+dsheet_id}/sheets/"]["post"]["requestBody"]["content"]["application/json"]["schema"], indent=2))'
+sheets POST schema:
+{
+  "$ref": "#/components/schemas/SheetCreate"
+}
+root@d628b230a5b7:/app# python3 -c 'import json; d=json.load(open("docs.json")); print("cells batch POST schema:"); print(json.dumps(d["paths"]["/sheets/{sheet_
+id}/cells/batch"]["post"]["requestBody"]["content"]["application/json"]["schema"], indent=2))'
+cells batch POST schema:
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json; d=json.load(open("docs.json")); print("cells batch POST schema:"); print(json.dumps(d["paths"]["/sheets/{sheet_id}/cells/batch"]["post"]["reque
+stBody"]["content"]["application/json"]["schema"], indent=2))
+                                                                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+KeyError: 'post'
+root@d628b230a5b7:/app# curl -sS -X POST http://api:8000/spreadsheets/ -H 'Content-Type: application/json' -d '{"name":"Financial Report"}' -o spreadsheet.json
+root@d628b230a5b7:/app# python3 -c 'import json; d=json.load(open("spreadsheet.json")); print(d); sid=d.get("id") or d.get("spreadsheet_id") or d.get("data",{})
+.get("id"); open("spreadsheet_id.txt","w").write(str(sid))'
+{'detail': [{'type': 'missing', 'loc': ['body', 'title'], 'msg': 'Field required', 'input': {'name': 'Financial Report'}, 'url': 'https://errors.pydantic.dev/2.
+5/v/missing'}]}
+root@d628b230a5b7:/app# python3 -c 'sid=open("spreadsheet_id.txt").read().strip(); import sys; sys.stdout.write(sid)'
+Noneroot@d628b230a5b7:/app# curl -sS -X POST http://api:8000/spreadsheets/$(cat spreadsheet_id.txt)/sheets/ -H 'Content-Type: application/json' -d '{"name":"Q1
+Data"}' -o sheet.json
+root@d628b230a5b7:/app# python3 -c 'import json; d=json.load(open("sheet.json")); print(d); shid=d.get("id") or d.get("sheet_id") or d.get("data",{}).get("id");
+ open("sheet_id.txt","w").write(str(shid))'
+{'detail': [{'type': 'int_parsing', 'loc': ['path', 'spreadsheet_id'], 'msg': 'Input should be a valid integer, unable to parse string as an integer', 'input':
+'None', 'url': 'https://errors.pydantic.dev/2.5/v/int_parsing'}, {'type': 'missing', 'loc': ['body', 'title'], 'msg': 'Field required', 'input': {'name': 'Q1 Da
+ta'}, 'url': 'https://errors.pydantic.dev/2.5/v/missing'}]}
+root@d628b230a5b7:/app# python3 -c 'cells=[{"cell_id":"A1","value":"Month"},{"cell_id":"B1","value":"Revenue"},{"cell_id":"C1","value":"Expenses"},{"cell_id":"A
+2","value":"January"},{"cell_id":"B2","value":10000},{"cell_id":"C2","value":8000},{"cell_id":"A3","value":"February"},{"cell_id":"B3","value":12000},{"cell_id"
+:"C3","value":9000},{"cell_id":"A4","value":"March"},{"cell_id":"B4","value":15000},{"cell_id":"C4","value":10000},{"cell_id":"D1","value":"Profit"},{"cell_id":
+"D2","value":10000-8000},{"cell_id":"D3","value":12000-9000},{"cell_id":"D4","value":15000-10000}]; import json; json.dump({"cells":cells}, open("cells.json","w
+"))'
+root@d628b230a5b7:/app# curl -sS -X POST http://api:8000/sheets/$(cat sheet_id.txt)/cells/batch -H 'Content-Type: application/json' --data-binary @cells.json -o
+ batch_resp.json
+root@d628b230a5b7:/app# python3 -c 'import json; print(json.load(open("batch_resp.json")))'
+{'detail': 'Method Not Allowed'}
+root@d628b230a5b7:/app# python3 -c 'import json; d=json.load(open("docs.json")); print("schemas:", ", ".join(sorted(d.get("components",{}).get("schemas",{}).key
+s())))'
+schemas: BatchOperationResponse, CellBatchUpdate, CellFormat, CellUpdate, HTTPValidationError, PaginatedSheets, PaginatedSpreadsheets, Sheet, SheetCreate, Sprea
+dsheet, SpreadsheetCreate, ValidationError
+root@d628b230a5b7:/app# python3 -c 'import json,sys; d=json.load(open("docs.json")); print(json.dumps(d["components"]["schemas"].get("SpreadsheetCreate", {}), i
+ndent=2))'
+{
+  "properties": {
+    "title": {
+      "type": "string",
+      "title": "Title"
+    }
+  },
+  "type": "object",
+  "required": [
+    "title"
+  ],
+  "title": "SpreadsheetCreate"
+}
+root@d628b230a5b7:/app# python3 -c 'import json,sys; d=json.load(open("docs.json")); print(json.dumps(d["components"]["schemas"].get("SheetCreate", {}), indent=
+2))'
+{
+  "properties": {
+    "title": {
+      "type": "string",
+      "title": "Title"
+    },
+    "data": {
+      "type": "object",
+      "title": "Data",
+      "default": {}
+    }
+  },
+  "type": "object",
+  "required": [
+    "title"
+  ],
+  "title": "SheetCreate"
+}
+root@d628b230a5b7:/app# python3 -c 'import json; d=json.load(open("docs.json")); p=d["paths"]["/sheets/{sheet_id}/cells/batch"]; print("cells/batch methods:", l
+ist(p.keys()));
+> for m in list(p.keys()):
+>     if "requestBody" in p[m]:
+>         print(m, json.dumps(p[m]["requestBody"]["content"]["application/json"]["schema"], indent=2))'
+cells/batch methods: ['put']
+put {
+  "$ref": "#/components/schemas/CellBatchUpdate"
+}
+root@d628b230a5b7:/app# python3 -c 'import json; d=json.load(open("docs.json")); p=d["paths"]["/sheets/{sheet_id}/cells/{cell_id}"]; print("cells/{cell_id} meth
+ods:", list(p.keys()));
+> for m in list(p.keys()):
+>     if "requestBody" in p[m]:
+>         print(m, json.dumps(p[m]["requestBody"]["content"]["application/json"]["schema"], indent=2))'
+cells/{cell_id} methods: ['put']
+put {
+  "$ref": "#/components/schemas/CellUpdate"
+}
+root@d628b230a5b7:/app# curl -sS -X POST http://api:8000/spreadsheets/ -H 'Content-Type: application/json' -d '{"title":"Financial Report"}' -o spreadsheet.json
+root@d628b230a5b7:/app# python3 -c 'import json; d=json.load(open("spreadsheet.json")); print(d); sid=d.get("id") or d.get("spreadsheet_id") or d.get("data",{})
+.get("id") or d.get("data",{}).get("spreadsheet_id"); open("spreadsheet_id.txt","w").write(str(sid))'
+{'title': 'Financial Report', 'id': 1, 'created_at': '2025-10-15T07:38:43.337650', 'updated_at': '2025-10-15T07:38:43.337660', 'sheets': []}
+root@d628b230a5b7:/app# python3 -c 'sid=open("spreadsheet_id.txt").read().strip(); print("spreadsheet_id:", sid)'
+spreadsheet_id: 1
+root@d628b230a5b7:/app# curl -sS -X POST http://api:8000/spreadsheets/$(cat spreadsheet_id.txt)/sheets/ -H 'Content-Type: application/json' -d '{"title":"Q1 Dat
+a"}' -o sheet.json
+root@d628b230a5b7:/app# python3 -c 'import json; d=json.load(open("sheet.json")); print(d); shid=d.get("id") or d.get("sheet_id") or d.get("data",{}).get("id")
+or d.get("data",{}).get("sheet_id"); open("sheet_id.txt","w").write(str(shid))'
+{'title': 'Q1 Data', 'data': {}, 'id': 1, 'spreadsheet_id': 1, 'created_at': '2025-10-15T07:38:44.953856', 'updated_at': '2025-10-15T07:38:44.953863'}
+root@d628b230a5b7:/app# python3 -c 'shid=open("sheet_id.txt").read().strip(); print("sheet_id:", shid)'
+sheet_id: 1
+root@d628b230a5b7:/app# python3 -c '
+> import json,sys
+> spec=json.load(open("docs.json"))
+> path=spec["paths"].get("/sheets/{sheet_id}/cells/batch", {})
+> methods=list(path.keys())
+> print(methods)
+> if not methods:
+>     sys.exit(0)
+> method=None
+> for m in methods:
+>     if m in ("put","post","patch"):
+>         method=m; break
+> print("chosen:", method)
+> if method:
+>     schema=path[method].get("requestBody",{}).get("content",{}).get("application/json",{}).get("schema")
+>     print(json.dumps(schema, indent=2))
+> '
+['put']
+chosen: put
+{
+  "$ref": "#/components/schemas/CellBatchUpdate"
+}
+root@d628b230a5b7:/app# python3 -c '
+> import json,sys
+> spec=json.load(open("docs.json"))
+> path=spec["paths"]["/sheets/{sheet_id}/cells/{cell_id}"]
+> methods=list(path.keys())
+> print(methods)
+> method=None
+> for m in methods:
+>     if m in ("put","post","patch"):
+>         method=m; break
+> print("chosen:", method)
+> schema=path[method].get("requestBody",{}).get("content",{}).get("application/json",{}).get("schema")
+> print(json.dumps(schema, indent=2))
+> '
+['put']
+chosen: put
+{
+  "$ref": "#/components/schemas/CellUpdate"
+}
+root@d628b230a5b7:/app# python3 -c '
+> # Prepare a list of cell updates for single-cell endpoint
+> cells=[
+>  ("A1","Month"),("B1","Revenue"),("C1","Expenses"),("D1","Profit"),
+>  ("A2","January"),("B2",10000),("C2",8000),("D2",10000-8000),
+>  ("A3","February"),("B3",12000),("C3",9000),("D3",12000-9000),
+>  ("A4","March"),("B4",15000),("C4",10000),("D4",15000-10000)
+> ]
+> import json
+> open("cells_list.json","w").write(json.dumps(cells))
+> '
+root@d628b230a5b7:/app# python3 - << 'PY'
+> import json, subprocess, shlex, time
+> sheet_id=open('sheet_id.txt').read().strip()
+> if not sheet_id or sheet_id=='None':
+>     print('Missing sheet_id; cannot proceed')
+>     raise SystemExit(0)
+> # Determine method for single cell updates
+> spec=json.load(open('docs.json'))
+> path=spec['paths']['/sheets/{sheet_id}/cells/{cell_id}']
+> method=None
+> for m in path.keys():
+>     if m in ('put','post','patch'):
+>         method=m; break
+> if not method:
+>     method='put'
+> # Determine the field name for value from schema properties
+> schema=path[method]['requestBody']['content']['application/json']['schema']
+> val_field='value'
+> if 'properties' in schema:
+>     # choose first property likely to be value
+>     for k in ('value','content','data','text','number'):
+>         if k in schema['properties']:
+>             val_field=k; break
+> cells=json.load(open('cells_list.json'))
+> for cell, val in cells:
+>     if isinstance(val, str):
+>         data=json.dumps({val_field: val})
+>     else:
+>         data=json.dumps({val_field: val})
+>     url=f"http://api:8000/sheets/{sheet_id}/cells/{cell}"
+>     cmd=["curl","-sS","-X",method.upper(),url,"-H","Content-Type: application/json","-d",data]
+>     print(' '.join(shlex.quote(c) for c in cmd))
+>     subprocess.run(cmd, check=False)
+>     time.sleep(0.05)
+> PY
+curl -sS -X PUT http://api:8000/sheets/1/cells/A1 -H 'Content-Type: application/json' -d '{"value": "Month"}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}}},"id":1,"spreadsheet_id":1,"created_at":"2025-10-15T07:38:44.953856","updated_at":"2025-10-15T07:3
+8:48.728388"}curl -sS -X PUT http://api:8000/sheets/1/cells/B1 -H 'Content-Type: application/json' -d '{"value": "Revenue"}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}}},"id":1,"spreadsheet_id":1,"created_at":"2025-10-15T07:38:44.
+953856","updated_at":"2025-10-15T07:38:48.801646"}curl -sS -X PUT http://api:8000/sheets/1/cells/C1 -H 'Content-Type: application/json' -d '{"value": "Expenses"
+}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}},"C1":{"value":"Expenses","format":{}}},"id":1,"spreadsheet_id
+":1,"created_at":"2025-10-15T07:38:44.953856","updated_at":"2025-10-15T07:38:48.873142"}curl -sS -X PUT http://api:8000/sheets/1/cells/D1 -H 'Content-Type: appl
+ication/json' -d '{"value": "Profit"}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}},"C1":{"value":"Expenses","format":{}},"D1":{"value":"Profit",
+"format":{}}},"id":1,"spreadsheet_id":1,"created_at":"2025-10-15T07:38:44.953856","updated_at":"2025-10-15T07:38:48.945068"}curl -sS -X PUT http://api:8000/shee
+ts/1/cells/A2 -H 'Content-Type: application/json' -d '{"value": "January"}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}},"C1":{"value":"Expenses","format":{}},"D1":{"value":"Profit",
+"format":{}},"A2":{"value":"January","format":{}}},"id":1,"spreadsheet_id":1,"created_at":"2025-10-15T07:38:44.953856","updated_at":"2025-10-15T07:38:49.016530"
+}curl -sS -X PUT http://api:8000/sheets/1/cells/B2 -H 'Content-Type: application/json' -d '{"value": 10000}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}},"C1":{"value":"Expenses","format":{}},"D1":{"value":"Profit",
+"format":{}},"A2":{"value":"January","format":{}},"B2":{"value":10000,"format":{}}},"id":1,"spreadsheet_id":1,"created_at":"2025-10-15T07:38:44.953856","updated
+_at":"2025-10-15T07:38:49.088451"}curl -sS -X PUT http://api:8000/sheets/1/cells/C2 -H 'Content-Type: application/json' -d '{"value": 8000}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}},"C1":{"value":"Expenses","format":{}},"D1":{"value":"Profit",
+"format":{}},"A2":{"value":"January","format":{}},"B2":{"value":10000,"format":{}},"C2":{"value":8000,"format":{}}},"id":1,"spreadsheet_id":1,"created_at":"2025
+-10-15T07:38:44.953856","updated_at":"2025-10-15T07:38:49.159996"}curl -sS -X PUT http://api:8000/sheets/1/cells/D2 -H 'Content-Type: application/json' -d '{"va
+lue": 2000}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}},"C1":{"value":"Expenses","format":{}},"D1":{"value":"Profit",
+"format":{}},"A2":{"value":"January","format":{}},"B2":{"value":10000,"format":{}},"C2":{"value":8000,"format":{}},"D2":{"value":2000,"format":{}}},"id":1,"spre
+adsheet_id":1,"created_at":"2025-10-15T07:38:44.953856","updated_at":"2025-10-15T07:38:49.231844"}curl -sS -X PUT http://api:8000/sheets/1/cells/A3 -H 'Content-
+Type: application/json' -d '{"value": "February"}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}},"C1":{"value":"Expenses","format":{}},"D1":{"value":"Profit",
+"format":{}},"A2":{"value":"January","format":{}},"B2":{"value":10000,"format":{}},"C2":{"value":8000,"format":{}},"D2":{"value":2000,"format":{}},"A3":{"value"
+:"February","format":{}}},"id":1,"spreadsheet_id":1,"created_at":"2025-10-15T07:38:44.953856","updated_at":"2025-10-15T07:38:49.303097"}curl -sS -X PUT http://a
+pi:8000/sheets/1/cells/B3 -H 'Content-Type: application/json' -d '{"value": 12000}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}},"C1":{"value":"Expenses","format":{}},"D1":{"value":"Profit",
+"format":{}},"A2":{"value":"January","format":{}},"B2":{"value":10000,"format":{}},"C2":{"value":8000,"format":{}},"D2":{"value":2000,"format":{}},"A3":{"value"
+:"February","format":{}},"B3":{"value":12000,"format":{}}},"id":1,"spreadsheet_id":1,"created_at":"2025-10-15T07:38:44.953856","updated_at":"2025-10-15T07:38:49
+.374557"}curl -sS -X PUT http://api:8000/sheets/1/cells/C3 -H 'Content-Type: application/json' -d '{"value": 9000}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}},"C1":{"value":"Expenses","format":{}},"D1":{"value":"Profit",
+"format":{}},"A2":{"value":"January","format":{}},"B2":{"value":10000,"format":{}},"C2":{"value":8000,"format":{}},"D2":{"value":2000,"format":{}},"A3":{"value"
+:"February","format":{}},"B3":{"value":12000,"format":{}},"C3":{"value":9000,"format":{}}},"id":1,"spreadsheet_id":1,"created_at":"2025-10-15T07:38:44.953856","
+updated_at":"2025-10-15T07:38:49.445742"}curl -sS -X PUT http://api:8000/sheets/1/cells/D3 -H 'Content-Type: application/json' -d '{"value": 3000}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}},"C1":{"value":"Expenses","format":{}},"D1":{"value":"Profit",
+"format":{}},"A2":{"value":"January","format":{}},"B2":{"value":10000,"format":{}},"C2":{"value":8000,"format":{}},"D2":{"value":2000,"format":{}},"A3":{"value"
+:"February","format":{}},"B3":{"value":12000,"format":{}},"C3":{"value":9000,"format":{}},"D3":{"value":3000,"format":{}}},"id":1,"spreadsheet_id":1,"created_at
+":"2025-10-15T07:38:44.953856","updated_at":"2025-10-15T07:38:49.516638"}curl -sS -X PUT http://api:8000/sheets/1/cells/A4 -H 'Content-Type: application/json' -
+d '{"value": "March"}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}},"C1":{"value":"Expenses","format":{}},"D1":{"value":"Profit",
+"format":{}},"A2":{"value":"January","format":{}},"B2":{"value":10000,"format":{}},"C2":{"value":8000,"format":{}},"D2":{"value":2000,"format":{}},"A3":{"value"
+:"February","format":{}},"B3":{"value":12000,"format":{}},"C3":{"value":9000,"format":{}},"D3":{"value":3000,"format":{}},"A4":{"value":"March","format":{}}},"i
+d":1,"spreadsheet_id":1,"created_at":"2025-10-15T07:38:44.953856","updated_at":"2025-10-15T07:38:49.587651"}curl -sS -X PUT http://api:8000/sheets/1/cells/B4 -H
+ 'Content-Type: application/json' -d '{"value": 15000}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}},"C1":{"value":"Expenses","format":{}},"D1":{"value":"Profit",
+"format":{}},"A2":{"value":"January","format":{}},"B2":{"value":10000,"format":{}},"C2":{"value":8000,"format":{}},"D2":{"value":2000,"format":{}},"A3":{"value"
+:"February","format":{}},"B3":{"value":12000,"format":{}},"C3":{"value":9000,"format":{}},"D3":{"value":3000,"format":{}},"A4":{"value":"March","format":{}},"B4
+":{"value":15000,"format":{}}},"id":1,"spreadsheet_id":1,"created_at":"2025-10-15T07:38:44.953856","updated_at":"2025-10-15T07:38:49.659016"}curl -sS -X PUT htt
+p://api:8000/sheets/1/cells/C4 -H 'Content-Type: application/json' -d '{"value": 10000}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}},"C1":{"value":"Expenses","format":{}},"D1":{"value":"Profit",
+"format":{}},"A2":{"value":"January","format":{}},"B2":{"value":10000,"format":{}},"C2":{"value":8000,"format":{}},"D2":{"value":2000,"format":{}},"A3":{"value"
+:"February","format":{}},"B3":{"value":12000,"format":{}},"C3":{"value":9000,"format":{}},"D3":{"value":3000,"format":{}},"A4":{"value":"March","format":{}},"B4
+":{"value":15000,"format":{}},"C4":{"value":10000,"format":{}}},"id":1,"spreadsheet_id":1,"created_at":"2025-10-15T07:38:44.953856","updated_at":"2025-10-15T07:
+38:49.730826"}curl -sS -X PUT http://api:8000/sheets/1/cells/D4 -H 'Content-Type: application/json' -d '{"value": 5000}'
+{"title":"Q1 Data","data":{"A1":{"value":"Month","format":{}},"B1":{"value":"Revenue","format":{}},"C1":{"value":"Expenses","format":{}},"D1":{"value":"Profit",
+"format":{}},"A2":{"value":"January","format":{}},"B2":{"value":10000,"format":{}},"C2":{"value":8000,"format":{}},"D2":{"value":2000,"format":{}},"A3":{"value"
+:"February","format":{}},"B3":{"value":12000,"format":{}},"C3":{"value":9000,"format":{}},"D3":{"value":3000,"format":{}},"A4":{"value":"March","format":{}},"B4
+":{"value":15000,"format":{}},"C4":{"value":10000,"format":{}},"D4":{"value":5000,"format":{}}},"id":1,"spreadsheet_id":1,"created_at":"2025-10-15T07:38:44.9538
+56","updated_at":"2025-10-15T07:38:49.805384"}root@d628b230a5b7:/app# bash /tests/run-tests.sh; tmux wait -S done
+Collecting pytest==8.3.0
+  Downloading pytest-8.3.0-py3-none-any.whl.metadata (7.5 kB)
+Collecting requests
+  Downloading requests-2.32.5-py3-none-any.whl.metadata (4.9 kB)
+Collecting iniconfig (from pytest==8.3.0)
+  Downloading iniconfig-2.1.0-py3-none-any.whl.metadata (2.7 kB)
+Collecting packaging (from pytest==8.3.0)
+  Downloading packaging-25.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting pluggy<2,>=1.5 (from pytest==8.3.0)
+  Downloading pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+Collecting charset_normalizer<4,>=2 (from requests)
+  Downloading charset_normalizer-3.4.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (37 kB)
+Collecting idna<4,>=2.5 (from requests)
+  Downloading idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+Collecting urllib3<3,>=1.21.1 (from requests)
+  Downloading urllib3-2.5.0-py3-none-any.whl.metadata (6.5 kB)
+Collecting certifi>=2017.4.17 (from requests)
+  Downloading certifi-2025.10.5-py3-none-any.whl.metadata (2.5 kB)
+Downloading pytest-8.3.0-py3-none-any.whl (341 kB)
+Downloading requests-2.32.5-py3-none-any.whl (64 kB)
+Downloading certifi-2025.10.5-py3-none-any.whl (163 kB)
+Downloading charset_normalizer-3.4.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (153 kB)
+Downloading idna-3.11-py3-none-any.whl (71 kB)
+Downloading pluggy-1.6.0-py3-none-any.whl (20 kB)
+Downloading urllib3-2.5.0-py3-none-any.whl (129 kB)
+Downloading iniconfig-2.1.0-py3-none-any.whl (6.0 kB)
+Downloading packaging-25.0-py3-none-any.whl (66 kB)
+Installing collected packages: urllib3, pluggy, packaging, iniconfig, idna, charset_normalizer, certifi, requests, pytest
+Successfully installed certifi-2025.10.5 charset_normalizer-3.4.4 idna-3.11 iniconfig-2.1.0 packaging-25.0 pluggy-1.6.0 pytest-8.3.0 requests-2.32.5 urllib3-2.5
+.0
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your syst
+em unusable.It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you ar
+e doing and want to suppress this warning.
+
+[notice] A new release of pip is available: 24.3.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+===================================================================== test session starts ======================================================================
+platform linux -- Python 3.13.1, pytest-8.3.0, pluggy-1.6.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /tests
+collected 3 items
+
+../tests/test_outputs.py::test_spreadsheet_created PASSED                                                                                                [ 33%]
+../tests/test_outputs.py::test_sheet_created PASSED                                                                                                      [ 66%]
+../tests/test_outputs.py::test_cells_created PASSED                                                                                                      [100%]
+
+======================================================================= warnings summary =======================================================================
+test_outputs.py::test_spreadsheet_created
+  /usr/local/lib/python3.13/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but test_outputs.py::test_spreadsheet_created return
+ed 1, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+test_outputs.py::test_sheet_created
+  /usr/local/lib/python3.13/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but test_outputs.py::test_sheet_created returned 1,
+which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================================================================ PASSES ============================================================================
+______________________________________________________________________ test_cells_created ______________________________________________________________________
+--------------------------------------------------------------------- Captured stdout call ---------------------------------------------------------------------
+Sheet data: {
+  "title": "Q1 Data",
+  "data": {
+    "A1": {
+      "value": "Month",
+      "format": {}
+    },
+    "B1": {
+      "value": "Revenue",
+      "format": {}
+    },
+    "C1": {
+      "value": "Expenses",
+      "format": {}
+    },
+    "D1": {
+      "value": "Profit",
+      "format": {}
+    },
+    "A2": {
+      "value": "January",
+      "format": {}
+    },
+    "B2": {
+      "value": 10000,
+      "format": {}
+    },
+    "C2": {
+      "value": 8000,
+      "format": {}
+    },
+    "D2": {
+      "value": 2000,
+      "format": {}
+    },
+    "A3": {
+      "value": "February",
+      "format": {}
+    },
+    "B3": {
+      "value": 12000,
+      "format": {}
+    },
+    "C3": {
+      "value": 9000,
+      "format": {}
+    },
+    "D3": {
+      "value": 3000,
+      "format": {}
+    },
+    "A4": {
+      "value": "March",
+      "format": {}
+    },
+    "B4": {
+      "value": 15000,
+      "format": {}
+    },
+    "C4": {
+      "value": 10000,
+      "format": {}
+    },
+    "D4": {
+      "value": 5000,
+      "format": {}
+    }
+  },
+  "id": 1,
+  "spreadsheet_id": 1,
+  "created_at": "2025-10-15T07:38:44.953856",
+  "updated_at": "2025-10-15T07:38:49.805384"
+}
+=================================================================== short test summary info ====================================================================
+PASSED ../tests/test_outputs.py::test_spreadsheet_created
+PASSED ../tests/test_outputs.py::test_sheet_created
+PASSED ../tests/test_outputs.py::test_cells_created
+================================================================ 3 passed, 2 warnings in 0.16s =================================================================
+root@d628b230a5b7:/app#

@@ -1,0 +1,31 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la /app\n'
+'bash -lc \'set -e; arch=secrets.7z; if [ ! -f "$arch" ]; then arch=$(find / -maxdepth 4 -type f -name secrets.7z 2>/dev/null | head -n1); fi; if [ -z "$arch" ]; then echo "secrets.7z not found" >&2; exit 1; fi; for cmd in 7z 7zr 7za; do if command -v "$cmd" >/dev/null 2>&1; then "$cmd" e -y -so "$arch" "secrete_file.txt" > /app/solution.txt && exit 0; fi; done; echo "No 7z tool found" >&2; exit 1\'\n'
+'ls -l /app/solution.txt\n'
+'cat /app/solution.txt\n'
+'apt-get update\n'
+'apt-get install -y p7zip-full\n'
+'7z e -y -so /app/secrets.7z secrete_file.txt > /app/solution.txt\n'
+'ls -l /app/solution.txt\n'
+'cat /app/solution.txt\n'
+'7z l /app/secrets.7z\n'
+'mkdir -p /app/tmp\n'
+'7z x -y -o/app/tmp /app/secrets.7z\n'
+'bash -lc \'f=$(find /app/tmp -type f -name "secrete_file.txt" -print -quit); if [ -z "$f" ]; then f=$(find /app/tmp -type f -name "secret_file.txt" -print -quit); fi; if [ -z "$f" ]; then f=$(find /app/tmp -type f -name "*secrete*" -print -quit); fi; if [ -z "$f" ]; then f=$(find /app/tmp -type f -name "*secret*" -print -quit); fi; if [ -n "$f" ]; then cat "$f" > /app/solution.txt; else echo "Target file not found" >&2; exit 1; fi\'\n'
+'ls -l /app/solution.txt\n'
+'cat /app/solution.txt\n'
+'C-c'
+'bash -lc \'out=/app/solution.txt; arch=/app/secrets.7z; target="secrets/secret_file.txt"; : > "$out"; for p in secret password 123456 letmein admin pass 0000 12345 qwerty; do if 7z e -y -so -p"$p" "$arch" "$target" > "$out" 2>/dev/null && [ -s "$out" ]; then echo "password_found:$p"; exit 0; fi; done; johnbin=""; if [ -x /app/john/run/john ]; then johnbin=/app/john/run/john; elif command -v john >/dev/null 2>&1; then johnbin=$(command -v john); fi; hashfile=/app/secrets.hash; conv=$(find /app/john -maxdepth 4 -type f -name "7z2john.py" -print -quit 2>/dev/null); if [ -n "$conv" ]; then python3 "$conv" "$arch" > "$hashfile"; else conv=$(find /app/john -maxdepth 4 -type f -name "7z2john.pl" -print -quit 2>/dev/null); if [ -n "$conv" ]; then perl "$conv" "$arch" > "$hashfile"; fi; fi; if [ ! -s "$hashfile" ] || [ -z "$johnbin" ]; then echo "cracking_setup_missing"; exit 2; fi; wordlist=""; if [ -f /app/john/run/password.lst ]; then wordlist=/app/john/run/password.lst; fi; if [ -z "$wordlist" ] && [ -f /usr/share/wordlists/rockyou.txt ]; then wordlist=/usr/share/wordlists/rockyou.txt; fi; if [ -n "$wordlist" ]; then "$johnbin" "$hashfile" --wordlist="$wordlist"; else "$johnbin" "$hashfile"; fi; pw=$("$johnbin" --show "$hashfile" 2>/dev/null | head -n1 | cut -d: -f2); if [ -z "$pw" ]; then echo "password_not_cracked"; exit 3; fi; 7z e -y -so -p"$pw" "$arch" "$target" > "$out"; [ -s "$out" ] || exit 4; echo "extracted_with_password:$pw"\'\n'
+'ls -l /app/solution.txt\n'
+'cat /app/solution.txt\n'
+'apt-get install -y libcompress-raw-lzma-perl\n'
+'bash -lc \'set -e; perl /app/john/run/7z2john.pl /app/secrets.7z > /app/secrets.hash; if [ ! -s /app/secrets.hash ]; then echo hash_gen_failed >&2; exit 1; fi; WL=""; if [ -f /app/john/run/password.lst ]; then WL=/app/john/run/password.lst; fi; if [ -n "$WL" ]; then /app/john/run/john /app/secrets.hash --wordlist="$WL"; else /app/john/run/john /app/secrets.hash; fi; /app/john/run/john --show /app/secrets.hash | head -n1 | cut -d: -f2 > /app/secrets.pw\'\n'
+'bash -lc \'pw=$(cat /app/secrets.pw 2>/dev/null || true); if [ -z "$pw" ]; then echo no_password_found >&2; exit 1; fi; 7z e -y -so -p"$pw" /app/secrets.7z secrets/secret_file.txt > /app/solution.txt; if [ ! -s /app/solution.txt ]; then echo extraction_failed >&2; exit 2; fi\'\n'
+'ls -l /app/solution.txt\n'
+'cat /app/solution.txt\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

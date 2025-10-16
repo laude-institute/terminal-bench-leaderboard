@@ -1,0 +1,119 @@
+root@00fdb925ad75:/app# ls -la
+total 8
+drwxr-xr-x 2 root root 4096 Mar 28  2025 .
+drwxr-xr-x 1 root root 4096 Oct 15 07:16 ..
+root@00fdb925ad75:/app# cat > scrape_books.py << 'PY'
+> #!/usr/bin/env python3
+> import requests
+> from bs4 import BeautifulSoup
+> import pandas as pd
+> import re
+>
+>
+> def main():
+>     url = 'http://server:8000'
+>     try:
+>         resp = requests.get(url, timeout=10)
+>         resp.raise_for_status()
+>     except Exception as e:
+>         print(f'Error fetching {url}: {e}')
+>         return
+>
+>     soup = BeautifulSoup(resp.text, 'html.parser')
+>     books = []
+>     for b in soup.select('div.book'):
+>         title_el = b.select_one('div.book-title')
+>         author_el = b.select_one('div.book-author')
+>         year_el = b.select_one('span.book-year')
+>         rating_el = b.select_one('span.book-rating')
+>         price_el = b.select_one('span.book-price')
+>
+>         title = title_el.get_text(strip=True) if title_el else None
+>         author_text = author_el.get_text(strip=True) if author_el else None
+>         if author_text and author_text.lower().startswith('by '):
+>             author = author_text[3:].strip()
+>         else:
+>             author = author_text
+>
+>         year_text = year_el.get_text(' ', strip=True) if year_el else None
+>         rating_text = rating_el.get_text(' ', strip=True) if rating_el else None
+>         price_text = price_el.get_text(' ', strip=True) if price_el else None
+>
+>         year = None
+>         if year_text:
+>             ym = re.search(r'(\d{4})', year_text)
+>             if ym:
+>                 year = int(ym.group(1))
+>
+>         rating = None
+>         if rating_text:
+>             rm = re.search(r'([\d.]+)', rating_text)
+>             if rm:
+>                 rating = float(rm.group(1))
+>
+>         price = None
+>         if price_text:
+>             pm = re.search(r'([\d.]+)', price_text)
+>             if pm:
+>                 price = float(pm.group(1))
+>
+>         books.append({
+>             'title': title,
+>             'author': author,
+>             'year': year,
+>             'rating': rating,
+>             'price': price
+>         })
+>
+>     df = pd.DataFrame(books, columns=['title', 'author', 'year', 'rating', 'price'])
+>     df.to_csv('books.csv', index=False)
+>
+>     total = len(df)
+>     avg_price = float(df['price'].dropna().mean()) if total > 0 else 0.0
+>
+>     highest_title = None
+>     highest_rating = None
+>     if total > 0 and df['rating'].notna().any():
+>         idx = df['rating'].idxmax()
+>         if pd.notna(df.at[idx, 'rating']):
+>             highest_title = df.at[idx, 'title']
+>             highest_rating = df.at[idx, 'rating']
+>
+>     with open('report.txt', 'w') as f:
+>         f.write(f'Total number of books scraped: {total}\n')
+>         f.write(f'Average book price: ${avg_price:.2f}\n')
+>         if highest_title is not None:
+>             f.write(f'Highest rated book: {highest_title} ({highest_rating:.2f}/5)\n')
+>         else:
+>             f.write('Highest rated book: N/A\n')
+>
+>     print('Scraping complete. Saved books.csv and report.txt.')
+>
+>
+> if __name__ == '__main__':
+>     main()
+> PY
+root@00fdb925ad75:/app# chmod +x scrape_books.py
+root@00fdb925ad75:/app# python3 scrape_books.py
+Scraping complete. Saved books.csv and report.txt.
+root@00fdb925ad75:/app# ls -la
+total 20
+drwxr-xr-x 1 root root 4096 Oct 15 07:17 .
+drwxr-xr-x 1 root root 4096 Oct 15 07:16 ..
+-rw-r--r-- 1 root root  345 Oct 15 07:17 books.csv
+-rw-r--r-- 1 root root  111 Oct 15 07:17 report.txt
+-rwxr-xr-x 1 root root 2815 Oct 15 07:17 scrape_books.py
+root@00fdb925ad75:/app# sed -n '1,10p' books.csv
+title,author,year,rating,price
+The Great Gatsby,F. Scott Fitzgerald,1925,4.2,12.99
+To Kill a Mockingbird,Harper Lee,1960,4.8,14.99
+1984,George Orwell,1949,4.6,11.99
+Pride and Prejudice,Jane Austen,1813,4.5,9.99
+The Catcher in the Rye,J.D. Salinger,1951,4.1,13.99
+Moby Dick,Herman Melville,1851,4.0,15.99
+The Hobbit,J.R.R. Tolkien,1937,4.7,16.99
+root@00fdb925ad75:/app# cat report.txt
+Total number of books scraped: 7
+Average book price: $13.85
+Highest rated book: To Kill a Mockingbird (4.80/5)
+root@00fdb925ad75:/app#

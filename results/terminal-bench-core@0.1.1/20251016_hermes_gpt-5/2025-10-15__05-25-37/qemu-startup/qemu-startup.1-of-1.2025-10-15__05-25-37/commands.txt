@@ -1,0 +1,17 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la /app\n'
+'ISO=$(ls -1 /app/*.iso 2>/dev/null | head -n1); if [ -z "$ISO" ]; then ISO=$(find / -maxdepth 3 -type f -name "*.iso" 2>/dev/null | head -n1); fi; if [ -z "$ISO" ]; then echo "ERROR: No ISO found" >&2; fi; echo "Using ISO: ${ISO}"\n'
+'command -v qemu-system-x86_64 >/dev/null 2>&1 || { echo "ERROR: qemu-system-x86_64 not found" >&2; }\n'
+'if [ -f /app/qemu-alpine.pid ]; then kill -9 $(cat /app/qemu-alpine.pid) 2>/dev/null || true; rm -f /app/qemu-alpine.pid; fi\n'
+'qemu-system-x86_64 -daemonize -pidfile /app/qemu-alpine.pid -name alpine-qemu -m 512 -smp 2 -cdrom "$ISO" -boot d -display none -serial telnet:127.0.0.1:6665,server,nowait\n'
+'ready_port=0; for i in $(seq 1 60); do if echo > /dev/tcp/127.0.0.1/6665 2>/dev/null; then ready_port=1; echo "Telnet port 6665 is open"; break; else sleep 1; fi; done; if [ "$ready_port" -ne 1 ]; then echo "WARNING: Telnet port 6665 not reachable after 60s" >&2; fi\n'
+'printf "" > /app/alpine-serial.log; ready_login=0; for i in $(seq 1 180); do OUT=$(timeout 2s cat </dev/tcp/127.0.0.1/6665 | tr -d "\\r"); if [ -n "$OUT" ]; then printf "%s\\n" "$OUT" >> /app/alpine-serial.log; fi; if echo "$OUT" | grep -Eiq \'login\'; then ready_login=1; echo "Login prompt detected on serial"; break; fi; sleep 2; done; [ "$ready_login" -eq 1 ] && echo "Alpine ISO is ready: telnet 127.0.0.1 6665"\n'
+'ps -p $(cat /app/qemu-alpine.pid 2>/dev/null) -o pid,cmd=\n'
+'echo > /dev/tcp/127.0.0.1/6665 2>/dev/null && echo "Telnet port 6665 is open (recheck)" || echo "Telnet port 6665 not reachable"\n'
+'exec 3<>/dev/tcp/127.0.0.1/6665; ready_login=0; : > /app/alpine-serial.log; for i in $(seq 1 20); do printf "\\r\\n" >&3; OUT=$(timeout 1s dd bs=1024 count=4 <&3 2>/dev/null | tr -dc \'\\11\\12\\15\\40-\\176\'); if [ -n "$OUT" ]; then printf "%s\\n" "$OUT" >> /app/alpine-serial.log; fi; if echo "$OUT" | grep -Eiq \'login\'; then ready_login=1; echo "Login prompt detected on serial"; break; fi; sleep 2; done; exec 3>&-; [ "$ready_login" -eq 1 ] && echo "Alpine ISO is ready: telnet 127.0.0.1 6665" || echo "WARNING: Login prompt not detected yet"\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

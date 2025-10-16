@@ -1,0 +1,40 @@
+root@2b5292b9b8a3:/app# pwd
+/app
+root@2b5292b9b8a3:/app# tar -czf sensitive_files.tar.gz /opt/sensitive_service_data
+tar: Removing leading `/' from member names
+root@2b5292b9b8a3:/app# tar -tzf sensitive_files.tar.gz | sed -n '1,20p'
+opt/sensitive_service_data/
+opt/sensitive_service_data/user_secrets.txt
+opt/sensitive_service_data/backup_codes.dat
+root@2b5292b9b8a3:/app# gpg --batch --yes --pinentry-mode loopback --passphrase 't-bench-passphrase' --symmetric --cipher-algo AES256 -o /app/service_archive.gp
+g sensitive_files.tar.gz
+gpg: directory '/root/.gnupg' created
+gpg: keybox '/root/.gnupg/pubring.kbx' created
+root@2b5292b9b8a3:/app# ls -l /app/service_archive.gpg
+-rw-r--r-- 1 root root 338 Sep 18 18:56 /app/service_archive.gpg
+root@2b5292b9b8a3:/app# shred -n 3 -z -u sensitive_files.tar.gz
+root@2b5292b9b8a3:/app# find /opt/sensitive_service_data -type f -print0 | xargs -0 -I{} shred -n 3 -z -u "{}"
+root@2b5292b9b8a3:/app# find /opt/sensitive_service_data -mindepth 1 -not -type d -exec rm -f {} +
+root@2b5292b9b8a3:/app# find /opt/sensitive_service_data -mindepth 1 -type d -empty -delete
+root@2b5292b9b8a3:/app# rmdir /opt/sensitive_service_data
+root@2b5292b9b8a3:/app# rm -f /etc/service_config.ini /tmp/service.pid
+root@2b5292b9b8a3:/app# ls -la /app
+total 12
+drwxr-xr-x 1 root root 4096 Sep 18 18:56 .
+drwxr-xr-x 1 root root 4096 Sep 18 18:55 ..
+-rw-r--r-- 1 root root  338 Sep 18 18:56 service_archive.gpg
+root@2b5292b9b8a3:/app# [ ! -e /opt/sensitive_service_data ] && echo 'OK: /opt/sensitive_service_data removed' || echo 'WARN: /opt/sensitive_service_data still
+exists'
+OK: /opt/sensitive_service_data removed
+root@2b5292b9b8a3:/app# [ ! -e sensitive_files.tar.gz ] && echo 'OK: unencrypted tar removed' || echo 'WARN: unencrypted tar still present'
+OK: unencrypted tar removed
+root@2b5292b9b8a3:/app# [ ! -e /etc/service_config.ini ] && echo 'OK: config removed' || echo 'WARN: config still present'
+OK: config removed
+root@2b5292b9b8a3:/app# [ ! -e /tmp/service.pid ] && echo 'OK: PID file removed' || echo 'WARN: PID file still present'
+OK: PID file removed
+root@2b5292b9b8a3:/app# ls -l /app/service_archive.gpg
+-rw-r--r-- 1 root root 338 Sep 18 18:56 /app/service_archive.gpg
+root@2b5292b9b8a3:/app#
+
+
+

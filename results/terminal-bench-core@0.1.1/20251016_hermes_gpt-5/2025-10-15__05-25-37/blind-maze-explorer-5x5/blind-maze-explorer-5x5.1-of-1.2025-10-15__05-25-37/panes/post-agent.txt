@@ -1,0 +1,468 @@
+root@c5af171f0468:/app# ls -la
+total 16
+drwxr-xr-x 1 root root 4096 Oct 15 06:11 .
+drwxr-xr-x 1 root root 4096 Oct 15 06:11 ..
+-rwxrwxr-x 1 root root   80 Oct  8 15:44 maze_game.sh
+drwxr-xr-x 2 root root 4096 Oct  8 15:44 tests
+root@c5af171f0468:/app# cat > explore_maze.py << 'PY'
+map_cells[pos] = ' '
+                    progressed = True
+                    break
+                else:
+                    raise RuntimeError(f"Unexpected response: {resp!r}")
+        if progressed:
+            continue
+        if not stack:
+            break
+        prev = stack.pop()
+        dx = prev[0]-pos[0]
+        dy = prev[1]-pos[1]
+        if dx==1 and dy==0:
+            back = 'E'
+        elif dx==-1 and dy==0:
+            back = 'W'
+        elif dx==0 and dy==1:
+            back = 'S'
+        elif dx==0 and dy==-1:
+            back = 'N'
+        else:
+            raise RuntimeError("Backtrack delta not adjacent")
+        resp = send(proc, f"move {back}")
+        if not ('moved' in resp or 'reached exit' in resp):
+            raise RuntimeError(f"Backtrack failed: {resp}")
+        pos = prev
+    try:
+        proc.stdin.close()
+    except:
+        pass
+    try:
+        proc.wait(timeout=5)
+    except:
+        proc.kill()
+    xs = [x for (x,y) in map_cells.keys()]
+    ys = [y for (x,y) in map_cells.keys()]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    full = {}
+    for y in range(min_y, max_y+1):
+        for x in range(min_x, max_x+1):
+            c = map_cells.get((x,y))
+            if c is None:
+                c = '#'
+            full[(x,y)] = c
+    lines=[]
+    for y in range(min_y, max_y+1):
+        row=[]
+        for x in range(min_x, max_x+1):
+            ch = full[(x,y)]
+            if ch in (' ', '#', 'S', 'E'):
+                row.append(ch)
+            else:
+                row.append(' ')
+        lines.append(''.join(row))
+    out_path = '/app/maze_map.txt'
+    with open(out_path,'w') as f:
+        f.write('\n'.join(lines)+'\n')
+    print(f"Explored cells: {len([c for c in map_cells.values() if c!='#'])}, walls: {len([c for c in map_cells.values() if c=='#'])}")
+    print(f"Map bounds: x[{min_x},{max_x}] y[{min_y},{max_y}]")
+    print(f"Exit at: {exit_pos}")
+    print(f"Written: {out_path}")
+
+if __name__=='__main__':
+    explore()
+PY
+> #!/usr/bin/env python3
+> import subprocess, sys, time, os
+>
+> def spawn_game():
+>     proc = subprocess.Popen(['bash','-lc','./maze_game.sh'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+>     return proc
+>
+> def send(proc, cmd):
+>     proc.stdin.write(cmd+'\n'); proc.stdin.flush()
+>     out = proc.stdout.readline()
+>     if not out:
+>         return ''
+>     return out.strip()
+>
+> dirs = {'N':(0,-1), 'S':(0,1), 'E':(1,0), 'W':(-1,0)}
+> opp = {'N':'S','S':'N','E':'W','W':'E'}
+>
+> map_cells = {}
+> visited_dirs = {}
+> pos = (0,0)
+> map_cells[pos]='S'
+> exit_pos = None
+>
+> proc = spawn_game()
+>
+> def explore():
+>     global pos, exit_pos
+>     stack = []
+>     while True:
+>         tried = visited_dirs.setdefault(pos,set())
+>         progressed = False
+>         for d,(dx,dy) in dirs.items():
+>             if d in tried:
+>                 continue
+>             tried.add(d)
+>             resp = send(proc, f"move {d}")
+>             nx,ny = pos[0]+dx, pos[1]+dy
+>             if resp.startswith('hit wall'):
+>                 map_cells[(nx,ny)] = '#'
+>             elif resp.startswith('moved') or resp.startswith('reached exit'):
+>                 stack.append(pos)
+>                 pos = (nx,ny)
+>                 if map_cells.get(pos) not in ('S','E'):
+>                     map_cells[pos] = ' '
+>                 if resp.startswith('reached exit'):
+>                     exit_pos = pos
+>                     map_cells[pos] = 'E'
+>                 progressed = True
+>                 break
+>             else:
+>                 if 'hit wall' in resp:
+>                     map_cells[(nx,ny)] = '#'
+>                 elif 'reached exit' in resp:
+>                     stack.append(pos)
+>                     pos = (nx,ny)
+>                     exit_pos = pos
+>                     map_cells[pos] = 'E'
+>                     progressed = True
+>                     break
+>                 elif 'moved' in resp:
+>                     stack.append(pos)
+>                     pos = (nx,ny)
+>                     if map_cells.get(pos) not in ('S','E'):
+>                         map_cells[pos] = ' '
+>                     progressed = True
+>                     break
+>                 else:
+>                     raise RuntimeError(f"Unexpected response: {resp!r}")
+>         if progressed:
+>             continue
+>         if not stack:
+>             break
+>         prev = stack.pop()
+>         dx = prev[0]-pos[0]
+>         dy = prev[1]-pos[1]
+>         if dx==1 and dy==0:
+>             back = 'E'
+>         elif dx==-1 and dy==0:
+>             back = 'W'
+>         elif dx==0 and dy==1:
+>             back = 'S'
+>         elif dx==0 and dy==-1:
+>             back = 'N'
+>         else:
+>             raise RuntimeError("Backtrack delta not adjacent")
+>         resp = send(proc, f"move {back}")
+>         if not ('moved' in resp or 'reached exit' in resp):
+>             raise RuntimeError(f"Backtrack failed: {resp}")
+>         pos = prev
+>     try:
+>         proc.stdin.close()
+>     except:
+>         pass
+>     try:
+>         proc.wait(timeout=5)
+>     except:
+>         proc.kill()
+>     xs = [x for (x,y) in map_cells.keys()]
+>     ys = [y for (x,y) in map_cells.keys()]
+>     min_x, max_x = min(xs), max(xs)
+>     min_y, max_y = min(ys), max(ys)
+>     full = {}
+>     for y in range(min_y, max_y+1):
+>         for x in range(min_x, max_x+1):
+>             c = map_cells.get((x,y))
+>             if c is None:
+>                 c = '#'
+>             full[(x,y)] = c
+>     lines=[]
+>     for y in range(min_y, max_y+1):
+>         row=[]
+>         for x in range(min_x, max_x+1):
+>             ch = full[(x,y)]
+>             if ch in (' ', '#', 'S', 'E'):
+>                 row.append(ch)
+>             else:
+>                 row.append(' ')
+>         lines.append(''.join(row))
+>     out_path = '/app/maze_map.txt'
+>     with open(out_path,'w') as f:
+>         f.write('\n'.join(lines)+'\n')
+>     print(f"Explored cells: {len([c for c in map_cells.values() if c!='#'])}, walls: {len([c for c in map_cells.values() if c=='#'])}")
+>     print(f"Map bounds: x[{min_x},{max_x}] y[{min_y},{max_y}]")
+>     print(f"Exit at: {exit_pos}")
+>     print(f"Written: {out_path}")
+>
+> if __name__=='__main__':
+>     explore()
+> PY
+root@c5af171f0468:/app# chmod +x explore_maze.py
+root@c5af171f0468:/app# python3 explore_maze.py
+Traceback (most recent call last):
+  File "/app/explore_maze.py", line 128, in <module>
+    explore()
+    ~~~~~~~^^
+  File "/app/explore_maze.py", line 68, in explore
+    raise RuntimeError(f"Unexpected response: {resp!r}")
+RuntimeError: Unexpected response: 'Welcome to the Blind Maze Explorer!'
+root@c5af171f0468:/app# ls -l /app/maze_map.txt
+ls: cannot access '/app/maze_map.txt': No such file or directory
+root@c5af171f0468:/app# head -n 20 /app/maze_map.txt
+head: cannot open '/app/maze_map.txt' for reading: No such file or directory
+root@c5af171f0468:/app# tail -n 20 /app/maze_map.txt
+tail: cannot open '/app/maze_map.txt' for reading: No such file or directory
+root@c5af171f0468:/app# cat > explore_maze.py << 'PY'
+    progressed = False
+        for d,(dx,dy) in dirs.items():
+            if d in tried:
+                continue
+            tried.add(d)
+            resp = send(proc, f"move {d}")
+            nx,ny = pos[0]+dx, pos[1]+dy
+            if resp.startswith('hit wall'):
+                map_cells[(nx,ny)] = '#'
+            elif resp.startswith('moved') or resp.startswith('reached exit'):
+                stack.append(pos)
+                pos = (nx,ny)
+                if resp.startswith('reached exit'):
+                    exit_pos = pos
+                    map_cells[pos] = 'E'
+                else:
+                    if map_cells.get(pos) not in ('S','E'):
+                        map_cells[pos] = ' '
+                progressed = True
+                break
+            else:
+                if 'hit wall' in resp and not ('moved' in resp or 'reached exit' in resp):
+                    map_cells[(nx,ny)] = '#'
+                elif 'reached exit' in resp:
+                    stack.append(pos)
+                    pos = (nx,ny)
+                    exit_pos = pos
+                    map_cells[pos] = 'E'
+                    progressed = True
+                    break
+                elif 'moved' in resp:
+                    stack.append(pos)
+                    pos = (nx,ny)
+                    if map_cells.get(pos) not in ('S','E'):
+                        map_cells[pos] = ' '
+                    progressed = True
+                    break
+                else:
+                    raise RuntimeError(f"Unexpected response: {resp!r}")
+        if progressed:
+            continue
+        if not stack:
+            break
+        prev = stack.pop()
+        dx = prev[0]-pos[0]
+        dy = prev[1]-pos[1]
+        if dx==1 and dy==0:
+            back = 'E'
+        elif dx==-1 and dy==0:
+            back = 'W'
+        elif dx==0 and dy==1:
+            back = 'S'
+        elif dx==0 and dy==-1:
+            back = 'N'
+        else:
+            raise RuntimeError("Backtrack delta not adjacent")
+        resp = send(proc, f"move {back}")
+        if not ('moved' in resp or 'reached exit' in resp):
+            raise RuntimeError(f"Backtrack failed: {resp}")
+        pos = prev
+    try:
+        proc.stdin.close()
+    except Exception:
+        pass
+    try:
+        proc.wait(timeout=5)
+    except Exception:
+        proc.kill()
+    xs = [x for (x,y) in map_cells.keys()]
+    ys = [y for (x,y) in map_cells.keys()]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    full = {}
+    for y in range(min_y, max_y+1):
+        for x in range(min_x, max_x+1):
+            c = map_cells.get((x,y))
+            if c is None:
+                c = '#'
+            full[(x,y)] = c
+    lines=[]
+    for y in range(min_y, max_y+1):
+        row=[]
+        for x in range(min_x, max_x+1):
+            ch = full[(x,y)]
+            if ch in (' ', '#', 'S', 'E'):
+                row.append(ch)
+            else:
+                row.append(' ')
+        lines.append(''.join(row))
+    out_path = '/app/maze_map.txt'
+    with open(out_path,'w') as f:
+        f.write('\n'.join(lines)+'\n')
+    > #!/usr/bin/env python3
+> import subprocess, sys, time, os
+>
+> def spawn_game():
+>     proc = subprocess.Popen(['bash','-lc','./maze_game.sh'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+>     return proc
+>
+> def read_until_response(proc):
+>     while True:
+>         line = proc.stdout.readline()
+>         if not line:
+>             return ''
+>         s = line.strip()
+>         if ('hit wall' in s) or ('moved' in s) or ('reached exit' in s):
+>             return s
+>         # ignore non-response lines (e.g., banners/instructions)
+>
+> def send(proc, cmd):
+>     proc.stdin.write(cmd+'\n'); proc.stdin.flush()
+>     return read_until_response(proc)
+>
+> dirs = {'N':(0,-1), 'S':(0,1), 'E':(1,0), 'W':(-1,0)}
+> opp = {'N':'S','S':'N','E':'W','W':'E'}
+>
+> map_cells = {}
+> visited_dirs = {}
+> pos = (0,0)
+> map_cells[pos]='S'
+> exit_pos = None
+>
+> proc = spawn_game()
+>
+> def explore():
+>     global pos, exit_pos
+>     stack = []
+>     while True:
+>         tried = visited_dirs.setdefault(pos,set())
+>         progressed = False
+>         for d,(dx,dy) in dirs.items():
+>             if d in tried:
+>                 continue
+>             tried.add(d)
+>             resp = send(proc, f"move {d}")
+>             nx,ny = pos[0]+dx, pos[1]+dy
+>             if resp.startswith('hit wall'):
+>                 map_cells[(nx,ny)] = '#'
+>             elif resp.startswith('moved') or resp.startswith('reached exit'):
+>                 stack.append(pos)
+>                 pos = (nx,ny)
+>                 if resp.startswith('reached exit'):
+>                     exit_pos = pos
+>                     map_cells[pos] = 'E'
+>                 else:
+>                     if map_cells.get(pos) not in ('S','E'):
+>                         map_cells[pos] = ' '
+>                 progressed = True
+>                 break
+>             else:
+>                 if 'hit wall' in resp and not ('moved' in resp or 'reached exit' in resp):
+>                     map_cells[(nx,ny)] = '#'
+>                 elif 'reached exit' in resp:
+>                     stack.append(pos)
+>                     pos = (nx,ny)
+>                     exit_pos = pos
+>                     map_cells[pos] = 'E'
+>                     progressed = True
+>                     break
+>                 elif 'moved' in resp:
+>                     stack.append(pos)
+>                     pos = (nx,ny)
+>                     if map_cells.get(pos) not in ('S','E'):
+>                         map_cells[pos] = ' '
+>                     progressed = True
+>                     break
+>                 else:
+>                     raise RuntimeError(f"Unexpected response: {resp!r}")
+>         if progressed:
+>             continue
+>         if not stack:
+>             break
+>         prev = stack.pop()
+>         dx = prev[0]-pos[0]
+>         dy = prev[1]-pos[1]
+>         if dx==1 and dy==0:
+>             back = 'E'
+>         elif dx==-1 and dy==0:
+>             back = 'W'
+>         elif dx==0 and dy==1:
+>             back = 'S'
+>         elif dx==0 and dy==-1:
+>             back = 'N'
+>         else:
+>             raise RuntimeError("Backtrack delta not adjacent")
+>         resp = send(proc, f"move {back}")
+>         if not ('moved' in resp or 'reached exit' in resp):
+>             raise RuntimeError(f"Backtrack failed: {resp}")
+>         pos = prev
+>     try:
+>         proc.stdin.close()
+>     except Exception:
+>         pass
+>     try:
+>         proc.wait(timeout=5)
+>     except Exception:
+>         proc.kill()
+>     xs = [x for (x,y) in map_cells.keys()]
+>     ys = [y for (x,y) in map_cells.keys()]
+>     min_x, max_x = min(xs), max(xs)
+>     min_y, max_y = min(ys), max(ys)
+>     full = {}
+>     for y in range(min_y, max_y+1):
+>         for x in range(min_x, max_x+1):
+>             c = map_cells.get((x,y))
+>             if c is None:
+>                 c = '#'
+>             full[(x,y)] = c
+>     lines=[]
+>     for y in range(min_y, max_y+1):
+>         row=[]
+>         for x in range(min_x, max_x+1):
+>             ch = full[(x,y)]
+>             if ch in (' ', '#', 'S', 'E'):
+>                 row.append(ch)
+>             else:
+>                 row.append(' ')
+>         lines.append(''.join(row))
+>     out_path = '/app/maze_map.txt'
+>     with open(out_path,'w') as f:
+>         f.write('\n'.join(lines)+'\n')
+>     print(f"Explored cells: {len([c for c in map_cells.values() if c!='#'])}, walls: {len([c for c in map_cells.values() if c=='#'])}")
+>     print(f"Map bounds: x[{min_x},{max_x}] y[{min_y},{max_y}]")
+>     print(f"Exit at: {exit_pos}")
+>     print(f"Written: {out_path}")
+>
+> if __name__=='__main__':
+>     explore()
+> PY
+root@c5af171f0468:/app# chmod +x explore_maze.py
+root@c5af171f0468:/app# python3 explore_maze.py
+Explored cells: 7, walls: 13
+Map bounds: x[-3,1] y[-1,3]
+Exit at: (-2, 1)
+Written: /app/maze_map.txt
+root@c5af171f0468:/app# ls -l /app/maze_map.txt
+-rw-r--r-- 1 root root 30 Oct 15 06:14 /app/maze_map.txt
+root@c5af171f0468:/app# head -n 30 /app/maze_map.txt
+#####
+# #S#
+#E# #
+#   #
+#####
+root@c5af171f0468:/app# tail -n 30 /app/maze_map.txt
+#####
+# #S#
+#E# #
+#   #
+#####
+root@c5af171f0468:/app#

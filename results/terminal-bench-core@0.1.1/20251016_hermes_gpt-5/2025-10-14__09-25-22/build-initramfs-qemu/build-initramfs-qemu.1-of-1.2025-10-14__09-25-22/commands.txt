@@ -1,0 +1,22 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'mkdir -p ramfs/rootfs/{bin,sbin,etc,proc,sys,dev,usr/bin,usr/sbin,root,run,tmp,mnt}\n'
+'/bin/sh -lc \'set -e; if ! command -v busybox >/dev/null 2>&1; then apt-get update && apt-get install -y busybox-static; fi; bb=$(command -v busybox); cp -a "$bb" ramfs/rootfs/bin/busybox\'\n'
+"/bin/sh -lc 'for i in sh mount umount ls cat echo dmesg ps login mkdir mknod setsid hostname; do ln -sf busybox ramfs/rootfs/bin/$i; done; ln -sf ../bin/busybox ramfs/rootfs/sbin/getty'\n"
+'/bin/sh -lc \'if ldd ramfs/rootfs/bin/busybox 2>&1 | grep -q "not a dynamic executable"; then echo "BusyBox is static"; else echo "BusyBox is dynamic; copying libs"; mkdir -p ramfs/rootfs/lib ramfs/rootfs/lib64 ramfs/rootfs/usr/lib; ldd ramfs/rootfs/bin/busybox | awk "/=>/ {print \\$3} /^\\// {print \\$1}" | sort -u | xargs -r -I {} cp -v --parents {} ramfs/rootfs; fi\'\n'
+"printf 'root:x:0:0:root:/root:/bin/sh\\n' > ramfs/rootfs/etc/passwd\n"
+"printf 'root::0:0:99999:7:::\\n' > ramfs/rootfs/etc/shadow\n"
+'chmod 600 ramfs/rootfs/etc/shadow\n'
+"printf 'ttyS0\\nconsole\\n' > ramfs/rootfs/etc/securetty\n"
+"printf 'root:x:0:\\n' > ramfs/rootfs/etc/group\n"
+'printf \'#!/bin/sh\\nexport PATH=/bin:/sbin:/usr/bin:/usr/sbin\\nmount -t devtmpfs devtmpfs /dev 2>/dev/null || mkdir -p /dev\\n[ -c /dev/console ] || mknod -m 600 /dev/console c 5 1\\n[ -c /dev/tty ] || mknod -m 666 /dev/tty c 5 0\\n[ -c /dev/ttyS0 ] || mknod -m 600 /dev/ttyS0 c 4 64\\nmount -t proc proc /proc\\nmount -t sysfs sys /sys\\necho "Welcome to minimal initramfs (serial console)"\\nwhile true; do\\n  /sbin/getty -L 115200 ttyS0 vt102\\ndone\\n\' > ramfs/rootfs/init\n'
+'chmod +x ramfs/rootfs/init\n'
+"/bin/sh -lc 'if ! command -v cpio >/dev/null 2>&1; then apt-get update && apt-get install -y cpio; fi'\n"
+"/bin/sh -lc 'cd ramfs/rootfs && find . -print0 | cpio --null -ov --format=newc | gzip -9 > ../initramfs.cpio.gz'\n"
+'ls -lh ramfs/initramfs.cpio.gz\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

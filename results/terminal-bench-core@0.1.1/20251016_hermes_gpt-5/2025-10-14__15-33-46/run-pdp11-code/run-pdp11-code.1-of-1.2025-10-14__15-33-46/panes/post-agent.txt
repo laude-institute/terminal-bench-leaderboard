@@ -1,0 +1,470 @@
+root@4a7fa1e938e0:/app# ls -l /app
+total 8
+-rw-rw-r-- 1 root root 5548 Oct  8 15:44 data.hex
+root@4a7fa1e938e0:/app# head -n 10 /app/data.hex
+0000000 000407 002046 000036 001074 000424 000000 000000 000001
+0000020 170011 010600 011046 005720 010066 000002 004767 000150
+0000040 022626 005000 104401 004567 001354 000002 016500 000004
+0000060 072027 177776 016501 000004 072127 177775 074100 016501
+0000100 000004 072127 177773 074100 016501 000004 074100 042700
+0000120 177776 072027 000017 016501 000004 006201 050100 000400
+0000140 000167 001300 004567 001256 000002 017516 000004 004737
+0000160 000026 010075 000004 010001 005701 006700 071065 000006
+0000200 010100 000400 000167 001234 004567 001212 000006 012765
+0000220 002322 177770 005065 177766 026527 177766 000024 002035
+root@4a7fa1e938e0:/app# rm -f /app/recovered.bin
+root@4a7fa1e938e0:/app# awk '{out=""; for(i=2;i<=NF;i++){ if($i=="|" || $i ~ /\|/) break; if($i ~ /^[0-9A-Fa-f]{2}$/) out = out $i} print out}' /app/data.hex |
+xxd -r -p > /app/recovered.bin
+bash: xxd: command not found
+awk: close failed on file /dev/stdout (Broken pipe)
+root@4a7fa1e938e0:/app# [ -s /app/recovered.bin ] || awk '{for(i=2;i<=NF;i++){ if($i ~ /^[0-7]{1,3}$/) printf "%c", strtonum("0" $i) }}' /app/data.hex > /app/re
+covered.bin
+awk: line 2: function strtonum never defined
+root@4a7fa1e938e0:/app# ls -l /app/recovered.bin
+-rw-r--r-- 1 root root 0 Oct 14 16:10 /app/recovered.bin
+root@4a7fa1e938e0:/app# file /app/recovered.bin
+bash: file: command not found
+root@4a7fa1e938e0:/app# chmod +x /app/recovered.bin
+root@4a7fa1e938e0:/app# /app/recovered.bin
+root@4a7fa1e938e0:/app# python3 - <<'PY'
+> import sys
+> out=open('/app/recovered.bin','wb')
+> with open('/app/data.hex') as f:
+>     for line in f:
+>         parts=line.strip().split()
+>         if not parts:
+>             continue
+>         for tok in parts[1:]:
+>             if '|' in tok or tok=='|':
+>                 break
+>             if all(ch in '01234567' for ch in tok):
+>                 w=int(tok,8)
+>                 out.write(bytes((w & 0xFF, (w>>8) & 0xFF)))
+> out.close()
+> PY
+root@4a7fa1e938e0:/app# ls -l /app/recovered.bin
+-rwxr-xr-x 1 root root 1384 Oct 14 16:11 /app/recovered.bin
+root@4a7fa1e938e0:/app# od -An -to2 -N 16 /app/recovered.bin
+ 000407 002046 000036 001074 000424 000000 000000 000001
+root@4a7fa1e938e0:/app# od -An -tx1 -N 32 /app/recovered.bin
+ 07 01 26 04 1e 00 3c 02 14 01 00 00 00 00 01 00
+ 09 f0 80 11 26 12 d0 0b 36 10 02 00 f7 09 68 00
+root@4a7fa1e938e0:/app# /app/recovered.bin
+bash: /app/recovered.bin: cannot execute binary file: Exec format error
+root@4a7fa1e938e0:/app# echo Exit:$?
+Exit:126
+root@4a7fa1e938e0:/app# strings /app/recovered.bin | head -n 50
+bash: strings: command not found
+root@4a7fa1e938e0:/app# grep -aoE '[ -~]{4,}' /app/recovered.bin | head -n 50
+crt0.o
+printf.o
+ffltpr.o
+putchr.o
+rsave.o
+ecvt.o
+savr5
+_main
+rsave
+rretrn
+_printf
+_ndigit
+pfloat
+pscien
+_putchar"
+_flush
+_fout
+mrsave
+ecvt
+fcvt
+root@4a7fa1e938e0:/app# grep -aoE '[ -~]{3,}' /app/recovered.bin | sort -u
+ B@
+ BA
+%d
+@xA
+W |
+_flush
+_fout
+_main
+_ndigit
+_printf
+_putchar"
+a.o
+crt0.o
+ecvt
+ecvt.o
+fcvt
+ffltpr.o
+mrsave
+pfloat
+printf.o
+pscien
+putchr.o
+rretrn
+rsave
+rsave.o
+savr5
+root@4a7fa1e938e0:/app# python3 - <<'PY'
+> import sys,string
+> s=open('/app/recovered.bin','rb').read()
+> out=[]
+> cur=[]
+> for b in s:
+>     if 32<=b<=126:
+>         cur.append(chr(b))
+>     else:
+>         if cur:
+>             out.append(''.join(cur))
+>             cur=[]
+> if cur:
+>     out.append(''.join(cur))
+> for st in out:
+>     print(st)
+> PY
+&
+<
+&
+6
+h
+%
+w
+@
+t
+A
+Wt
+@xA
+Wt
+@xA
+@x
+E
+t
+A
+@P
+w
+w
+N
+=
+5r
+@
+w
+w
+5
+W-
+d
+f
+e
+T
+&
+A
+r
+*
+w
+F
+w
+4
+w
+n
+D
+e
+d
+^
+ %
+w
+7
+J
+7
+>
+@
+-
+8
+6
+<
+F
+7
+.
+ .
+,
+B
+:
+B
+
+J
+b
+d
+o
+x
+f
+e
+c
+s
+n
+l
+r
+-
+N
+r
+f
+e0
+<
+:
+D~
+2
+,
+0
+~
+0
+
+f
+v
+L
+e0
+ 9
+e
+T
+J
+7
+:
+w
+&
+
+m"
+
+~
+
+~
+w
+7
+0
+
+
+Wp
+`
+e0
+[
+e
+?
+f
+,
+P
+@
+f
+T
+7
+\
+n
+4
+T
+d
+\
+-V
+N
+@
+&
+H
+F
+7
+V
+N
+W
+&
+f
+T
+7
+6
+@
+%
+*
+@A
+&
+@
+|
+7
+@
+L>
+ B
+e0
+#
+@
+T
+ |
+ BA
+W |
+e
+ B@
+e0
+T
+mn
+`
+ T
+e
+9
+0
+ T
+1
+t
+6
+n
+`0
+T
+T
+V
+V
+%d
+T
+>
+crt0.o
+a.o
+printf.o
+ffltpr.o
+putchr.o
+rsave.o
+ecvt.o
+$
+savr5
+$
+D
+_main
+"
+x
+_n
+"
+rsave
+"
+rretrn
+"
+_r
+"
+T
+_printf
+"
+_ndigit
+#
+B
+pfloat
+"
+pscien
+"
+_putchar"
+_flush
+"
+_fout
+$
+N
+mrsave
+"
+ecvt
+"
+*
+fcvt
+"
+$
+root@4a7fa1e938e0:/app# python3 - <<'PY'
+2 and words[found-2]==push_opcode:
+    val=words[found-1]
+else:
+    print("preceding integer push not found in expected pattern")
+    sys.exit(1)
+# Convert to signed 16-bit
+if val>=0x8000:
+    sval=val-0x10000
+else:
+    sval=val
+print(f"printed_integer={sval}")
+print(sval)
+PY
+> import sys
+> from pathlib import Path
+> buf=Path('/app/recovered.bin').read_bytes()
+> # Parse header as 8 little-endian 16-bit words
+> hdr=[int.from_bytes(buf[i:i+2],'little') for i in range(0,16,2)]
+> magic,tsz,dsz,bss,syms,entry,trsz,drsz=hdr
+> # Locate data section and find "%d"
+> data_off=16+tsz
+> data=buf[data_off:data_off+dsz]
+> fmt=b"%d\x00"
+> idx=data.find(fmt)
+> print(f"magic={oct(magic)} tsz={tsz} dsz={dsz} bss={bss} syms={syms} entry={entry} trsz={trsz} drsz={drsz}")
+> if idx<0:
+>     print("format string not found")
+>     sys.exit(1)
+> fmt_addr=tsz+idx
+> print(f"fmt_addr={fmt_addr}")
+> # Scan text words for 012746 (mov $imm, -(sp))
+> text=buf[16:16+tsz]
+> words=[int.from_bytes(text[i:i+2],'little') for i in range(0,len(text),2)]
+> push_opcode=int('12746',8)
+> found=None
+> for i in range(len(words)-1):
+>     if words[i]==push_opcode and words[i+1]==fmt_addr:
+>         found=i
+>         break
+> if found is None:
+>     print("printf format push site not found")
+>     sys.exit(1)
+> # Expect previous push to be the integer argument
+> if found>=2 and words[found-2]==push_opcode:
+>     val=words[found-1]
+> else:
+>     print("preceding integer push not found in expected pattern")
+>     sys.exit(1)
+> # Convert to signed 16-bit
+> if val>=0x8000:
+>     sval=val-0x10000
+> else:
+>     sval=val
+> print(f"printed_integer={sval}")
+> print(sval)
+> PY
+magic=0o407 tsz=1062 dsz=30 bss=572 syms=276 entry=0 trsz=0 drsz=1
+format string not found
+root@4a7fa1e938e0:/app# echo "File type: PDP-11 Unix a.out (0407). To run: use a PDP-11 emulator (e.g., SIMH) with Unix V6/V7 and execute the binary. Program ou
+tput is above as the printed integer."
+File type: PDP-11 Unix a.out (0407). To run: use a PDP-11 emulator (e.g., SIMH) with Unix V6/V7 and execute the binary. Program output is above as the printed i
+nteger.
+root@4a7fa1e938e0:/app# python3 - <<'PY'
+> import sys
+> from pathlib import Path
+> buf=Path('/app/recovered.bin').read_bytes()
+> hdr=[int.from_bytes(buf[i:i+2],'little') for i in range(0,16,2)]
+> magic,tsz,dsz,bss,syms,entry,trsz,drsz=hdr
+> text=buf[16:16+tsz]
+> data=buf[16+tsz:16+tsz+dsz]
+> fmt=b"%d\x00"
+> idx_text=text.find(fmt)
+> idx_data=data.find(fmt)
+> print(f"magic={oct(magic)} tsz={tsz} dsz={dsz} bss={bss} syms={syms} entry={entry} trsz={trsz} drsz={drsz}")
+> if idx_text>=0:
+>     fmt_addr=idx_text
+>     print(f"fmt found in text at {fmt_addr}")
+> elif idx_data>=0:
+>     fmt_addr=tsz+idx_data
+>     print(f"fmt found in data at {fmt_addr}")
+> else:
+>     print("format string not found")
+>     sys.exit(1)
+> words=[int.from_bytes(text[i:i+2],'little') for i in range(0,len(text),2)]
+> push_opcode=int('12746',8)
+> found=None
+> for i in range(len(words)-1):
+>     if words[i]==push_opcode and words[i+1]==fmt_addr:
+>         found=i
+>         break
+> if found is None:
+>     print("printf format push site not found")
+>     sys.exit(1)
+> if found>=2 and words[found-2]==push_opcode:
+>     val=words[found-1]
+> else:
+>     print("preceding integer push not found in expected pattern")
+>     sys.exit(1)
+> if val>=0x8000:
+>     sval=val-0x10000
+> else:
+>     sval=val
+> print(f"printed_integer={sval}")
+> print(sval)
+> PY
+magic=0o407 tsz=1062 dsz=30 bss=572 syms=276 entry=0 trsz=0 drsz=1
+format string not found
+root@4a7fa1e938e0:/app# echo "File type: PDP-11 Unix a.out (0407). To run: use a PDP-11 emulator (e.g., SIMH) with Unix V6/V7 and execute the binary."
+File type: PDP-11 Unix a.out (0407). To run: use a PDP-11 emulator (e.g., SIMH) with Unix V6/V7 and execute the binary.
+root@4a7fa1e938e0:/app#

@@ -1,0 +1,44 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'git status\n'
+'grep -R "class DirFileSystem" -n . || grep -R "dirfs" -n fsspec || grep -R "DirFileSystem" -n fsspec\n'
+'grep -R "implementations" -n fsspec\n'
+'find . -maxdepth 3 -type f -name "*dir*" -o -name "*fs*" | sed -n \'1,200p\'\n'
+'grep -R "filesystem(\'dir\'" -n .\n'
+'grep -R "class .*FileSystem" -n fsspec | sed -n \'1,200p\'\n'
+'ls -la fsspec\n'
+'ls -la fsspec/implementations\n'
+"sed -n '1,200p' fsspec/implementations/dirfs.py\n"
+"sed -n '200,400p' fsspec/implementations/dirfs.py\n"
+"sed -n '1,200p' fsspec/implementations/__init__.py\n"
+'git diff -- fsspec/implementations/dirfs.py\n'
+'python3 -c "import fsspec,inspect; import fsspec.implementations.dirfs as d; print(\'Has DirFileSystem:\', hasattr(d,\'DirFileSystem\')); print(inspect.getsource(d.DirFileSystem))" \n'
+"python3 - << 'PY'\nimport fsspec\ntry:\n    dirfs = fsspec.filesystem('dir', path='/tmp', asynchronous=True)\n    print('DirFS created', dirfs)\n    import asyncio\n    async def t():\n        try:\n            f = await dirfs.open_async('hello', 'wb')\n            await f.close()\n            print('open_async works')\n        except Exception as e:\n            print('open_async error:', type(e).__name__, e)\n    asyncio.run(t())\nexcept Exception as e:\n    print('Create error:', e)\nPY\n"
+'applypatch() { python3 - << \'PY\'\nfrom pathlib import Path\np = Path(\'fsspec/implementations/dirfs.py\')\ns = p.read_text()\n# naive insertion: add open_async if missing\nif \'def open_async\' not in s:\n    # find class start\n    lines = s.splitlines()\n    # insert method near other async stubs, try after __init__ or existing async methods\n    insert_idx = None\n    for i,l in enumerate(lines):\n        if l.strip().startswith(\'class DirFileSystem\'):\n            insert_idx = i\n            break\n    # find next method after class header to place method after similar methods\n    # we\'ll append at end of class if unsure\n    # find class indentation\n    class_indent = None\n    for i in range(insert_idx+1, len(lines)):\n        if lines[i].strip():\n            class_indent = len(lines[i]) - len(lines[i].lstrip())\n            break\n    if class_indent is None:\n        class_indent = 4\n    indent = \' \' * class_indent\n    method = f"\\n{indent}async def open_async(self, path, mode=\'rb\', **kwargs):\\n{indent}    \\"\\"\\"Open a file asynchronously within the mapped directory.\\n{indent}    Delegates to the underlying filesystem\'s open_async with the joined path.\\n{indent}    \\"\\"\\"\\n{indent}    # Map relative path to full path on underlying filesystem\\n{indent}    full_path = self._join(path) if hasattr(self, \'_join\') else self._strip_protocol(path) if hasattr(self, \'_strip_protocol\') else path\\n{indent}    # Some DirFileSystem implementations keep base path attribute as self.path or self.root\\n{indent}    try:\\n{indent}        base = getattr(self, \'path\', None) or getattr(self, \'root\', None) or getattr(self, \'base\', None)\\n{indent}        if base and not str(full_path).startswith(str(base)):\\n{indent}            # Use the filesystem\'s path join if available\\n{indent}            if hasattr(self, \'fs\') and hasattr(self.fs, \'sep\'):\\n{indent}                sep = getattr(self.fs, \'sep\', \'/\')\\n{indent}                if full_path and full_path[0] == sep:\\n{indent}                    full_path = full_path\\n{indent}                else:\\n{indent}                    full_path = base.rstrip(sep) + sep + str(path).lstrip(sep)\\n{indent}            else:\\n{indent}                import os\\n{indent}                full_path = os.path.join(base, str(path))\\n{indent}    except Exception:\\n{indent}        pass\\n{indent}    if hasattr(self, \'fs\') and hasattr(self.fs, \'open_async\'):\\n{indent}        return await self.fs.open_async(full_path, mode, **kwargs)\\n{indent}    # If underlying filesystem doesn\'t support open_async, use sync open via loop executor\n{indent}    # Fallback: use fsspec\'s async wrapper\n{indent}    import fsspec\\n{indent}    return await fsspec.asyn.open_file(self, full_path, mode, **kwargs)\\n"\n    # Insert before class end: find end by dedent\n    end_idx = len(lines)\n    # naive: append at end\n    lines.append(method)\n    new = "\\n".join(lines)\n    p.write_text(new)\nprint(\'Patched open_async in\', p)\nPY\n}\napplypatch\n'
+"git diff -- fsspec/implementations/dirfs.py | sed -n '1,200p'\n"
+"python3 - << 'PY'\nimport fsspec\nimport asyncio\nasync def t():\n    dirfs = fsspec.filesystem('dir', path='/tmp', asynchronous=True)\n    f = await dirfs.open_async('hello', 'wb')\n    await f.close()\n    print('OK')\nasyncio.run(t())\nPY\n"
+'pytest -q\n'
+'git add -A\n'
+'git commit -m "DirFileSystem: implement open_async() delegating to underlying filesystem"\n'
+"sed -n '1,200p' fsspec/implementations/dirfs.py\n"
+"sed -n '200,400p' fsspec/implementations/dirfs.py\n"
+"sed -n '1,200p' fsspec/asyn.py\n"
+"sed -n '200,400p' fsspec/asyn.py\n"
+'python3 - << \'PY\'\nfrom pathlib import Path\np = Path(\'fsspec/implementations/dirfs.py\')\ns = p.read_text()\nif \'async def open_async\' in s:\n    print(\'open_async already present\')\nelse:\n    lines = s.splitlines()\n    # Find class DirFileSystem block start\n    cls_idx = None\n    for i,l in enumerate(lines):\n        if l.strip().startswith(\'class DirFileSystem\'):\n            cls_idx = i\n            break\n    if cls_idx is None:\n        raise SystemExit(\'DirFileSystem class not found\')\n    # Determine class indent\n    class_indent = None\n    for i in range(cls_idx+1, len(lines)):\n        if lines[i].strip():\n            class_indent = len(lines[i]) - len(lines[i].lstrip())\n            break\n    if class_indent is None:\n        class_indent = 4\n    indent = \' \' * class_indent\n    method = (\n        \'\\n\' +\n        indent + \'async def open_async(self, path, mode=\\\'rb\\\', **kwargs):\\n\' +\n        indent + \'    """Open a file asynchronously within the mapped directory.\\n\' +\n        indent + \'    Delegates to the underlying filesystem\\\'s open_async with the joined path.\\n\' +\n        indent + \'    """\\n\' +\n        indent + \'    # Map relative path to full path on underlying filesystem\\n\' +\n        indent + \'    try:\\n\' +\n        indent + \'        full_path = self._join(path)\\n\' +\n        indent + \'    except Exception:\\n\' +\n        indent + \'        import os\\n\' +\n        indent + "        base = getattr(self, \'path\', None) or getattr(self, \'root\', None) or \'\'\\n" +\n        indent + \'        full_path = os.path.join(base, str(path))\\n\' +\n        indent + \'    # Delegate to underlying filesystem if available\\n\' +\n        indent + \'    if hasattr(self, \\"fs\\") and hasattr(self.fs, \\"open_async\\"):\\n\' +\n        indent + \'        return await self.fs.open_async(full_path, mode, **kwargs)\\n\' +\n        indent + \'    # Fallback to generic async open using fsspec wrapper\\n\' +\n        indent + \'    from fsspec.asyn import open_file\\n\' +\n        indent + \'    return await open_file(self, full_path, mode, **kwargs)\\n\'\n    )\n    # Insert at end of class: find next top-level def/class after cls_idx\n    insert_idx = len(lines)\n    # naive: append method near end of file, which typically still in class body\n    lines.append(method)\n    new = \'\\n\'.join(lines) + \'\\n\'\n    p.write_text(new)\n    print(\'Inserted open_async into dirfs.py\')\nPY\n'
+"sed -n '1,240p' fsspec/implementations/dirfs.py\n"
+'printf "__version__ = \'0+local\'\\n" > fsspec/_version.py\n'
+"python3 - << 'PY'\nimport fsspec\nimport asyncio\nasync def t():\n    dirfs = fsspec.filesystem('dir', path='/tmp', asynchronous=True)\n    try:\n        f = await dirfs.open_async('hello_async_dirfs_test', 'wb')\n        await f.close()\n        print('open_async OK')\n    except Exception as e:\n        print('open_async failed:', type(e).__name__, e)\nasyncio.run(t())\nPY\n"
+'git config user.email "devnull@example.com"\n'
+'git config user.name "CI Bot"\n'
+'git add -A\n'
+'git commit -m "DirFileSystem: add open_async() delegating to underlying filesystem; provide fallback wrapper"\n'
+'grep -n "open_async" fsspec/implementations/dirfs.py\n'
+'tail -n 200 fsspec/implementations/dirfs.py\n'
+'git show --stat\n'
+'git status\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']
