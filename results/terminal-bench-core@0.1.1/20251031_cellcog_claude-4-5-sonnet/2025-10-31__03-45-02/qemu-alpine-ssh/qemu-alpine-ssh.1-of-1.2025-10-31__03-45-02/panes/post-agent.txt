@@ -1,0 +1,95 @@
+root@e4336325d4b8:/app# asciinema rec --stdin --append /logs/agent.cast
+asciinema: appending to asciicast at /logs/agent.cast
+asciinema: press <ctrl-d> or type "exit" when you're done
+root@e4336325d4b8:/app# clear
+root@e4336325d4b8:/app# echo HEALTH_396641
+HEALTH_396641
+root@e4336325d4b8:/app# jobs -l && cat /tmp/qemu_final.log | tail -80
+cat: /tmp/qemu_final.log: No such file or directory
+root@e4336325d4b8:/app# timeout 5 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3 -p 2222 root@localhost 'echo "SSH Test Suc
+cessful"' 2>&1 || echo "SSH connection failed"
+netstat -tlnp 2>/dev/null | grep 2222 || lsof -i :2222 2>/dev/null || echo "Port 2222 not listening"
+Connection timed out during banner exchange
+Connection to 127.0.0.1 port 2222 timed out
+SSH connection failed
+root@e4336325d4b8:/app# netstat -tlnp 2>/dev/null | grep 2222 || lsof -i :2222 2>/dev/null || echo "Port 2222 not listening"
+Port 2222 not listening
+root@e4336325d4b8:/app# nohup expect -c '
+> set timeout 180
+> spawn qemu-system-x86_64 -m 512M -cdrom /app/alpine.iso -hda /app/alpine-disk.qcow2 -boot d -net nic -net user,hostfwd=tcp::2222-:22 -nographic
+> expect "boot:"
+> send "\r"
+> expect "login:"
+> send "root\r"
+> expect "#"
+> send "apk update && apk add openssh && echo root:password123 | chpasswd && ssh-keygen -A && /usr/sbin/sshd && echo SETUP_COMPLETE\r"
+> expect "SETUP_COMPLETE"
+> interact
+> ' > /tmp/qemu_expect_final.log 2>&1 &
+[1] 3596
+root@e4336325d4b8:/app# echo "Final QEMU setup started, PID: $!"
+Final QEMU setup started, PID: 3596
+root@e4336325d4b8:/app# sleep 45 && echo "=== Final Setup Log ===" && tail -100 /tmp/qemu_expect_final.log && echo -e "\n=== Testing SSH ===" && timeout 3 ssh -
+o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 root@localhost 'whoami' 2>&1 || echo "SSH not ready yet"
+sleep 50 && echo "=== Setup Progress ===" && cat /tmp/qemu_expect_final.log && echo -e "\n=== Port 2222 ===" && (netstat -tlnp 2>/dev/null | grep 2222 || lsof -
+i :2222 2>/dev/null || echo "Checking port")
+sleep 55 && echo "=== Final SSH Test ===" && timeout 5 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3 -p 2222 root@localhos
+t 'echo "Connection Successful"' 2>&1 || echo "SSH test failed"
+sleep 60 && echo "=== Complete Setup Status ===" && cat /tmp/qemu_expect_final.log && echo -e "\n=== Jobs ===" && jobs -l && echo -e "\n=== Port Check ===" && (
+netstat -tlnp 2>/dev/null | grep 2222 || lsof -i :2222 2>/dev/null || echo "Port check") && echo -e "\n=== SSH Verification ===" && timeout 5 ssh -o StrictHostK
+eyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 root@localhost 'whoami' 2>&1
+cat /tmp/qemu_expect_final.log | tail -80
+jobs -l
+timeout 3 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=2 -p 2222 root@localhost 'echo test' 2>&1
+cat /tmp/qemu_expect_final.log
+jobs -l && ps aux | grep -E "[e]xpect|[q]emu" | head -10
+lsof -i :2222 2>/dev/null || netstat -tlnp 2>/dev/null | grep 2222 || echo "Port 2222 not accessible"
+[1]+  Done                    nohup expect -c '
+set timeout 180
+spawn qemu-system-x86_64 -m 512M -cdrom /app/alpine.iso -hda /app/alpine-disk.qcow2 -boot d -net nic -net user,hostfwd=tcp::2222-:22 -nographic
+expect "boot:"
+send "\r"
+expect "login:"
+send "root\r"
+expect "#"
+send "apk update && apk add openssh && echo root:password123 | chpasswd && ssh-keygen -A && /usr/sbin/sshd && echo SETUP_COMPLETE\r"
+expect "SETUP_COMPLETE"
+interact
+' > /tmp/qemu_expect_final.log 2>&1
+=== Final Setup Log ===
+nohup: ignoring input
+spawn qemu-system-x86_64 -m 512M -cdrom /app/alpine.iso -hda /app/alpine-disk.qcow2 -boot d -net nic -net user,hostfwd=tcp::2222-:22 -nographic
+qemu-system-x86_64: -hda /app/alpine-disk.qcow2: Failed to get "write" lock
+Is another process using the image [/app/alpine-disk.qcow2]?
+send: spawn id exp4 not open
+    while executing
+"send "\r""
+
+=== Testing SSH ===
+SSH not ready yet
+root@e4336325d4b8:/app# sleep 50 && echo "=== Setup Progress ===" && cat /tmp/qemu_expect_final.log && echo -e "\n=== Port 2222 ===" && (netstat -tlnp 2>/dev/nu
+ll | grep 2222 || lsof -i :2222 2>/dev/null || echo "Checking port")
+killall -9 qemu-system-x86_64 2>/dev/null; killall -9 expect 2>/dev/null; sleep 2 && echo "Processes killed"
+lsof /app/alpine-disk.qcow2 2>/dev/null || echo "No locks on disk image"
+nohup expect -c '
+set timeout 180
+spawn qemu-system-x86_64 -m 512M -cdrom /app/alpine.iso -hda /app/alpine-disk.qcow2 -boot d -net nic -net user,hostfwd=tcp::2222-:22 -nographic
+expect "boot:"
+send "\r"
+expect "login:"
+send "root\r"
+expect "#"
+send "apk update && apk add openssh && echo root:password123 | chpasswd && ssh-keygen -A && /usr/sbin/sshd && echo SETUP_COMPLETE\r"
+expect "SETUP_COMPLETE"
+interact
+' > /tmp/qemu_clean_start.log 2>&1 &
+echo "Clean start initiated, PID: $!"
+sleep 50 && echo "=== Clean Start Log ===" && cat /tmp/qemu_clean_start.log && echo -e "\n=== SSH Test ===" && timeout 5 ssh -o StrictHostKeyChecking=no -o User
+KnownHostsFile=/dev/null -p 2222 root@localhost 'whoami' 2>&1
+sleep 55 && echo "=== Setup Status ===" && cat /tmp/qemu_clean_start.log && echo -e "\n=== Port 2222 ===" && (netstat -tlnp 2>/dev/null | grep 2222 || lsof -i :
+2222 2>/dev/null || echo "Port status unknown") && echo -e "\n=== Final SSH Verification ===" && timeout 5 ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile
+=/dev/null -p 2222 root@localhost 'echo "SSH Works!"' 2>&1
+sleep 60 && echo "=== Complete Final Status ===" && cat /tmp/qemu_clean_start.log && echo -e "\n=== Jobs ===" && jobs -l && echo -e "\n=== Port Check ===" && (n
+etstat -tlnp 2>/dev/null | grep 2222 || lsof -i :2222 2>/dev/null || echo "Port check failed") && echo -e "\n=== SSH Connection Test ===" && timeout 5 ssh -o St
+rictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3 -p 2222 root@localhost 'whoami' 2>&1 || echo "SSH verification failed"
+

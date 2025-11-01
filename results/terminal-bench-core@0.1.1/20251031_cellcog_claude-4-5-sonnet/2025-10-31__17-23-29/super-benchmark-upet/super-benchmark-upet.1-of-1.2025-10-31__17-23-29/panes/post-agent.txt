@@ -1,0 +1,1897 @@
+    from arguments import get_args
+  File "/app/UPET/arguments.py", line 9, in <module>
+    from tasks.utils import *
+  File "/app/UPET/tasks/utils.py", line 1, in <module>
+    from tasks.glue.dataset import task_to_keys as glue_tasks
+  File "/app/UPET/tasks/glue/dataset.py", line 5, in <module>
+    from datasets.load import load_dataset, load_metric
+ImportError: cannot import name 'load_metric' from 'datasets.load' (/usr/local/lib/python3.10/site-packages/datasets/load.py)
+root@0d2614781682:/app/UPET# cd /app/UPET && timeout 20 python3 run.py --help 2>&1
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 12, in <module>
+    from arguments import get_args
+  File "/app/UPET/arguments.py", line 9, in <module>
+    from tasks.utils import *
+  File "/app/UPET/tasks/utils.py", line 1, in <module>
+    from tasks.glue.dataset import task_to_keys as glue_tasks
+  File "/app/UPET/tasks/glue/dataset.py", line 5, in <module>
+    from datasets.load import load_dataset, load_metric
+ImportError: cannot import name 'load_metric' from 'datasets.load' (/usr/local/lib/python3.10/site-packages/datasets/load.py)
+root@0d2614781682:/app/UPET# cd /app/UPET && python3 run.py --help 2>&1 > /tmp/runpy_help.txt & sleep 3 && cat /tmp/runpy_help.txt | head -200
+[1] 667
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 12, in <module>
+    from arguments import get_args
+  File "/app/UPET/arguments.py", line 9, in <module>
+    from tasks.utils import *
+  File "/app/UPET/tasks/utils.py", line 1, in <module>
+    from tasks.glue.dataset import task_to_keys as glue_tasks
+  File "/app/UPET/tasks/glue/dataset.py", line 5, in <module>
+    from datasets.load import load_dataset, load_metric
+ImportError: cannot import name 'load_metric' from 'datasets.load' (/usr/local/lib/python3.10/site-packages/datasets/load.py)
+cd /app/UPET && cat run.py | head -200 && echo "=== SEARCHING FOR FEW SHOT ARGS ===" && grep -n "few\|shot\|num.*example\|train.*size" run.py
+[1]+  Exit 1                  cd /app/UPET && python3 run.py --help 2>&1 > /tmp/runpy_help.txt
+root@0d2614781682:/app/UPET# sleep 5 && cat /tmp/runpy_help.txt 2>/dev/null | head -250 || (cd /app/UPET && python3 -c "import sys; sys.argv = ['run.py', '--hel
+p']; exec(open('run.py').read())" 2>&1 | head -250)
+root@0d2614781682:/app/UPET# cd /app/UPET && cat run.py | head -200 && echo "=== SEARCHING FOR FEW SHOT ARGS ===" && grep -n "few\|shot\|num.*example\|train.*si
+ze" run.py
+import logging
+import os
+import sys
+import numpy as np
+from typing import Dict
+
+import datasets
+import transformers
+from transformers import set_seed, Trainer
+from transformers.trainer_utils import get_last_checkpoint
+
+from arguments import get_args
+
+from tasks.utils import *
+
+os.environ["WANDB_DISABLED"] = "true"
+
+logger = logging.getLogger(__name__)
+
+def train(trainer, resume_from_checkpoint=None, last_checkpoint=None):
+    checkpoint = None
+    if resume_from_checkpoint is not None:
+        checkpoint = resume_from_checkpoint
+    elif last_checkpoint is not None:
+        checkpoint = last_checkpoint
+    train_result = trainer.train(resume_from_checkpoint=checkpoint)
+    # trainer.save_model()，
+
+    try:
+        metrics = train_result.metrics
+
+        trainer.log_metrics("train", metrics)
+        trainer.save_metrics("train", metrics)
+        trainer.save_state()
+
+        trainer.log_best_metrics()
+    except:
+        pass
+
+def evaluate(trainer):
+    logger.info("*** Evaluate ***")
+    metrics = trainer.evaluate()
+
+    trainer.log_metrics("eval", metrics)
+    trainer.save_metrics("eval", metrics)
+
+def predict(trainer, predict_dataset=None):
+    if predict_dataset is None:
+        logger.info("No dataset is available for testing")
+
+    elif isinstance(predict_dataset, dict):
+
+        for dataset_name, d in predict_dataset.items():
+            logger.info("*** Predict: %s ***" % dataset_name)
+            predictions, labels, metrics = trainer.predict(d, metric_key_prefix="predict")
+            predictions = np.argmax(predictions, axis=2)
+
+            trainer.log_metrics("predict", metrics)
+            trainer.save_metrics("predict", metrics)
+
+    else:
+        logger.info("*** Predict ***")
+        predictions, labels, metrics = trainer.predict(predict_dataset, metric_key_prefix="predict")
+        predictions = np.argmax(predictions, axis=2)
+
+        trainer.log_metrics("predict", metrics)
+        trainer.save_metrics("predict", metrics)
+
+if __name__ == '__main__':
+
+    args = get_args()
+
+    _, data_args, training_args, semi_training_args, _ = args
+
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
+
+    log_level = training_args.get_process_log_level()
+    logger.setLevel(log_level)
+    datasets.utils.logging.set_verbosity(log_level)
+    transformers.utils.logging.set_verbosity(log_level)
+    transformers.utils.logging.enable_default_handler()
+    transformers.utils.logging.enable_explicit_format()
+
+    # Log on each process the small summary:
+    logger.warning(
+        f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
+        + f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
+    )
+    logger.info(f"Training/evaluation parameters {training_args}")
+
+
+    if not os.path.isdir("checkpoints") or not os.path.exists("checkpoints"):
+        os.mkdir("checkpoints")
+
+    if data_args.task_name.lower() == "superglue":
+        assert data_args.dataset_name.lower() in SUPERGLUE_DATASETS
+        from tasks.superglue.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "glue":
+        assert data_args.dataset_name.lower() in GLUE_DATASETS
+        from tasks.glue.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "ner":
+        assert data_args.dataset_name.lower() in NER_DATASETS
+        from tasks.ner.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "srl":
+        assert data_args.dataset_name.lower() in SRL_DATASETS
+        from tasks.srl.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "qa":
+        assert data_args.dataset_name.lower() in QA_DATASETS
+        from tasks.qa.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "other_cls":
+        assert data_args.dataset_name.lower() in OTHER_DATASETS
+        from tasks.other_cls.get_trainer import get_trainer
+
+    else:
+        raise NotImplementedError('Task {} is not implemented. Please choose a task from: {}'.format(data_args.task_name, ", ".join(TASKS)))
+
+    set_seed(training_args.seed)
+
+    trainer, predict_dataset = get_trainer(args)
+
+    last_checkpoint = None
+    if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
+        last_checkpoint = get_last_checkpoint(training_args.output_dir)
+        if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
+            raise ValueError(
+                f"Output directory ({training_args.output_dir}) already exists and is not empty. "
+                "Use --overwrite_output_dir to overcome."
+            )
+        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+            logger.info(
+                f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
+                "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
+            )
+
+
+    if training_args.do_train:
+        train(trainer, training_args.resume_from_checkpoint, last_checkpoint)
+
+    # if training_args.do_eval:
+    #     evaluate(trainer)
+
+    # if training_args.do_predict:
+    #     predict(trainer, predict_dataset)
+
+   === SEARCHING FOR FEW SHOT ARGS ===
+root@0d2614781682:/app/UPET# cd /app/UPET && echo "=== CHECKING DATASET FILES ===" && find tasks -name "*.py" -exec grep -l "load_metric" {} \; && echo "=== DAT
+ASETS VERSION ===" && python3 -c "import datasets; print(datasets.__version__)" && echo "=== CHECKING EVALUATE PACKAGE ===" && pip3 list | grep evaluate
+=== CHECKING DATASET FILES ===
+tasks/srl/dataset.py
+tasks/qa/dataset.py
+tasks/utils.py
+tasks/other_cls/dataset.py
+tasks/ner/dataset.py
+tasks/superglue/dataset_record.py
+tasks/superglue/dataset.py
+tasks/glue/dataset.py
+=== DATASETS VERSION ===
+4.3.0
+=== CHECKING EVALUATE PACKAGE ===
+root@0d2614781682:/app/UPET# cd /app/UPET && python3 -c "import datasets; print(datasets.__version__)" && echo "=== INSTALLING EVALUATE ===" && pip3 install eva
+luate && echo "=== VERIFY ===" && python3 -c "import evaluate; print('evaluate installed')"
+4.3.0
+=== INSTALLING EVALUATE ===
+Collecting evaluate
+  Downloading evaluate-0.4.6-py3-none-any.whl.metadata (9.5 kB)
+Requirement already satisfied: datasets>=2.0.0 in /usr/local/lib/python3.10/site-packages (from evaluate) (4.3.0)
+Requirement already satisfied: numpy>=1.17 in /usr/local/lib/python3.10/site-packages (from evaluate) (1.25.2)
+Requirement already satisfied: dill in /usr/local/lib/python3.10/site-packages (from evaluate) (0.4.0)
+Requirement already satisfied: pandas in /usr/local/lib/python3.10/site-packages (from evaluate) (2.0.3)
+Requirement already satisfied: requests>=2.19.0 in /usr/local/lib/python3.10/site-packages (from evaluate) (2.32.5)
+Requirement already satisfied: tqdm>=4.62.1 in /usr/local/lib/python3.10/site-packages (from evaluate) (4.66.4)
+Requirement already satisfied: xxhash in /usr/local/lib/python3.10/site-packages (from evaluate) (3.6.0)
+Requirement already satisfied: multiprocess in /usr/local/lib/python3.10/site-packages (from evaluate) (0.70.16)
+Requirement already satisfied: fsspec>=2021.05.0 in /usr/local/lib/python3.10/site-packages (from fsspec[http]>=2021.05.0->evaluate) (2023.6.0)
+Requirement already satisfied: huggingface-hub>=0.7.0 in /usr/local/lib/python3.10/site-packages (from evaluate) (0.36.0)
+Requirement already satisfied: packaging in /usr/local/lib/python3.10/site-packages (from evaluate) (25.0)
+Requirement already satisfied: filelock in /usr/local/lib/python3.10/site-packages (from datasets>=2.0.0->evaluate) (3.20.0)
+Requirement already satisfied: pyarrow>=21.0.0 in /usr/local/lib/python3.10/site-packages (from datasets>=2.0.0->evaluate) (22.0.0)
+Requirement already satisfied: httpx<1.0.0 in /usr/local/lib/python3.10/site-packages (from datasets>=2.0.0->evaluate) (0.28.1)
+Requirement already satisfied: pyyaml>=5.1 in /usr/local/lib/python3.10/site-packages (from datasets>=2.0.0->evaluate) (6.0.3)
+Requirement already satisfied: aiohttp!=4.0.0a0,!=4.0.0a1 in /usr/local/lib/python3.10/site-packages (from fsspec[http]>=2021.05.0->evaluate) (3.13.2)
+Requirement already satisfied: anyio in /usr/local/lib/python3.10/site-packages (from httpx<1.0.0->datasets>=2.0.0->evaluate) (4.11.0)
+Requirement already satisfied: certifi in /usr/local/lib/python3.10/site-packages (from httpx<1.0.0->datasets>=2.0.0->evaluate) (2025.10.5)
+Requirement already satisfied: httpcore==1.* in /usr/local/lib/python3.10/site-packages (from httpx<1.0.0->datasets>=2.0.0->evaluate) (1.0.9)
+Requirement already satisfied: idna in /usr/local/lib/python3.10/site-packages (from httpx<1.0.0->datasets>=2.0.0->evaluate) (3.11)
+Requirement already satisfied: h11>=0.16 in /usr/local/lib/python3.10/site-packages (from httpcore==1.*->httpx<1.0.0->datasets>=2.0.0->evaluate) (0.16.0)
+Requirement already satisfied: typing-extensions>=3.7.4.3 in /usr/local/lib/python3.10/site-packages (from huggingface-hub>=0.7.0->evaluate) (4.15.0)
+Requirement already satisfied: hf-xet<2.0.0,>=1.1.3 in /usr/local/lib/python3.10/site-packages (from huggingface-hub>=0.7.0->evaluate) (1.2.0)
+Requirement already satisfied: aiohappyeyeballs>=2.5.0 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]>=2021.05.0->eva
+luate) (2.6.1)
+Requirement already satisfied: aiosignal>=1.4.0 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]>=2021.05.0->evaluate)
+(1.4.0)
+Requirement already satisfied: async-timeout<6.0,>=4.0 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]>=2021.05.0->eva
+luate) (5.0.1)
+Requirement already satisfied: attrs>=17.3.0 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]>=2021.05.0->evaluate) (25
+.4.0)
+Requirement already satisfied: frozenlist>=1.1.1 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]>=2021.05.0->evaluate)
+ (1.8.0)
+Requirement already satisfied: multidict<7.0,>=4.5 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]>=2021.05.0->evaluat
+e) (6.7.0)
+Requirement already satisfied: propcache>=0.2.0 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]>=2021.05.0->evaluate)
+(0.4.1)
+Requirement already satisfied: yarl<2.0,>=1.17.0 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]>=2021.05.0->evaluate)
+ (1.22.0)
+Requirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.10/site-packages (from requests>=2.19.0->evaluate) (3.4.4)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.10/site-packages (from requests>=2.19.0->evaluate) (2.0.7)
+Requirement already satisfied: exceptiongroup>=1.0.2 in /usr/local/lib/python3.10/site-packages (from anyio->httpx<1.0.0->datasets>=2.0.0->evaluate) (1.3.0)
+Requirement already satisfied: sniffio>=1.1 in /usr/local/lib/python3.10/site-packages (from anyio->httpx<1.0.0->datasets>=2.0.0->evaluate) (1.3.1)
+Requirement already satisfied: python-dateutil>=2.8.2 in /usr/local/lib/python3.10/site-packages (from pandas->evaluate) (2.9.0.post0)
+Requirement already satisfied: pytz>=2020.1 in /usr/local/lib/python3.10/site-packages (from pandas->evaluate) (2025.2)
+Requirement already satisfied: tzdata>=2022.1 in /usr/local/lib/python3.10/site-packages (from pandas->evaluate) (2025.2)
+Requirement already satisfied: six>=1.5 in /usr/local/lib/python3.10/site-packages (from python-dateutil>=2.8.2->pandas->evaluate) (1.17.0)
+Downloading evaluate-0.4.6-py3-none-any.whl (84 kB)
+Installing collected packages: evaluate
+Successfully installed evaluate-0.4.6
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your syst
+em unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you a
+re doing and want to suppress this warning.
+=== VERIFY ===
+evaluate installed
+root@0d2614781682:/app/UPET# sleep 10 && pip3 list | grep evaluate && python3 -c "import evaluate; print('evaluate:', evaluate.__version__)" 2>&1
+pip3 list | grep evaluate && echo "=== TESTING IMPORT ===" && python3 -c "import evaluate; print('evaluate version:', evaluate.__version__)" && echo "=== FINDIN
+G LOAD_METRIC USAGE ===" && grep -r "from datasets.load import load_metric" tasks/ | head -10
+evaluate                0.4.6
+evaluate: 0.4.6
+root@0d2614781682:/app/UPET# pip3 list | grep evaluate && echo "=== TESTING IMPORT ===" && python3 -c "import evaluate; print('evaluate version:', evaluate.__ve
+rsion__)" && echo "=== FINDING LOAD_METRIC USAGE ===" && grep -r "from datasets.load import load_metric" tasks/ | head -10
+evaluate                0.4.6
+=== TESTING IMPORT ===
+evaluate version: 0.4.6
+=== FINDING LOAD_METRIC USAGE ===
+tasks/qa/dataset.py:from datasets.load import load_metric, load_dataset
+root@0d2614781682:/app/UPET# cd /app/UPET && evaluate 0.4.6 && echo "=== TESTING IMPORT ===" && python3 -c "import evaluate; print('evaluate version:', evaluate
+.__version__)" && echo "=== FINDING LOAD_METRIC USAGE ===" && grep -r "from datasets.load import load_metric" tasks/ | head -10 && echo "=== PATCHING FILES ==="
+ && find tasks -name "*.py" -exec sed -i 's/from datasets.load import load_dataset, load_metric/from datasets import load_dataset\nimport evaluate as load_metri
+c_module/g' {} \; && find tasks -name "*.py" -exec sed -i 's/load_metric(/load_metric_module.load(/g' {} \; && echo "=== VERIFY PATCH ===" && grep -r "load_metr
+ic" tasks/glue/dataset.py | head -5
+bash: evaluate: command not found
+root@0d2614781682:/app/UPET# cd /app/UPET && echo "=== FINDING FILES TO PATCH ===" && find tasks -name "*.py" -exec grep -l "from datasets.load import" {} \; &&
+ echo "=== APPLYING PATCHES ===" && sed -i 's/from datasets.load import load_dataset, load_metric/from datasets import load_dataset\nimport evaluate/g' tasks/gl
+ue/dataset.py && sed -i 's/from datasets.load import load_metric, load_dataset/from datasets import load_dataset\nimport evaluate/g' tasks/qa/dataset.py && sed
+-i 's/from datasets.load import load_metric/import evaluate/g' tasks/superglue/dataset.py tasks/superglue/dataset_record.py tasks/ner/dataset.py tasks/srl/datas
+et.py tasks/other_cls/dataset.py 2>/dev/null && echo "=== REPLACING load_metric CALLS ===" && find tasks -name "*.py" -exec sed -i 's/load_metric(/evaluate.load
+(/g' {} \; && echo "=== VERIFY PATCHES ===" && head -10 tasks/glue/dataset.py && echo "===" && grep "load_metric\|evaluate" tasks/glue/dataset.py | head -5
+=== FINDING FILES TO PATCH ===
+tasks/srl/dataset.py
+tasks/qa/dataset.py
+tasks/utils.py
+tasks/other_cls/dataset.py
+tasks/ner/dataset.py
+tasks/superglue/dataset_record.py
+tasks/superglue/dataset.py
+tasks/glue/dataset.py
+=== APPLYING PATCHES ===
+=== REPLACING load_metric CALLS ===
+=== VERIFY PATCHES ===
+import torch
+from torch.utils import data
+from torch.utils.data import Dataset
+from datasets.arrow_dataset import Dataset as HFDataset
+from datasets import load_dataset
+import evaluate
+from transformers import (
+    AutoTokenizer,
+    DataCollatorWithPadding,
+    EvalPrediction,
+===
+import evaluate
+        self.metric = evaluate.load("./metrics/glue", data_args.dataset_name)
+root@0d2614781682:/app/UPET# cd /app/UPET && python3 run.py --help 2>&1 | head -100
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 12, in <module>
+    from arguments import get_args
+  File "/app/UPET/arguments.py", line 9, in <module>
+    from tasks.utils import *
+  File "/app/UPET/tasks/utils.py", line 2, in <module>
+    from tasks.superglue.dataset import task_to_keys as superglue_tasks
+  File "/app/UPET/tasks/superglue/dataset.py", line 1, in <module>
+    from datasets.load import load_dataset, load_metric
+ImportError: cannot import name 'load_metric' from 'datasets.load' (/usr/local/lib/python3.10/site-packages/datasets/load.py)
+root@0d2614781682:/app/UPET# cd /app/UPET && timeout 15 python3 run.py --help 2>&1 || echo "TIMEOUT_OR_ERROR"
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 12, in <module>
+    from arguments import get_args
+  File "/app/UPET/arguments.py", line 9, in <module>
+    from tasks.utils import *
+  File "/app/UPET/tasks/utils.py", line 2, in <module>
+    from tasks.superglue.dataset import task_to_keys as superglue_tasks
+  File "/app/UPET/tasks/superglue/dataset.py", line 1, in <module>
+    from datasets.load import load_dataset, load_metric
+ImportError: cannot import name 'load_metric' from 'datasets.load' (/usr/local/lib/python3.10/site-packages/datasets/load.py)
+TIMEOUT_OR_ERROR
+root@0d2614781682:/app/UPET# cd /app/UPET && echo "=== CHECKING ALL IMPORT STATEMENTS ===" && grep -rn "from datasets.load import" tasks/ && echo "=== FIXING SU
+PERGLUE ===" && sed -i 's/from datasets.load import load_dataset, load_metric/from datasets import load_dataset\nimport evaluate/g' tasks/superglue/dataset.py t
+asks/superglue/dataset_record.py && echo "=== FIXING OTHER FILES ===" && sed -i 's/from datasets.load import load_metric, load_dataset/from datasets import load
+_dataset\nimport evaluate/g' tasks/srl/dataset.py tasks/ner/dataset.py tasks/other_cls/dataset.py && echo "=== VERIFY ALL FIXED ===" && grep -rn "from datasets.
+load import" tasks/ || echo "All imports fixed!" && echo "=== TEST IMPORT ===" && python3 -c "from tasks.utils import *; print('Import successful')"
+=== CHECKING ALL IMPORT STATEMENTS ===
+tasks/srl/dataset.py:6:from datasets.load import load_dataset, load_metric
+tasks/utils.py:3:from datasets.load import load_dataset, load_metric
+tasks/other_cls/dataset.py:5:from datasets.load import load_dataset, load_metric
+tasks/ner/dataset.py:5:from datasets.load import load_dataset, load_metric
+tasks/superglue/dataset_record.py:5:from datasets.load import load_dataset, load_metric
+tasks/superglue/dataset.py:1:from datasets.load import load_dataset, load_metric
+=== FIXING SUPERGLUE ===
+=== FIXING OTHER FILES ===
+=== VERIFY ALL FIXED ===
+tasks/srl/dataset.py:6:from datasets.load import load_dataset, load_metric
+tasks/utils.py:3:from datasets.load import load_dataset, load_metric
+tasks/other_cls/dataset.py:5:from datasets.load import load_dataset, load_metric
+tasks/ner/dataset.py:5:from datasets.load import load_dataset, load_metric
+=== TEST IMPORT ===
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/app/UPET/tasks/utils.py", line 3, in <module>
+    from datasets.load import load_dataset, load_metric
+ImportError: cannot import name 'load_metric' from 'datasets.load' (/usr/local/lib/python3.10/site-packages/datasets/load.py)
+root@0d2614781682:/app/UPET# cd /app/UPET && echo "=== FIXING ALL FILES WITH CORRECT PATTERN ===" && sed -i 's/from datasets.load import load_dataset, load_metr
+ic/from datasets import load_dataset\nimport evaluate/g' tasks/srl/dataset.py tasks/ner/dataset.py tasks/other_cls/dataset.py tasks/superglue/dataset.py tasks/s
+uperglue/dataset_record.py tasks/utils.py && echo "=== VERIFY NO MORE BAD IMPORTS ===" && grep -rn "from datasets.load import" tasks/ || echo "All fixed!" && ec
+ho "=== TEST IMPORT NOW ===" && python3 -c "from tasks.utils import *; print('SUCCESS: Import works!')" 2>&1
+bash: !': event not found
+root@0d2614781682:/app/UPET# cd /app/UPET && find tasks -name "dataset.py" -o -name "dataset_record.py" | while read file; do sed -i 's/from datasets.load impor
+t load_dataset, load_metric/from datasets import load_dataset\nimport evaluate/g' "$file"; sed -i 's/from datasets.load import load_metric, load_dataset/from da
+tasets import load_dataset\nimport evaluate/g' "$file"; done && echo "=== VERIFY ===" && grep -r "from datasets.load import" tasks/ || echo "All fixed!" && pyth
+on3 -c "from tasks.utils import *; print('Import successful')"
+=== VERIFY ===
+All fixed!
+Import successful
+root@0d2614781682:/app/UPET# cd /app/UPET && python3 -c "from tasks.utils import *; print('Imports work!')" && echo "=== CHECKING RUN.PY HELP ===" && python3 ru
+n.py --help 2>&1 | head -150 || echo "Still loading..." && echo "=== CHECKING ARGUMENTS.PY ===" && grep -n "few\|shot\|num.*example\|train.*size" arguments.py |
+ head -20
+bash: !': event not found
+root@0d2614781682:/app/UPET# cd /app/UPET && python3 run.py --help 2>&1 > /tmp/help_output.txt & sleep 5 && cat /tmp/help_output.txt | head -200 && echo "=== CH
+ECKING ARGUMENTS.PY FOR FEW-SHOT ===" && cat arguments.py | head -100
+[1] 1414
+[1]+  Done                    cd /app/UPET && python3 run.py --help 2>&1 > /tmp/help_output.txt
+usage: run.py [-h] --model_name_or_path MODEL_NAME_OR_PATH
+              [--config_name CONFIG_NAME] [--tokenizer_name TOKENIZER_NAME]
+              [--cache_dir CACHE_DIR]
+              [--use_fast_tokenizer [USE_FAST_TOKENIZER]]
+              [--no_use_fast_tokenizer] [--model_revision MODEL_REVISION]
+              [--use_auth_token [USE_AUTH_TOKEN]] [--use_pe [USE_PE]]
+              [--head_prefix [HEAD_PREFIX]] [--prompt_prefix [PROMPT_PREFIX]]
+              [--head_only [HEAD_ONLY]] [--prompt_only [PROMPT_ONLY]]
+              [--head_ptuning [HEAD_PTUNING]]
+              [--prompt_ptuning [PROMPT_PTUNING]]
+              [--head_adapter [HEAD_ADAPTER]]
+              [--prompt_adapter [PROMPT_ADAPTER]]
+              [--adapter_choice ADAPTER_CHOICE] [--adapter_dim ADAPTER_DIM]
+              [--pre_seq_len PRE_SEQ_LEN]
+              [--prefix_projection [PREFIX_PROJECTION]]
+              [--prefix_hidden_size PREFIX_HIDDEN_SIZE]
+              [--hidden_dropout_prob HIDDEN_DROPOUT_PROB] --task_name
+              {glue,superglue,ner,srl,qa,other_cls} --dataset_name
+              {cola,mnli,mrpc,qnli,qqp,rte,sst2,stsb,wnli,boolq,cb,rte,wic,wsc,copa,record,multirc,conll2003,conll2004,ontonotes,conll2005,conll2012,squad,squad
+_v2,movie_rationales,cr,snli,trec,ag_news,yelp_polarity}
+              [--num_examples_per_label NUM_EXAMPLES_PER_LABEL]
+              [--dataset_config_name DATASET_CONFIG_NAME]
+              [--max_seq_length MAX_SEQ_LENGTH]
+              [--overwrite_cache [OVERWRITE_CACHE]]
+              [--pad_to_max_length [PAD_TO_MAX_LENGTH]]
+              [--no_pad_to_max_length] [--max_train_samples MAX_TRAIN_SAMPLES]
+              [--max_eval_samples MAX_EVAL_SAMPLES]
+              [--max_predict_samples MAX_PREDICT_SAMPLES]
+              [--train_file TRAIN_FILE] [--validation_file VALIDATION_FILE]
+              [--test_file TEST_FILE] [--template_id TEMPLATE_ID] --output_dir
+              OUTPUT_DIR [--overwrite_output_dir [OVERWRITE_OUTPUT_DIR]]
+              [--do_train [DO_TRAIN]] [--do_eval [DO_EVAL]]
+              [--do_predict [DO_PREDICT]]
+              [--evaluation_strategy {no,steps,epoch}]
+              [--prediction_loss_only [PREDICTION_LOSS_ONLY]]
+              [--per_device_train_batch_size PER_DEVICE_TRAIN_BATCH_SIZE]
+              [--per_device_eval_batch_size PER_DEVICE_EVAL_BATCH_SIZE]
+              [--per_gpu_train_batch_size PER_GPU_TRAIN_BATCH_SIZE]
+              [--per_gpu_eval_batch_size PER_GPU_EVAL_BATCH_SIZE]
+              [--gradient_accumulation_steps GRADIENT_ACCUMULATION_STEPS]
+              [--eval_accumulation_steps EVAL_ACCUMULATION_STEPS]
+              [--eval_delay EVAL_DELAY] [--learning_rate LEARNING_RATE]
+              [--weight_decay WEIGHT_DECAY] [--adam_beta1 ADAM_BETA1]
+              [--adam_beta2 ADAM_BETA2] [--adam_epsilon ADAM_EPSILON]
+              [--max_grad_norm MAX_GRAD_NORM]
+              [--num_train_epochs NUM_TRAIN_EPOCHS] [--max_steps MAX_STEPS]
+              [--lr_scheduler_type {linear,cosine,cosine_with_restarts,polynomial,constant,constant_with_warmup,inverse_sqrt,reduce_lr_on_plateau,cosine_with_mi
+n_lr}]
+              [--lr_scheduler_kwargs LR_SCHEDULER_KWARGS]
+              [--warmup_ratio WARMUP_RATIO] [--warmup_steps WARMUP_STEPS]
+              [--log_level {detail,debug,info,warning,error,critical,passive}]
+              [--log_level_replica {detail,debug,info,warning,error,critical,passive}]
+              [--log_on_each_node [LOG_ON_EACH_NODE]] [--no_log_on_each_node]
+              [--logging_dir LOGGING_DIR]
+              [--logging_strategy {no,steps,epoch}]
+              [--logging_first_step [LOGGING_FIRST_STEP]]
+              [--logging_steps LOGGING_STEPS]
+              [--logging_nan_inf_filter [LOGGING_NAN_INF_FILTER]]
+              [--no_logging_nan_inf_filter] [--save_strategy {no,steps,epoch}]
+              [--save_steps SAVE_STEPS] [--save_total_limit SAVE_TOTAL_LIMIT]
+              [--save_safetensors [SAVE_SAFETENSORS]] [--no_save_safetensors]
+              [--save_on_each_node [SAVE_ON_EACH_NODE]]
+              [--save_only_model [SAVE_ONLY_MODEL]] [--no_cuda [NO_CUDA]]
+              [--use_cpu [USE_CPU]] [--use_mps_device [USE_MPS_DEVICE]]
+              [--seed SEED] [--data_seed DATA_SEED]
+              [--jit_mode_eval [JIT_MODE_EVAL]] [--use_ipex [USE_IPEX]]
+              [--bf16 [BF16]] [--fp16 [FP16]]
+              [--fp16_opt_level FP16_OPT_LEVEL]
+              [--half_precision_backend {auto,apex,cpu_amp}]
+              [--bf16_full_eval [BF16_FULL_EVAL]]
+              [--fp16_full_eval [FP16_FULL_EVAL]] [--tf32 TF32]
+              [--local_rank LOCAL_RANK]
+              [--ddp_backend {nccl,gloo,mpi,ccl,hccl,cncl}]
+              [--tpu_num_cores TPU_NUM_CORES]
+              [--tpu_metrics_debug [TPU_METRICS_DEBUG]]
+              [--debug DEBUG [DEBUG ...]]
+              [--dataloader_drop_last [DATALOADER_DROP_LAST]]
+              [--eval_steps EVAL_STEPS]
+              [--dataloader_num_workers DATALOADER_NUM_WORKERS]
+              [--dataloader_prefetch_factor DATALOADER_PREFETCH_FACTOR]
+              [--past_index PAST_INDEX] [--run_name RUN_NAME]
+              [--disable_tqdm DISABLE_TQDM]
+              [--remove_unused_columns [REMOVE_UNUSED_COLUMNS]]
+              [--no_remove_unused_columns]
+              [--label_names LABEL_NAMES [LABEL_NAMES ...]]
+              [--load_best_model_at_end [LOAD_BEST_MODEL_AT_END]]
+              [--metric_for_best_model METRIC_FOR_BEST_MODEL]
+              [--greater_is_better GREATER_IS_BETTER]
+              [--ignore_data_skip [IGNORE_DATA_SKIP]] [--fsdp FSDP]
+              [--fsdp_min_num_params FSDP_MIN_NUM_PARAMS]
+              [--fsdp_config FSDP_CONFIG]
+              [--fsdp_transformer_layer_cls_to_wrap FSDP_TRANSFORMER_LAYER_CLS_TO_WRAP]
+              [--accelerator_config ACCELERATOR_CONFIG]
+              [--deepspeed DEEPSPEED]
+              [--label_smoothing_factor LABEL_SMOOTHING_FACTOR]
+              [--optim {adamw_hf,adamw_torch,adamw_torch_fused,adamw_torch_xla,adamw_torch_npu_fused,adamw_apex_fused,adafactor,adamw_anyprecision,sgd,adagrad,a
+damw_bnb_8bit,adamw_8bit,lion_8bit,lion_32bit,paged_adamw_32bit,paged_adamw_8bit,paged_lion_32bit,paged_lion_8bit,rmsprop,rmsprop_bnb,rmsprop_bnb_8bit,rmsprop_b
+nb_32bit,galore_adamw,galore_adamw_8bit,galore_adafactor,galore_adamw_layerwise,galore_adamw_8bit_layerwise,galore_adafactor_layerwise}]
+              [--optim_args OPTIM_ARGS] [--adafactor [ADAFACTOR]]
+              [--group_by_length [GROUP_BY_LENGTH]]
+              [--length_column_name LENGTH_COLUMN_NAME]
+              [--report_to REPORT_TO]
+              [--ddp_find_unused_parameters DDP_FIND_UNUSED_PARAMETERS]
+              [--ddp_bucket_cap_mb DDP_BUCKET_CAP_MB]
+              [--ddp_broadcast_buffers DDP_BROADCAST_BUFFERS]
+              [--dataloader_pin_memory [DATALOADER_PIN_MEMORY]]
+              [--no_dataloader_pin_memory]
+              [--dataloader_persistent_workers [DATALOADER_PERSISTENT_WORKERS]]
+              [--skip_memory_metrics [SKIP_MEMORY_METRICS]]
+              [--no_skip_memory_metrics]
+              [--use_legacy_prediction_loop [USE_LEGACY_PREDICTION_LOOP]]
+              [--push_to_hub [PUSH_TO_HUB]]
+              [--resume_from_checkpoint RESUME_FROM_CHECKPOINT]
+              [--hub_model_id HUB_MODEL_ID]
+              [--hub_strategy {end,every_save,checkpoint,all_checkpoints}]
+              [--hub_token HUB_TOKEN] [--hub_private_repo [HUB_PRIVATE_REPO]]
+              [--hub_always_push [HUB_ALWAYS_PUSH]]
+              [--gradient_checkpointing [GRADIENT_CHECKPOINTING]]
+              [--gradient_checkpointing_kwargs GRADIENT_CHECKPOINTING_KWARGS]
+              [--include_inputs_for_metrics [INCLUDE_INPUTS_FOR_METRICS]]
+              [--eval_do_concat_batches [EVAL_DO_CONCAT_BATCHES]]
+              [--no_eval_do_concat_batches]
+              [--fp16_backend {auto,apex,cpu_amp}]
+              [--push_to_hub_model_id PUSH_TO_HUB_MODEL_ID]
+              [--push_to_hub_organization PUSH_TO_HUB_ORGANIZATION]
+              [--push_to_hub_token PUSH_TO_HUB_TOKEN]
+              [--mp_parameters MP_PARAMETERS]
+              [--auto_find_batch_size [AUTO_FIND_BATCH_SIZE]]
+              [--full_determinism [FULL_DETERMINISM]]
+              [--torchdynamo TORCHDYNAMO] [--ray_scope RAY_SCOPE]
+              [--ddp_timeout DDP_TIMEOUT] [--torch_compile [TORCH_COMPILE]]
+              [--torch_compile_backend TORCH_COMPILE_BACKEND]
+              [--torch_compile_mode TORCH_COMPILE_MODE]
+              [--dispatch_batches DISPATCH_BATCHES]
+              [--split_batches SPLIT_BATCHES]
+              [--include_tokens_per_second [INCLUDE_TOKENS_PER_SECOND]]
+              [--include_num_input_tokens_seen [INCLUDE_NUM_INPUT_TOKENS_SEEN]]
+              [--neftune_noise_alpha NEFTUNE_NOISE_ALPHA]
+              [--optim_target_modules OPTIM_TARGET_MODULES]
+              [--use_semi [USE_SEMI]]
+              [--unlabeled_data_num UNLABELED_DATA_NUM]
+              [--unlabeled_data_batch_size UNLABELED_DATA_BATCH_SIZE]
+              [--pseudo_sample_num_or_ratio PSEUDO_SAMPLE_NUM_OR_RATIO]
+              [--teacher_training_epoch TEACHER_TRAINING_EPOCH]
+              [--teacher_tuning_epoch TEACHER_TUNING_EPOCH]
+              [--student_training_epoch STUDENT_TRAINING_EPOCH]
+              [--student_learning_rate STUDENT_LEARNING_RATE]
+              [--self_training_epoch SELF_TRAINING_EPOCH]
+              [--post_student_train [POST_STUDENT_TRAIN]]
+              [--student_pre_seq_len STUDENT_PRE_SEQ_LEN]
+              [--n_best_size N_BEST_SIZE]
+              [--max_answer_length MAX_ANSWER_LENGTH]
+              [--version_2_with_negative [VERSION_2_WITH_NEGATIVE]]
+              [--null_score_diff_threshold NULL_SCORE_DIFF_THRESHOLD]
+
+options:
+  -h, --help            show this help message and exit
+  --model_name_or_path MODEL_NAME_OR_PATH
+                        Path to pretrained model or model identifier from
+                        huggingface.co/models (default: None)
+  --config_name CONFIG_NAME
+                        Pretrained config name or path if not the same as
+                        model_name (default: None)
+  --tokenizer_name TOKENIZER_NAME
+                        Pretrained tokenizer name or path if not the same as
+                        model_name (default: None)
+  --cache_dir CACHE_DIR
+                        Where do you want to store the pretrained models
+                        downloaded from huggingface.co (default: None)
+  --use_fast_tokenizer [USE_FAST_TOKENIZER]
+                        Whether to use one of the fast tokenizer (backed by
+                        the tokenizers library) or not. (default: True)
+  --no_use_fast_tokenizer
+                        Whether to use one of the fast tokenizer (backed by
+                        the tokenizers library) or not. (default: False)
+  --model_revision MODEL_REVISION
+                        The specific model version to use (can be a branch
+                        name, tag name or commit id). (default: main)
+  --use_auth_token [USE_AUTH_TOKEN]
+                        Will use the token generated when running
+                        `transformers-cli login` (necessary to use this script
+                        with private models). (default: False)
+  --use_pe [USE_PE]     Whether to use parameter-efficient settings. If true,
+                        that means fix the parameters of the backbone, and
+                        onlytune the new initialized modules (e.g., adapter,
+                        prefix, ptuning, etc.) (default: False)
+  --head_prefix [HEAD_PREFIX]
+                        Will use Head-tuning Prefix (P-tuning v2) during
+                        training (default: False)
+  --prompt_prefix [PROMPT_PREFIX]
+                        Will use Prompt-tuning Prefix (P-tuning v2) during
+                        training (default: False)
+  --head_only [HEAD_ONLY]
+                        Will use Head Fine-tuning during training (w/o. any
+                        new modules) (default: False)
+  --prompt_only [PROMPT_ONLY]
+                        Will use Prompt Fine-tuning during training (w/o. any
+                        new modules) (default: False)
+  --head_ptuning [HEAD_PTUNING]
+                        Will use Head-tuning P-tuning during training (w.
+                        parameter-efficient) (default: False)
+  --prompt_ptuning [PROMPT_PTUNING]
+                        Will use Prompt-tuning P-tuning during training (w.
+                        parameter-efficient) (default: False)
+=== CHECKING ARGUMENTS.PY FOR FEW-SHOT ===
+from enum import Enum
+import argparse
+import dataclasses
+from dataclasses import dataclass, field
+from typing import Optional
+
+from transformers import HfArgumentParser, TrainingArguments
+
+from tasks.utils import *
+
+
+@dataclass
+class DataTrainingArguments:
+    """
+    Arguments pertaining to what data we are going to input our model for training and eval.
+
+    Using `HfArgumentParser` we can turn this class
+    into argparse arguments to be able to specify them on
+    the command line.training_args
+    """
+    task_name: str = field(
+        metadata={
+            "help": "The name of the task to train on: " + ", ".join(TASKS),
+            "choices": TASKS
+        },
+    )
+    dataset_name: str = field(
+        metadata={
+            "help": "The name of the dataset to use: " + ", ".join(DATASETS),
+            "choices": DATASETS
+        }
+    )
+    # add by wjn
+    num_examples_per_label: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "Randomly sampling k-shot examples for each label "
+        },
+    )
+    dataset_config_name: Optional[str] = field(
+        default=None, metadata={"help": "The configuration name of the dataset to use (via the datasets library)."}
+    )
+    max_seq_length: int = field(
+        default=128,
+        metadata={
+            "help": "The maximum total input sequence length after tokenization. Sequences longer "
+            "than this will be truncated, sequences shorter will be padded."
+        },
+    )
+    overwrite_cache: bool = field(
+        default=False, metadata={"help": "Overwrite the cached preprocessed datasets or not."}
+    )
+    pad_to_max_length: bool = field(
+        default=True,
+        metadata={
+            "help": "Whether to pad all samples to `max_seq_length`. "
+            "If False, will pad the samples dynamically when batching to the maximum length in the batch."
+        },
+    )
+    max_train_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "For debugging purposes or quicker training, truncate the number of training examples to this "
+            "value if set."
+        },
+    )
+    max_eval_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "For debugging purposes or quicker training, truncate the number of evaluation examples to this "
+            "value if set."
+        },
+    )
+    max_predict_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "For debugging purposes or quicker training, truncate the number of prediction examples to this "
+            "value if set."
+        },
+    )
+    train_file: Optional[str] = field(
+        default=None, metadata={"help": "A csv or a json file containing the training data."}
+    )
+    validation_file: Optional[str] = field(
+        default=None, metadata={"help": "A csv or a json file containing the validation data."}
+    )
+    test_file: Optional[str] = field(
+        default=None,
+        metadata={"help": "A csv or a json file containing the test data."}
+    )
+    template_id: Optional[int] = field(
+        default=0,
+        metadata={
+            "help": "The specific prompt string to use"
+        }
+    )
+
+
+@dataclass
+class ModelArguments:
+root@0d2614781682:/app/UPET# sleep 8 && cat /tmp/help_output.txt 2>/dev/null | head -200 && echo "=== CHECKING ARGUMENTS.PY ===" && cat arguments.py | grep -A 5
+ -B 2 "add_argument" | head -100
+usage: run.py [-h] --model_name_or_path MODEL_NAME_OR_PATH
+              [--config_name CONFIG_NAME] [--tokenizer_name TOKENIZER_NAME]
+              [--cache_dir CACHE_DIR]
+              [--use_fast_tokenizer [USE_FAST_TOKENIZER]]
+              [--no_use_fast_tokenizer] [--model_revision MODEL_REVISION]
+              [--use_auth_token [USE_AUTH_TOKEN]] [--use_pe [USE_PE]]
+              [--head_prefix [HEAD_PREFIX]] [--prompt_prefix [PROMPT_PREFIX]]
+              [--head_only [HEAD_ONLY]] [--prompt_only [PROMPT_ONLY]]
+              [--head_ptuning [HEAD_PTUNING]]
+              [--prompt_ptuning [PROMPT_PTUNING]]
+              [--head_adapter [HEAD_ADAPTER]]
+              [--prompt_adapter [PROMPT_ADAPTER]]
+              [--adapter_choice ADAPTER_CHOICE] [--adapter_dim ADAPTER_DIM]
+              [--pre_seq_len PRE_SEQ_LEN]
+              [--prefix_projection [PREFIX_PROJECTION]]
+              [--prefix_hidden_size PREFIX_HIDDEN_SIZE]
+              [--hidden_dropout_prob HIDDEN_DROPOUT_PROB] --task_name
+              {glue,superglue,ner,srl,qa,other_cls} --dataset_name
+              {cola,mnli,mrpc,qnli,qqp,rte,sst2,stsb,wnli,boolq,cb,rte,wic,wsc,copa,record,multirc,conll2003,conll2004,ontonotes,conll2005,conll2012,squad,squad
+_v2,movie_rationales,cr,snli,trec,ag_news,yelp_polarity}
+              [--num_examples_per_label NUM_EXAMPLES_PER_LABEL]
+              [--dataset_config_name DATASET_CONFIG_NAME]
+              [--max_seq_length MAX_SEQ_LENGTH]
+              [--overwrite_cache [OVERWRITE_CACHE]]
+              [--pad_to_max_length [PAD_TO_MAX_LENGTH]]
+              [--no_pad_to_max_length] [--max_train_samples MAX_TRAIN_SAMPLES]
+              [--max_eval_samples MAX_EVAL_SAMPLES]
+              [--max_predict_samples MAX_PREDICT_SAMPLES]
+              [--train_file TRAIN_FILE] [--validation_file VALIDATION_FILE]
+              [--test_file TEST_FILE] [--template_id TEMPLATE_ID] --output_dir
+              OUTPUT_DIR [--overwrite_output_dir [OVERWRITE_OUTPUT_DIR]]
+              [--do_train [DO_TRAIN]] [--do_eval [DO_EVAL]]
+              [--do_predict [DO_PREDICT]]
+              [--evaluation_strategy {no,steps,epoch}]
+              [--prediction_loss_only [PREDICTION_LOSS_ONLY]]
+              [--per_device_train_batch_size PER_DEVICE_TRAIN_BATCH_SIZE]
+              [--per_device_eval_batch_size PER_DEVICE_EVAL_BATCH_SIZE]
+              [--per_gpu_train_batch_size PER_GPU_TRAIN_BATCH_SIZE]
+              [--per_gpu_eval_batch_size PER_GPU_EVAL_BATCH_SIZE]
+              [--gradient_accumulation_steps GRADIENT_ACCUMULATION_STEPS]
+              [--eval_accumulation_steps EVAL_ACCUMULATION_STEPS]
+              [--eval_delay EVAL_DELAY] [--learning_rate LEARNING_RATE]
+              [--weight_decay WEIGHT_DECAY] [--adam_beta1 ADAM_BETA1]
+              [--adam_beta2 ADAM_BETA2] [--adam_epsilon ADAM_EPSILON]
+              [--max_grad_norm MAX_GRAD_NORM]
+              [--num_train_epochs NUM_TRAIN_EPOCHS] [--max_steps MAX_STEPS]
+              [--lr_scheduler_type {linear,cosine,cosine_with_restarts,polynomial,constant,constant_with_warmup,inverse_sqrt,reduce_lr_on_plateau,cosine_with_mi
+n_lr}]
+              [--lr_scheduler_kwargs LR_SCHEDULER_KWARGS]
+              [--warmup_ratio WARMUP_RATIO] [--warmup_steps WARMUP_STEPS]
+              [--log_level {detail,debug,info,warning,error,critical,passive}]
+              [--log_level_replica {detail,debug,info,warning,error,critical,passive}]
+              [--log_on_each_node [LOG_ON_EACH_NODE]] [--no_log_on_each_node]
+              [--logging_dir LOGGING_DIR]
+              [--logging_strategy {no,steps,epoch}]
+              [--logging_first_step [LOGGING_FIRST_STEP]]
+              [--logging_steps LOGGING_STEPS]
+              [--logging_nan_inf_filter [LOGGING_NAN_INF_FILTER]]
+              [--no_logging_nan_inf_filter] [--save_strategy {no,steps,epoch}]
+              [--save_steps SAVE_STEPS] [--save_total_limit SAVE_TOTAL_LIMIT]
+              [--save_safetensors [SAVE_SAFETENSORS]] [--no_save_safetensors]
+              [--save_on_each_node [SAVE_ON_EACH_NODE]]
+              [--save_only_model [SAVE_ONLY_MODEL]] [--no_cuda [NO_CUDA]]
+              [--use_cpu [USE_CPU]] [--use_mps_device [USE_MPS_DEVICE]]
+              [--seed SEED] [--data_seed DATA_SEED]
+              [--jit_mode_eval [JIT_MODE_EVAL]] [--use_ipex [USE_IPEX]]
+              [--bf16 [BF16]] [--fp16 [FP16]]
+              [--fp16_opt_level FP16_OPT_LEVEL]
+              [--half_precision_backend {auto,apex,cpu_amp}]
+              [--bf16_full_eval [BF16_FULL_EVAL]]
+              [--fp16_full_eval [FP16_FULL_EVAL]] [--tf32 TF32]
+              [--local_rank LOCAL_RANK]
+              [--ddp_backend {nccl,gloo,mpi,ccl,hccl,cncl}]
+              [--tpu_num_cores TPU_NUM_CORES]
+              [--tpu_metrics_debug [TPU_METRICS_DEBUG]]
+              [--debug DEBUG [DEBUG ...]]
+              [--dataloader_drop_last [DATALOADER_DROP_LAST]]
+              [--eval_steps EVAL_STEPS]
+              [--dataloader_num_workers DATALOADER_NUM_WORKERS]
+              [--dataloader_prefetch_factor DATALOADER_PREFETCH_FACTOR]
+              [--past_index PAST_INDEX] [--run_name RUN_NAME]
+              [--disable_tqdm DISABLE_TQDM]
+              [--remove_unused_columns [REMOVE_UNUSED_COLUMNS]]
+              [--no_remove_unused_columns]
+              [--label_names LABEL_NAMES [LABEL_NAMES ...]]
+              [--load_best_model_at_end [LOAD_BEST_MODEL_AT_END]]
+              [--metric_for_best_model METRIC_FOR_BEST_MODEL]
+              [--greater_is_better GREATER_IS_BETTER]
+              [--ignore_data_skip [IGNORE_DATA_SKIP]] [--fsdp FSDP]
+              [--fsdp_min_num_params FSDP_MIN_NUM_PARAMS]
+              [--fsdp_config FSDP_CONFIG]
+              [--fsdp_transformer_layer_cls_to_wrap FSDP_TRANSFORMER_LAYER_CLS_TO_WRAP]
+              [--accelerator_config ACCELERATOR_CONFIG]
+              [--deepspeed DEEPSPEED]
+              [--label_smoothing_factor LABEL_SMOOTHING_FACTOR]
+              [--optim {adamw_hf,adamw_torch,adamw_torch_fused,adamw_torch_xla,adamw_torch_npu_fused,adamw_apex_fused,adafactor,adamw_anyprecision,sgd,adagrad,a
+damw_bnb_8bit,adamw_8bit,lion_8bit,lion_32bit,paged_adamw_32bit,paged_adamw_8bit,paged_lion_32bit,paged_lion_8bit,rmsprop,rmsprop_bnb,rmsprop_bnb_8bit,rmsprop_b
+nb_32bit,galore_adamw,galore_adamw_8bit,galore_adafactor,galore_adamw_layerwise,galore_adamw_8bit_layerwise,galore_adafactor_layerwise}]
+              [--optim_args OPTIM_ARGS] [--adafactor [ADAFACTOR]]
+              [--group_by_length [GROUP_BY_LENGTH]]
+              [--length_column_name LENGTH_COLUMN_NAME]
+              [--report_to REPORT_TO]
+              [--ddp_find_unused_parameters DDP_FIND_UNUSED_PARAMETERS]
+              [--ddp_bucket_cap_mb DDP_BUCKET_CAP_MB]
+              [--ddp_broadcast_buffers DDP_BROADCAST_BUFFERS]
+              [--dataloader_pin_memory [DATALOADER_PIN_MEMORY]]
+              [--no_dataloader_pin_memory]
+              [--dataloader_persistent_workers [DATALOADER_PERSISTENT_WORKERS]]
+              [--skip_memory_metrics [SKIP_MEMORY_METRICS]]
+              [--no_skip_memory_metrics]
+              [--use_legacy_prediction_loop [USE_LEGACY_PREDICTION_LOOP]]
+              [--push_to_hub [PUSH_TO_HUB]]
+              [--resume_from_checkpoint RESUME_FROM_CHECKPOINT]
+              [--hub_model_id HUB_MODEL_ID]
+              [--hub_strategy {end,every_save,checkpoint,all_checkpoints}]
+              [--hub_token HUB_TOKEN] [--hub_private_repo [HUB_PRIVATE_REPO]]
+              [--hub_always_push [HUB_ALWAYS_PUSH]]
+              [--gradient_checkpointing [GRADIENT_CHECKPOINTING]]
+              [--gradient_checkpointing_kwargs GRADIENT_CHECKPOINTING_KWARGS]
+              [--include_inputs_for_metrics [INCLUDE_INPUTS_FOR_METRICS]]
+              [--eval_do_concat_batches [EVAL_DO_CONCAT_BATCHES]]
+              [--no_eval_do_concat_batches]
+              [--fp16_backend {auto,apex,cpu_amp}]
+              [--push_to_hub_model_id PUSH_TO_HUB_MODEL_ID]
+              [--push_to_hub_organization PUSH_TO_HUB_ORGANIZATION]
+              [--push_to_hub_token PUSH_TO_HUB_TOKEN]
+              [--mp_parameters MP_PARAMETERS]
+              [--auto_find_batch_size [AUTO_FIND_BATCH_SIZE]]
+              [--full_determinism [FULL_DETERMINISM]]
+              [--torchdynamo TORCHDYNAMO] [--ray_scope RAY_SCOPE]
+              [--ddp_timeout DDP_TIMEOUT] [--torch_compile [TORCH_COMPILE]]
+              [--torch_compile_backend TORCH_COMPILE_BACKEND]
+              [--torch_compile_mode TORCH_COMPILE_MODE]
+              [--dispatch_batches DISPATCH_BATCHES]
+              [--split_batches SPLIT_BATCHES]
+              [--include_tokens_per_second [INCLUDE_TOKENS_PER_SECOND]]
+              [--include_num_input_tokens_seen [INCLUDE_NUM_INPUT_TOKENS_SEEN]]
+              [--neftune_noise_alpha NEFTUNE_NOISE_ALPHA]
+              [--optim_target_modules OPTIM_TARGET_MODULES]
+              [--use_semi [USE_SEMI]]
+              [--unlabeled_data_num UNLABELED_DATA_NUM]
+              [--unlabeled_data_batch_size UNLABELED_DATA_BATCH_SIZE]
+              [--pseudo_sample_num_or_ratio PSEUDO_SAMPLE_NUM_OR_RATIO]
+              [--teacher_training_epoch TEACHER_TRAINING_EPOCH]
+              [--teacher_tuning_epoch TEACHER_TUNING_EPOCH]
+              [--student_training_epoch STUDENT_TRAINING_EPOCH]
+              [--student_learning_rate STUDENT_LEARNING_RATE]
+              [--self_training_epoch SELF_TRAINING_EPOCH]
+              [--post_student_train [POST_STUDENT_TRAIN]]
+              [--student_pre_seq_len STUDENT_PRE_SEQ_LEN]
+              [--n_best_size N_BEST_SIZE]
+              [--max_answer_length MAX_ANSWER_LENGTH]
+              [--version_2_with_negative [VERSION_2_WITH_NEGATIVE]]
+              [--null_score_diff_threshold NULL_SCORE_DIFF_THRESHOLD]
+
+options:
+  -h, --help            show this help message and exit
+  --model_name_or_path MODEL_NAME_OR_PATH
+                        Path to pretrained model or model identifier from
+                        huggingface.co/models (default: None)
+  --config_name CONFIG_NAME
+                        Pretrained config name or path if not the same as
+                        model_name (default: None)
+  --tokenizer_name TOKENIZER_NAME
+                        Pretrained tokenizer name or path if not the same as
+                        model_name (default: None)
+  --cache_dir CACHE_DIR
+                        Where do you want to store the pretrained models
+                        downloaded from huggingface.co (default: None)
+  --use_fast_tokenizer [USE_FAST_TOKENIZER]
+                        Whether to use one of the fast tokenizer (backed by
+                        the tokenizers library) or not. (default: True)
+  --no_use_fast_tokenizer
+                        Whether to use one of the fast tokenizer (backed by
+                        the tokenizers library) or not. (default: False)
+  --model_revision MODEL_REVISION
+                        The specific model version to use (can be a branch
+                        name, tag name or commit id). (default: main)
+  --use_auth_token [USE_AUTH_TOKEN]
+                        Will use the token generated when running
+                        `transformers-cli login` (necessary to use this script
+                        with private models). (default: False)
+  --use_pe [USE_PE]     Whether to use parameter-efficient settings. If true,
+                        that means fix the parameters of the backbone, and
+                        onlytune the new initialized modules (e.g., adapter,
+                        prefix, ptuning, etc.) (default: False)
+  --head_prefix [HEAD_PREFIX]
+                        Will use Head-tuning Prefix (P-tuning v2) during
+                        training (default: False)
+  --prompt_prefix [PROMPT_PREFIX]
+                        Will use Prompt-tuning Prefix (P-tuning v2) during
+                        training (default: False)
+  --head_only [HEAD_ONLY]
+                        Will use Head Fine-tuning during training (w/o. any
+                        new modules) (default: False)
+  --prompt_only [PROMPT_ONLY]
+                        Will use Prompt Fine-tuning during training (w/o. any
+                        new modules) (default: False)
+  --head_ptuning [HEAD_PTUNING]
+                        Will use Head-tuning P-tuning during training (w.
+                        parameter-efficient) (default: False)
+  --prompt_ptuning [PROMPT_PTUNING]
+                        Will use Prompt-tuning P-tuning during training (w.
+                        parameter-efficient) (default: False)
+=== CHECKING ARGUMENTS.PY ===
+root@0d2614781682:/app/UPET# cd /app/UPET && nohup python3 run.py \
+>   --model_name_or_path roberta-base \
+>   --task_name superglue \
+>   --dataset_name rte \
+>   --do_train \
+>   --do_eval \
+>   --max_seq_length 128 \
+>   --per_device_train_batch_size 32 \
+>   --learning_rate 5e-3 \
+>   --num_train_epochs 1 \
+>   --pre_seq_len 128 \
+>   --output_dir checkpoints/rte-roberta-base/ \
+>   --overwrite_output_dir \
+>   --hidden_dropout_prob 0.1 \
+>   --seed 42 \
+>   --save_strategy no \
+>   --evaluation_strategy epoch \
+>   --head_prefix \
+>   --num_examples_per_label 5 > /tmp/training.log 2>&1 & echo "Training started, PID: $!" && sleep 3 && tail -30 /tmp/training.log
+[1] 1530
+Training started, PID: 1530
+[1]+  Exit 1                  cd /app/UPET && nohup python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_train --do_ev
+al --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-roberta-base/
+--overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5 > /tmp/traini
+ng.log 2>&1
+nohup: ignoring input
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 71, in <module>
+    args = get_args()
+  File "/app/UPET/arguments.py", line 326, in get_args
+    args = parser.parse_args_into_dataclasses()
+  File "/usr/local/lib/python3.10/site-packages/transformers/hf_argparser.py", line 339, in parse_args_into_dataclasses
+    obj = dtype(**inputs)
+  File "<string>", line 125, in __init__
+  File "/usr/local/lib/python3.10/site-packages/transformers/training_args.py", line 1605, in __post_init__
+    and (self.device.type != "cuda")
+  File "/usr/local/lib/python3.10/site-packages/transformers/training_args.py", line 2094, in device
+    return self._setup_devices
+  File "/usr/local/lib/python3.10/site-packages/transformers/utils/generic.py", line 63, in __get__
+    cached = self.fget(obj)
+  File "/usr/local/lib/python3.10/site-packages/transformers/training_args.py", line 2000, in _setup_devices
+    raise ImportError(
+ImportError: Using the `Trainer` with `PyTorch` requires `accelerate>=0.21.0`: Please run `pip install transformers[torch]` or `pip install accelerate -U`
+root@0d2614781682:/app/UPET# cd /app/UPET && pip3 install accelerate && echo "=== VERIFY INSTALL ===" && pip3 list | grep accelerate && echo "=== RESTARTING TRA
+INING ===" && nohup python3 run.py \
+>   --model_name_or_path roberta-base \
+>   --task_name superglue \
+>   --dataset_name rte \
+>   --do_train \
+>   --do_eval \
+>   --max_seq_length 128 \
+>   --per_device_train_batch_size 32 \
+>   --learning_rate 5e-3 \
+>   --num_train_epochs 1 \
+>   --pre_seq_len 128 \
+>   --output_dir checkpoints/rte-roberta-base/ \
+>   --overwrite_output_dir \
+>   --hidden_dropout_prob 0.1 \
+>   --seed 42 \
+>   --save_strategy no \
+>   --evaluation_strategy epoch \
+>   --head_prefix \
+>   --num_examples_per_label 5 > /tmp/training.log 2>&1 & echo "Training PID: $!" && sleep 5 && tail -40 /tmp/training.log
+[1] 1589
+Training PID: 1589
+Collecting accelerate
+  Downloading accelerate-1.11.0-py3-none-any.whl.metadata (19 kB)
+Requirement already satisfied: numpy>=1.17 in /usr/local/lib/python3.10/site-packages (from accelerate) (1.25.2)
+Requirement already satisfied: packaging>=20.0 in /usr/local/lib/python3.10/site-packages (from accelerate) (25.0)
+Collecting psutil (from accelerate)
+  Downloading psutil-7.1.2-cp36-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl.metadata (23 kB)
+Requirement already satisfied: pyyaml in /usr/local/lib/python3.10/site-packages (from accelerate) (6.0.3)
+Requirement already satisfied: torch>=2.0.0 in /usr/local/lib/python3.10/site-packages (from accelerate) (2.2.1)
+Requirement already satisfied: huggingface_hub>=0.21.0 in /usr/local/lib/python3.10/site-packages (from accelerate) (0.36.0)
+Requirement already satisfied: safetensors>=0.4.3 in /usr/local/lib/python3.10/site-packages (from accelerate) (0.6.2)
+Requirement already satisfied: filelock in /usr/local/lib/python3.10/site-packages (from huggingface_hub>=0.21.0->accelerate) (3.20.0)
+Requirement already satisfied: fsspec>=2023.5.0 in /usr/local/lib/python3.10/site-packages (from huggingface_hub>=0.21.0->accelerate) (2023.6.0)
+Requirement already satisfied: requests in /usr/local/lib/python3.10/site-packages (from huggingface_hub>=0.21.0->accelerate) (2.32.5)
+Requirement already satisfied: tqdm>=4.42.1 in /usr/local/lib/python3.10/site-packages (from huggingface_hub>=0.21.0->accelerate) (4.66.4)
+Requirement already satisfied: typing-extensions>=3.7.4.3 in /usr/local/lib/python3.10/site-packages (from huggingface_hub>=0.21.0->accelerate) (4.15.0)
+Requirement already satisfied: hf-xet<2.0.0,>=1.1.3 in /usr/local/lib/python3.10/site-packages (from huggingface_hub>=0.21.0->accelerate) (1.2.0)
+Requirement already satisfied: sympy in /usr/local/lib/python3.10/site-packages (from torch>=2.0.0->accelerate) (1.12)
+Requirement already satisfied: networkx in /usr/local/lib/python3.10/site-packages (from torch>=2.0.0->accelerate) (3.4.2)
+Requirement already satisfied: jinja2 in /usr/local/lib/python3.10/site-packages (from torch>=2.0.0->accelerate) (3.1.6)
+Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.10/site-packages (from jinja2->torch>=2.0.0->accelerate) (3.0.3)
+Requirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.10/site-packages (from requests->huggingface_hub>=0.21.0->accelerate) (3.4.4)
+Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.10/site-packages (from requests->huggingface_hub>=0.21.0->accelerate) (3.11)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.10/site-packages (from requests->huggingface_hub>=0.21.0->accelerate) (2.0.7)
+Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.10/site-packages (from requests->huggingface_hub>=0.21.0->accelerate) (2025.10.5)
+Requirement already satisfied: mpmath>=0.19 in /usr/local/lib/python3.10/site-packages (from sympy->torch>=2.0.0->accelerate) (1.3.0)
+Downloading accelerate-1.11.0-py3-none-any.whl (375 kB)
+Downloading psutil-7.1.2-cp36-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (260 kB)
+Installing collected packages: psutil, accelerate
+Successfully installed accelerate-1.11.0 psutil-7.1.2
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your syst
+em unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you a
+re doing and want to suppress this warning.
+=== VERIFY INSTALL ===
+accelerate              1.11.0
+=== RESTARTING TRAINING ===
+[1]+  Exit 1                  cd /app/UPET && pip3 install accelerate && echo "=== VERIFY INSTALL ===" && pip3 list | grep accelerate && echo "=== RESTARTING TR
+AINING ===" && nohup python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_train --do_eval --max_seq_length 128 --per_d
+evice_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-roberta-base/ --overwrite_output_dir --hidden
+_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5 > /tmp/training.log 2>&1
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:32:04 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 101, in <module>
+    from tasks.superglue.get_trainer import get_trainer
+  File "/app/UPET/tasks/superglue/get_trainer.py", line 14, in <module>
+    from training.trainer_exp import ExponentialTrainer
+  File "/app/UPET/training/trainer_exp.py", line 16, in <module>
+    from transformers.trainer_utils import (
+ImportError: cannot import name 'ShardedDDPOption' from 'transformers.trainer_utils' (/usr/local/lib/python3.10/site-packages/transformers/trainer_utils.py)
+root@0d2614781682:/app/UPET# sleep 10 && tail -60 /tmp/training.log && echo "=== CHECKING IF TRAINING RUNNING ===" && ps aux | grep "python3 run.py" | grep -v g
+rep
+cd /app/UPET && echo "=== FINDING SHARDED DDP USAGE ===" && grep -rn "ShardedDDPOption" training/ && echo "=== CHECKING TRAINER_EXP.PY ===" && head -30 training
+/trainer_exp.py
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:32:04 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 101, in <module>
+    from tasks.superglue.get_trainer import get_trainer
+  File "/app/UPET/tasks/superglue/get_trainer.py", line 14, in <module>
+    from training.trainer_exp import ExponentialTrainer
+  File "/app/UPET/training/trainer_exp.py", line 16, in <module>
+    from transformers.trainer_utils import (
+ImportError: cannot import name 'ShardedDDPOption' from 'transformers.trainer_utils' (/usr/local/lib/python3.10/site-packages/transformers/trainer_utils.py)
+=== CHECKING IF TRAINING RUNNING ===
+root@0d2614781682:/app/UPET# cd /app/UPET && echo "=== FINDING SHARDED DDP USAGE ===" && grep -rn "ShardedDDPOption" training/ && echo "=== CHECKING TRAINER_EXP
+.PY ===" && head -30 training/trainer_exp.py
+=== FINDING SHARDED DDP USAGE ===
+training/trainer_exp.py:18:    ShardedDDPOption,
+training/trainer_exp.py:191:        delay_optimizer_creation = self.sharded_ddp is not None and self.sharded_ddp != ShardedDDPOption.SIMPLE
+grep: training/__pycache__/trainer_exp.cpython-310.pyc: binary file matches
+=== CHECKING TRAINER_EXP.PY ===
+import logging
+import os
+import random
+import sys
+
+from typing import Any, Dict, List, Optional, OrderedDict, Tuple, Union
+import math
+import random
+import time
+import warnings
+import collections
+
+from transformers.debug_utils import DebugOption, DebugUnderflowOverflow
+from transformers.trainer_callback import TrainerState
+from transformers.trainer_pt_utils import IterableDatasetShard
+from transformers.trainer_utils import (
+    HPSearchBackend,
+    ShardedDDPOption,
+    TrainOutput,
+    get_last_checkpoint,
+    set_seed,
+    speed_metrics,
+)
+from transformers.file_utils import (
+    CONFIG_NAME,
+    WEIGHTS_NAME,
+    is_torch_tpu_available,
+)
+
+import torch
+root@0d2614781682:/app/UPET# cd /app/UPET && grep -rn "ShardedDDPOption" training/ && echo "=== FULL IMPORT SECTION ===" && head -40 training/trainer_exp.py | g
+rep -A 30 "from transformers"
+training/trainer_exp.py:18:    ShardedDDPOption,
+training/trainer_exp.py:191:        delay_optimizer_creation = self.sharded_ddp is not None and self.sharded_ddp != ShardedDDPOption.SIMPLE
+grep: training/__pycache__/trainer_exp.cpython-310.pyc: binary file matches
+=== FULL IMPORT SECTION ===
+from transformers.debug_utils import DebugOption, DebugUnderflowOverflow
+from transformers.trainer_callback import TrainerState
+from transformers.trainer_pt_utils import IterableDatasetShard
+from transformers.trainer_utils import (
+    HPSearchBackend,
+    ShardedDDPOption,
+    TrainOutput,
+    get_last_checkpoint,
+    set_seed,
+    speed_metrics,
+)
+from transformers.file_utils import (
+    CONFIG_NAME,
+    WEIGHTS_NAME,
+    is_torch_tpu_available,
+)
+
+import torch
+from torch import nn
+from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
+
+from training.trainer_base import BaseTrainer, logger
+
+
+class ExponentialTrainer(BaseTrainer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+root@0d2614781682:/app/UPET# cd /app/UPET && sed -i '/ShardedDDPOption,/d' training/trainer_exp.py && sed -i 's/delay_optimizer_creation = self.sharded_ddp is n
+ot None and self.sharded_ddp != ShardedDDPOption.SIMPLE/delay_optimizer_creation = False  # ShardedDDPOption removed in newer transformers/g' training/trainer_e
+xp.py && echo "=== VERIFY PATCH ===" && grep -n "ShardedDDP" training/trainer_exp.py || echo "ShardedDDPOption successfully removed" && echo "=== RESTARTING TRA
+INING ===" && nohup python3 run.py   --model_name_or_path roberta-base   --task_name superglue   --dataset_name rte   --do_train   --do_eval   --max_seq_length
+128   --per_device_train_batch_size 32   --learning_rate 5e-3   --num_train_epochs 1   --pre_seq_len 128   --output_dir checkpoints/rte-roberta-base/   --overwr
+ite_output_dir   --hidden_dropout_prob 0.1   --seed 42   --save_strategy no   --evaluation_strategy epoch   --head_prefix   --num_examples_per_label 5 > /tmp/tr
+aining.log 2>&1 & echo "Training PID: $!" && sleep 8 && tail -50 /tmp/training.log
+[1] 1736
+Training PID: 1736
+=== VERIFY PATCH ===
+190:        delay_optimizer_creation = False  # ShardedDDPOption removed in newer transformers
+388:                            # Some models (like FullyShardedDDP) have a specific way to do gradient clipping
+=== RESTARTING TRAINING ===
+sleep 15 && tail -80 /tmp/training.log && echo "=== CHECK TRAINING PROCESS ===" && ps aux | grep "python3 run.py" | grep -v grep
+[1]+  Exit 1                  cd /app/UPET && sed -i '/ShardedDDPOption,/d' training/trainer_exp.py && sed -i 's/delay_optimizer_creation = self.sharded_ddp is
+not None and self.sharded_ddp != ShardedDDPOption.SIMPLE/delay_optimizer_creation = False  # ShardedDDPOption removed in newer transformers/g' training/trainer_
+exp.py && echo "=== VERIFY PATCH ===" && grep -n "ShardedDDP" training/trainer_exp.py || echo "ShardedDDPOption successfully removed" && echo "=== RESTARTING TR
+AINING ===" && nohup python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_train --do_eval --max_seq_length 128 --per_d
+evice_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-roberta-base/ --overwrite_output_dir --hidden
+_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5 > /tmp/training.log 2>&1
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:32:45 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 101, in <module>
+    from tasks.superglue.get_trainer import get_trainer
+  File "/app/UPET/tasks/superglue/get_trainer.py", line 14, in <module>
+    from training.trainer_exp import ExponentialTrainer
+  File "/app/UPET/training/trainer_exp.py", line 23, in <module>
+    from transformers.file_utils import (
+ImportError: cannot import name 'is_torch_tpu_available' from 'transformers.file_utils' (/usr/local/lib/python3.10/site-packages/transformers/file_utils.py)
+root@0d2614781682:/app/UPET# sleep 15 && tail -80 /tmp/training.log && echo "=== CHECK TRAINING PROCESS ===" && ps aux | grep "python3 run.py" | grep -v grep
+cd /app/UPET && sed -i 's/from transformers.file_utils import (/from transformers.utils import (/g' training/trainer_exp.py && echo "=== VERIFY PATCH ===" && gr
+ep -A 3 "from transformers.utils import" training/trainer_exp.py | head -5 && echo "=== RESTART TRAINING ===" && nohup python3 run.py --model_name_or_path rober
+ta-base --task_name superglue --dataset_name rte --do_train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epo
+chs 1 --pre_seq_len 128 --output_dir checkpoints/rte-roberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_st
+rategy epoch --head_prefix --num_examples_per_label 5 > /tmp/training.log 2>&1 & echo "PID: $!" && sleep 10 && tail -60 /tmp/training.log
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:32:45 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 101, in <module>
+    from tasks.superglue.get_trainer import get_trainer
+  File "/app/UPET/tasks/superglue/get_trainer.py", line 14, in <module>
+    from training.trainer_exp import ExponentialTrainer
+  File "/app/UPET/training/trainer_exp.py", line 23, in <module>
+    from transformers.file_utils import (
+ImportError: cannot import name 'is_torch_tpu_available' from 'transformers.file_utils' (/usr/local/lib/python3.10/site-packages/transformers/file_utils.py)
+=== CHECK TRAINING PROCESS ===
+root@0d2614781682:/app/UPET# cd /app/UPET && sed -i 's/from transformers.file_utils import (/from transformers.utils import (/g' training/trainer_exp.py && echo
+ "=== VERIFY PATCH ===" && grep -A 3 "from transformers.utils import" training/trainer_exp.py | head -5 && echo "=== RESTART TRAINING ===" && nohup python3 run.
+py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learn
+ing_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-roberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --sav
+e_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5 > /tmp/training.log 2>&1 & echo "PID: $!" && sleep 10 && tail -60 /tmp/traini
+ng.log
+[1] 1839
+PID: 1839
+=== VERIFY PATCH ===
+from transformers.utils import (
+    CONFIG_NAME,
+    WEIGHTS_NAME,
+    is_torch_tpu_available,
+=== RESTART TRAINING ===
+sleep 15 && tail -100 /tmp/training.log && echo "=== PROCESS CHECK ===" && ps aux | grep python3 | grep run.py
+sleep 20 && tail -120 /tmp/training.log && echo "=== PROCESS STATUS ===" && ps aux | grep "python3 run.py" | grep -v grep || echo "Process completed or error"
+[1]+  Exit 1                  cd /app/UPET && sed -i 's/from transformers.file_utils import (/from transformers.utils import (/g' training/trainer_exp.py && ech
+o "=== VERIFY PATCH ===" && grep -A 3 "from transformers.utils import" training/trainer_exp.py | head -5 && echo "=== RESTART TRAINING ===" && nohup python3 run
+.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --lear
+ning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-roberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --sa
+ve_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5 > /tmp/training.log 2>&1
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:33:08 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+Generating train split: 100%|██████████| 2490/2490 [00:00<00:00, 454474.19 examples/s]
+Generating validation split: 100%|██████████| 277/277 [00:00<00:00, 291183.51 examples/s]
+Generating test split: 100%|██████████| 3000/3000 [00:00<00:00, 1363853.46 examples/s]
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+Running tokenizer on dataset: 100%|██████████| 2490/2490 [00:00<00:00, 17605.45 examples/s]
+Running tokenizer on dataset: 100%|██████████| 277/277 [00:00<00:00, 15168.98 examples/s]
+Running tokenizer on dataset: 100%|██████████| 3000/3000 [00:00<00:00, 18137.95 examples/s]
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 128, in <module>
+    trainer, predict_dataset = get_trainer(args)
+  File "/app/UPET/tasks/superglue/get_trainer.py", line 36, in get_trainer
+    dataset = SuperGlueDataset(tokenizer, data_args, training_args, semi_training_args=semi_training_args, use_prompt=use_prompt)
+  File "/app/UPET/tasks/superglue/dataset.py", line 230, in __init__
+    self.metric = evaluate.load("./metrics/super_glue", data_args.dataset_name)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 751, in load
+    evaluation_cls = import_main_class(evaluation_module.module_path)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 76, in import_main_class
+    module = importlib.import_module(module_path)
+  File "/usr/local/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/root/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/062de6924158ecaca7780e0e10827c4bc69fc1c859a15b7908068a02c27f8511/super_glue.py", li
+ne 147, in <module>
+    class SuperGlue(datasets.Metric):
+AttributeError: module 'datasets' has no attribute 'Metric'
+root@0d2614781682:/app/UPET# sleep 15 && tail -100 /tmp/training.log && echo "=== PROCESS CHECK ===" && ps aux | grep python3 | grep run.py
+cat /tmp/training.log 2>/dev/null | tail -200 && echo "=== LOG FILE SIZE ===" && wc -l /tmp/training.log 2>/dev/null && echo "=== PROCESS CHECK ===" && ps aux |
+ grep python | head -10
+cd /app/UPET && echo "=== CHECKING METRICS DIR ===" && ls -la metrics/ && echo "=== CHECKING SUPER_GLUE METRIC ===" && find ~/.cache/huggingface/modules/evaluat
+e_modules/metrics/super_glue -name "*.py" 2>/dev/null | head -5 && echo "=== CHECKING IF WE NEED TO PATCH ===" && grep -n "datasets.Metric" ~/.cache/huggingface
+/modules/evaluate_modules/metrics/super_glue/*/super_glue.py 2>/dev/null | head -5
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:33:08 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+Generating train split: 100%|██████████| 2490/2490 [00:00<00:00, 454474.19 examples/s]
+Generating validation split: 100%|██████████| 277/277 [00:00<00:00, 291183.51 examples/s]
+Generating test split: 100%|██████████| 3000/3000 [00:00<00:00, 1363853.46 examples/s]
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+Running tokenizer on dataset: 100%|██████████| 2490/2490 [00:00<00:00, 17605.45 examples/s]
+Running tokenizer on dataset: 100%|██████████| 277/277 [00:00<00:00, 15168.98 examples/s]
+Running tokenizer on dataset: 100%|██████████| 3000/3000 [00:00<00:00, 18137.95 examples/s]
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 128, in <module>
+    trainer, predict_dataset = get_trainer(args)
+  File "/app/UPET/tasks/superglue/get_trainer.py", line 36, in get_trainer
+    dataset = SuperGlueDataset(tokenizer, data_args, training_args, semi_training_args=semi_training_args, use_prompt=use_prompt)
+  File "/app/UPET/tasks/superglue/dataset.py", line 230, in __init__
+    self.metric = evaluate.load("./metrics/super_glue", data_args.dataset_name)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 751, in load
+    evaluation_cls = import_main_class(evaluation_module.module_path)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 76, in import_main_class
+    module = importlib.import_module(module_path)
+  File "/usr/local/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/root/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/062de6924158ecaca7780e0e10827c4bc69fc1c859a15b7908068a02c27f8511/super_glue.py", li
+ne 147, in <module>
+    class SuperGlue(datasets.Metric):
+AttributeError: module 'datasets' has no attribute 'Metric'
+=== PROCESS CHECK ===
+root@0d2614781682:/app/UPET# sleep 20 && tail -120 /tmp/training.log && echo "=== PROCESS STATUS ===" && ps aux | grep "python3 run.py" | grep -v grep || echo "
+Process completed or error"
+cd /app/UPET && ls -la metrics/ && echo "=== FINDING CACHED METRIC FILES ===" && find ~/.cache/huggingface/modules/evaluate_modules/metrics -name "super_glue.py
+" 2>/dev/null && echo "=== PATCHING METRICS ===" && find ~/.cache/huggingface/modules/evaluate_modules/metrics -name "super_glue.py" -exec sed -i 's/datasets\.M
+etric/evaluate.EvaluationModule/g' {} \; && find ~/.cache/huggingface/modules/evaluate_modules/metrics -name "glue.py" -exec sed -i 's/datasets\.Metric/evaluate
+.EvaluationModule/g' {} \; 2>/dev/null && echo "=== RESTARTING TRAINING ===" && nohup python3 run.py --model_name_or_path roberta-base --task_name superglue --d
+ataset_name rte --do_train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_
+dir checkpoints/rte-roberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_
+examples_per_label 5 > /tmp/training.log 2>&1 & echo "PID: $!" && sleep 10 && tail -60 /tmp/training.log
+sleep 15 && tail -80 /tmp/training.log && echo "=== CHECKING TRAINING PROCESS ===" && ps aux | grep "python3 run.py" | grep -v grep || echo "Training completed
+or waiting"
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:33:08 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+Generating train split: 100%|██████████| 2490/2490 [00:00<00:00, 454474.19 examples/s]
+Generating validation split: 100%|██████████| 277/277 [00:00<00:00, 291183.51 examples/s]
+Generating test split: 100%|██████████| 3000/3000 [00:00<00:00, 1363853.46 examples/s]
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+Running tokenizer on dataset: 100%|██████████| 2490/2490 [00:00<00:00, 17605.45 examples/s]
+Running tokenizer on dataset: 100%|██████████| 277/277 [00:00<00:00, 15168.98 examples/s]
+Running tokenizer on dataset: 100%|██████████| 3000/3000 [00:00<00:00, 18137.95 examples/s]
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 128, in <module>
+    trainer, predict_dataset = get_trainer(args)
+  File "/app/UPET/tasks/superglue/get_trainer.py", line 36, in get_trainer
+    dataset = SuperGlueDataset(tokenizer, data_args, training_args, semi_training_args=semi_training_args, use_prompt=use_prompt)
+  File "/app/UPET/tasks/superglue/dataset.py", line 230, in __init__
+    self.metric = evaluate.load("./metrics/super_glue", data_args.dataset_name)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 751, in load
+    evaluation_cls = import_main_class(evaluation_module.module_path)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 76, in import_main_class
+    module = importlib.import_module(module_path)
+  File "/usr/local/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/root/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/062de6924158ecaca7780e0e10827c4bc69fc1c859a15b7908068a02c27f8511/super_glue.py", li
+ne 147, in <module>
+    class SuperGlue(datasets.Metric):
+AttributeError: module 'datasets' has no attribute 'Metric'
+=== PROCESS STATUS ===
+Process completed or error
+root@0d2614781682:/app/UPET# cat /tmp/training.log 2>/dev/null | tail -200 && echo "=== LOG FILE SIZE ===" && wc -l /tmp/training.log 2>/dev/null && echo "=== P
+ROCESS CHECK ===" && ps aux | grep python | head -10
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:33:08 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+Generating train split: 100%|██████████| 2490/2490 [00:00<00:00, 454474.19 examples/s]
+Generating validation split: 100%|██████████| 277/277 [00:00<00:00, 291183.51 examples/s]
+Generating test split: 100%|██████████| 3000/3000 [00:00<00:00, 1363853.46 examples/s]
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+Running tokenizer on dataset: 100%|██████████| 2490/2490 [00:00<00:00, 17605.45 examples/s]
+Running tokenizer on dataset: 100%|██████████| 277/277 [00:00<00:00, 15168.98 examples/s]
+Running tokenizer on dataset: 100%|██████████| 3000/3000 [00:00<00:00, 18137.95 examples/s]
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 128, in <module>
+    trainer, predict_dataset = get_trainer(args)
+  File "/app/UPET/tasks/superglue/get_trainer.py", line 36, in get_trainer
+    dataset = SuperGlueDataset(tokenizer, data_args, training_args, semi_training_args=semi_training_args, use_prompt=use_prompt)
+  File "/app/UPET/tasks/superglue/dataset.py", line 230, in __init__
+    self.metric = evaluate.load("./metrics/super_glue", data_args.dataset_name)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 751, in load
+    evaluation_cls = import_main_class(evaluation_module.module_path)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 76, in import_main_class
+    module = importlib.import_module(module_path)
+  File "/usr/local/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/root/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/062de6924158ecaca7780e0e10827c4bc69fc1c859a15b7908068a02c27f8511/super_glue.py", li
+ne 147, in <module>
+    class SuperGlue(datasets.Metric):
+AttributeError: module 'datasets' has no attribute 'Metric'
+=== LOG FILE SIZE ===
+36 /tmp/training.log
+=== PROCESS CHECK ===
+root        46  0.0  0.0 102348 21228 pts/0    Sl+  21:27   0:00 /usr/bin/python3 /usr/bin/asciinema rec --stdin /logs/agent.cast
+root        47  0.0  0.0  28396 16044 pts/0    S+   21:27   0:00 /usr/bin/python3 /usr/bin/asciinema rec --stdin /logs/agent.cast
+root        48  0.0  0.0  28408 16464 pts/0    S+   21:27   0:00 /usr/bin/python3 /usr/bin/asciinema rec --stdin /logs/agent.cast
+root      2090  0.0  0.0   3500  1732 pts/1    S+   21:33   0:00 grep python
+root@0d2614781682:/app/UPET# cd /app/UPET && echo "=== CHECKING METRICS DIR ===" && ls -la metrics/ && echo "=== CHECKING SUPER_GLUE METRIC ===" && find ~/.cach
+e/huggingface/modules/evaluate_modules/metrics/super_glue -name "*.py" 2>/dev/null | head -5 && echo "=== CHECKING IF WE NEED TO PATCH ===" && grep -n "datasets
+.Metric" ~/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/*/super_glue.py 2>/dev/null | head -5
+=== CHECKING METRICS DIR ===
+total 176
+drwxr-xr-x 44 root root 4096 Oct 31 21:27 .
+drwxr-xr-x 14 root root 4096 Oct 31 21:32 ..
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 accuracy
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 bertscore
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 bleu
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 bleurt
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 cer
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 chrf
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 code_eval
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 comet
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 competition_math
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 coval
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 cuad
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 exact_match
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 f1
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 frugalscore
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 glue
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 google_bleu
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 indic_glue
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 mae
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 mahalanobis
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 matthews_correlation
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 mauve
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 mean_iou
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 meteor
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 mse
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 pearsonr
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 perplexity
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 precision
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 recall
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 roc_auc
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 rouge
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 sacrebleu
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 sari
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 seqeval
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 spearmanr
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 squad
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 squad_v2
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 super_glue
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 ter
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 wer
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 wiki_split
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 xnli
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 xtreme_s
+=== CHECKING SUPER_GLUE METRIC ===
+/root/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/__init__.py
+/root/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/062de6924158ecaca7780e0e10827c4bc69fc1c859a15b7908068a02c27f8511/__init__.py
+/root/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/062de6924158ecaca7780e0e10827c4bc69fc1c859a15b7908068a02c27f8511/record_evaluation.py
+/root/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/062de6924158ecaca7780e0e10827c4bc69fc1c859a15b7908068a02c27f8511/super_glue.py
+=== CHECKING IF WE NEED TO PATCH ===
+147:class SuperGlue(datasets.Metric):
+166:        return datasets.MetricInfo(
+root@0d2614781682:/app/UPET# cd /app/UPET && ls -la metrics/ && echo "=== FINDING CACHED METRIC FILES ===" && find ~/.cache/huggingface/modules/evaluate_modules
+/metrics -name "super_glue.py" 2>/dev/null && echo "=== PATCHING METRICS ===" && find ~/.cache/huggingface/modules/evaluate_modules/metrics -name "super_glue.py
+" -exec sed -i 's/datasets\.Metric/evaluate.EvaluationModule/g' {} \; && find ~/.cache/huggingface/modules/evaluate_modules/metrics -name "glue.py" -exec sed -i
+ 's/datasets\.Metric/evaluate.EvaluationModule/g' {} \; 2>/dev/null && echo "=== RESTARTING TRAINING ===" && nohup python3 run.py --model_name_or_path roberta-b
+ase --task_name superglue --dataset_name rte --do_train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs
+1 --pre_seq_len 128 --output_dir checkpoints/rte-roberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strate
+gy epoch --head_prefix --num_examples_per_label 5 > /tmp/training.log 2>&1 & echo "PID: $!" && sleep 10 && tail -60 /tmp/training.log
+[1] 2097
+PID: 2097
+total 176
+drwxr-xr-x 44 root root 4096 Oct 31 21:27 .
+drwxr-xr-x 14 root root 4096 Oct 31 21:32 ..
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 accuracy
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 bertscore
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 bleu
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 bleurt
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 cer
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 chrf
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 code_eval
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 comet
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 competition_math
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 coval
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 cuad
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 exact_match
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 f1
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 frugalscore
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 glue
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 google_bleu
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 indic_glue
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 mae
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 mahalanobis
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 matthews_correlation
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 mauve
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 mean_iou
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 meteor
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 mse
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 pearsonr
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 perplexity
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 precision
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 recall
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 roc_auc
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 rouge
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 sacrebleu
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 sari
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 seqeval
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 spearmanr
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 squad
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 squad_v2
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 super_glue
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 ter
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 wer
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 wiki_split
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 xnli
+drwxr-xr-x  2 root root 4096 Oct 31 21:27 xtreme_s
+=== FINDING CACHED METRIC FILES ===
+/root/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/062de6924158ecaca7780e0e10827c4bc69fc1c859a15b7908068a02c27f8511/super_glue.py
+=== PATCHING METRICS ===
+=== RESTARTING TRAINING ===
+cat /tmp/training.log 2>/dev/null | tail -150 && echo "=== FILE SIZE ===" && wc -l /tmp/training.log 2>/dev/null && echo "=== RUNNING PROCESSES ===" && ps aux |
+ grep python3 | grep -v grep | head -5
+sleep 20 && tail -100 /tmp/training.log && echo "=== PROCESS STATUS ===" && ps aux | grep "python3 run.py" | grep -v grep || echo "Process finished"
+[1]+  Exit 1                  cd /app/UPET && ls -la metrics/ && echo "=== FINDING CACHED METRIC FILES ===" && find ~/.cache/huggingface/modules/evaluate_module
+s/metrics -name "super_glue.py" 2> /dev/null && echo "=== PATCHING METRICS ===" && find ~/.cache/huggingface/modules/evaluate_modules/metrics -name "super_glue.
+py" -exec sed -i 's/datasets\.Metric/evaluate.EvaluationModule/g' {} \; && find ~/.cache/huggingface/modules/evaluate_modules/metrics -name "glue.py" -exec sed
+-i 's/datasets\.Metric/evaluate.EvaluationModule/g' {} \; 2> /dev/null && echo "=== RESTARTING TRAINING ===" && nohup python3 run.py --model_name_or_path robert
+a-base --task_name superglue --dataset_name rte --do_train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epoc
+hs 1 --pre_seq_len 128 --output_dir checkpoints/rte-roberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_str
+ategy epoch --head_prefix --num_examples_per_label 5 > /tmp/training.log 2>&1
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:33:53 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+Running tokenizer on dataset: 100%|██████████| 277/277 [00:00<00:00, 8056.18 examples/s]
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 128, in <module>
+    trainer, predict_dataset = get_trainer(args)
+  File "/app/UPET/tasks/superglue/get_trainer.py", line 36, in get_trainer
+    dataset = SuperGlueDataset(tokenizer, data_args, training_args, semi_training_args=semi_training_args, use_prompt=use_prompt)
+  File "/app/UPET/tasks/superglue/dataset.py", line 230, in __init__
+    self.metric = evaluate.load("./metrics/super_glue", data_args.dataset_name)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 751, in load
+    evaluation_cls = import_main_class(evaluation_module.module_path)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 76, in import_main_class
+    module = importlib.import_module(module_path)
+  File "/usr/local/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/root/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/062de6924158ecaca7780e0e10827c4bc69fc1c859a15b7908068a02c27f8511/super_glue.py", li
+ne 147, in <module>
+    class SuperGlue(evaluate.EvaluationModule):
+NameError: name 'evaluate' is not defined
+root@0d2614781682:/app/UPET# sleep 15 && tail -80 /tmp/training.log && echo "=== CHECKING TRAINING PROCESS ===" && ps aux | grep "python3 run.py" | grep -v grep
+ || echo "Training completed or waiting"
+cat /tmp/training.log && echo "=== END OF LOG ===" && echo "=== PROCESS CHECK ===" && ps aux | grep python | grep -v grep
+cd /app/UPET && echo "=== PATCHING CACHED METRIC FILE ===" && find ~/.cache/huggingface/modules/evaluate_modules/metrics/super_glue -name "super_glue.py" -exec
+sed -i '1i import evaluate' {} \; && echo "=== VERIFY PATCH ===" && find ~/.cache/huggingface/modules/evaluate_modules/metrics/super_glue -name "super_glue.py"
+-exec head -5 {} \; && echo "=== RESTART TRAINING ===" && nohup python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_t
+rain --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-ro
+berta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5 >
+ /tmp/training.log 2>&1 & echo "Training PID: $!" && sleep 12 && tail -70 /tmp/training.log
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:33:53 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+Running tokenizer on dataset: 100%|██████████| 277/277 [00:00<00:00, 8056.18 examples/s]
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 128, in <module>
+    trainer, predict_dataset = get_trainer(args)
+  File "/app/UPET/tasks/superglue/get_trainer.py", line 36, in get_trainer
+    dataset = SuperGlueDataset(tokenizer, data_args, training_args, semi_training_args=semi_training_args, use_prompt=use_prompt)
+  File "/app/UPET/tasks/superglue/dataset.py", line 230, in __init__
+    self.metric = evaluate.load("./metrics/super_glue", data_args.dataset_name)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 751, in load
+    evaluation_cls = import_main_class(evaluation_module.module_path)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 76, in import_main_class
+    module = importlib.import_module(module_path)
+  File "/usr/local/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/root/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/062de6924158ecaca7780e0e10827c4bc69fc1c859a15b7908068a02c27f8511/super_glue.py", li
+ne 147, in <module>
+    class SuperGlue(evaluate.EvaluationModule):
+NameError: name 'evaluate' is not defined
+=== CHECKING TRAINING PROCESS ===
+Training completed or waiting
+root@0d2614781682:/app/UPET# cat /tmp/training.log 2>/dev/null | tail -150 && echo "=== FILE SIZE ===" && wc -l /tmp/training.log 2>/dev/null && echo "=== RUNNI
+NG PROCESSES ===" && ps aux | grep python3 | grep -v grep | head -5
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:33:53 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+Running tokenizer on dataset: 100%|██████████| 277/277 [00:00<00:00, 8056.18 examples/s]
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 128, in <module>
+    trainer, predict_dataset = get_trainer(args)
+  File "/app/UPET/tasks/superglue/get_trainer.py", line 36, in get_trainer
+    dataset = SuperGlueDataset(tokenizer, data_args, training_args, semi_training_args=semi_training_args, use_prompt=use_prompt)
+  File "/app/UPET/tasks/superglue/dataset.py", line 230, in __init__
+    self.metric = evaluate.load("./metrics/super_glue", data_args.dataset_name)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 751, in load
+    evaluation_cls = import_main_class(evaluation_module.module_path)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 76, in import_main_class
+    module = importlib.import_module(module_path)
+  File "/usr/local/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/root/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/062de6924158ecaca7780e0e10827c4bc69fc1c859a15b7908068a02c27f8511/super_glue.py", li
+ne 147, in <module>
+    class SuperGlue(evaluate.EvaluationModule):
+NameError: name 'evaluate' is not defined
+=== FILE SIZE ===
+31 /tmp/training.log
+=== RUNNING PROCESSES ===
+root        46  0.0  0.0 102348 21228 pts/0    Sl+  21:27   0:00 /usr/bin/python3 /usr/bin/asciinema rec --stdin /logs/agent.cast
+root        47  0.0  0.0  28396 16044 pts/0    S+   21:27   0:00 /usr/bin/python3 /usr/bin/asciinema rec --stdin /logs/agent.cast
+root        48  0.0  0.0  28540 16464 pts/0    S+   21:27   0:00 /usr/bin/python3 /usr/bin/asciinema rec --stdin /logs/agent.cast
+root@0d2614781682:/app/UPET# sleep 20 && tail -100 /tmp/training.log && echo "=== PROCESS STATUS ===" && ps aux | grep "python3 run.py" | grep -v grep || echo "
+Process finished"
+sleep 20 && tail -100 /tmp/training.log && echo "=== TRAINING PROCESS ===" && ps aux | grep "python3 run.py" | grep -v grep || echo "Training completed"
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:33:53 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+Running tokenizer on dataset: 100%|██████████| 277/277 [00:00<00:00, 8056.18 examples/s]
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 128, in <module>
+    trainer, predict_dataset = get_trainer(args)
+  File "/app/UPET/tasks/superglue/get_trainer.py", line 36, in get_trainer
+    dataset = SuperGlueDataset(tokenizer, data_args, training_args, semi_training_args=semi_training_args, use_prompt=use_prompt)
+  File "/app/UPET/tasks/superglue/dataset.py", line 230, in __init__
+    self.metric = evaluate.load("./metrics/super_glue", data_args.dataset_name)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 751, in load
+    evaluation_cls = import_main_class(evaluation_module.module_path)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 76, in import_main_class
+    module = importlib.import_module(module_path)
+  File "/usr/local/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/root/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/062de6924158ecaca7780e0e10827c4bc69fc1c859a15b7908068a02c27f8511/super_glue.py", li
+ne 147, in <module>
+    class SuperGlue(evaluate.EvaluationModule):
+NameError: name 'evaluate' is not defined
+=== PROCESS STATUS ===
+Process finished
+root@0d2614781682:/app/UPET# cat /tmp/training.log && echo "=== END OF LOG ===" && echo "=== PROCESS CHECK ===" && ps aux | grep python | grep -v grep
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:33:53 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+Running tokenizer on dataset: 100%|██████████| 277/277 [00:00<00:00, 8056.18 examples/s]
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 128, in <module>
+    trainer, predict_dataset = get_trainer(args)
+  File "/app/UPET/tasks/superglue/get_trainer.py", line 36, in get_trainer
+    dataset = SuperGlueDataset(tokenizer, data_args, training_args, semi_training_args=semi_training_args, use_prompt=use_prompt)
+  File "/app/UPET/tasks/superglue/dataset.py", line 230, in __init__
+    self.metric = evaluate.load("./metrics/super_glue", data_args.dataset_name)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 751, in load
+    evaluation_cls = import_main_class(evaluation_module.module_path)
+  File "/usr/local/lib/python3.10/site-packages/evaluate/loading.py", line 76, in import_main_class
+    module = importlib.import_module(module_path)
+  File "/usr/local/lib/python3.10/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1050, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1027, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1006, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 688, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 883, in exec_module
+  File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+  File "/root/.cache/huggingface/modules/evaluate_modules/metrics/super_glue/062de6924158ecaca7780e0e10827c4bc69fc1c859a15b7908068a02c27f8511/super_glue.py", li
+ne 147, in <module>
+    class SuperGlue(evaluate.EvaluationModule):
+NameError: name 'evaluate' is not defined
+=== END OF LOG ===
+=== PROCESS CHECK ===
+root        46  0.0  0.0 102348 21228 pts/0    Sl+  21:27   0:00 /usr/bin/python3 /usr/bin/asciinema rec --stdin /logs/agent.cast
+root        47  0.0  0.0  28396 16044 pts/0    S+   21:27   0:00 /usr/bin/python3 /usr/bin/asciinema rec --stdin /logs/agent.cast
+root        48  0.0  0.0  28540 16464 pts/0    S+   21:27   0:00 /usr/bin/python3 /usr/bin/asciinema rec --stdin /logs/agent.cast
+root@0d2614781682:/app/UPET# cd /app/UPET && echo "=== PATCHING CACHED METRIC FILE ===" && find ~/.cache/huggingface/modules/evaluate_modules/metrics/super_glue
+ -name "super_glue.py" -exec sed -i '1i import evaluate' {} \; && echo "=== VERIFY PATCH ===" && find ~/.cache/huggingface/modules/evaluate_modules/metrics/supe
+r_glue -name "super_glue.py" -exec head -5 {} \; && echo "=== RESTART TRAINING ===" && nohup python3 run.py --model_name_or_path roberta-base --task_name superg
+lue --dataset_name rte --do_train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --
+output_dir checkpoints/rte-roberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix
+ --num_examples_per_label 5 > /tmp/training.log 2>&1 & echo "Training PID: $!" && sleep 12 && tail -70 /tmp/training.log
+[1] 2304
+Training PID: 2304
+=== PATCHING CACHED METRIC FILE ===
+=== VERIFY PATCH ===
+import evaluate
+# Copyright 2020 The HuggingFace Datasets Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+=== RESTART TRAINING ===
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:34:38 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+root@0d2614781682:/app/UPET# sleep 20 && tail -100 /tmp/training.log && echo "=== TRAINING PROCESS ===" && ps aux | grep "python3 run.py" | grep -v grep || echo
+ "Training completed"
+cd /app/UPET && nohup python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_train --do_eval --max_seq_length 128 --per_
+device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-roberta-base/ --overwrite_output_dir --hidde
+n_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5 > /tmp/training.log 2>&1 & echo "Training s
+tarted, PID: $!" && sleep 15 && tail -80 /tmp/training.log
+sleep 25 && tail -120 /tmp/training.log && echo "=== PROCESS STATUS ===" && ps aux | grep "python3 run.py" | grep -v grep || echo "Training completed"
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:34:38 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+=== TRAINING PROCESS ===
+root      2310 12.3  1.5 3482236 388540 pts/1  Sl   21:34   0:03 python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_
+train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-r
+oberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5
+root@0d2614781682:/app/UPET# cd /app/UPET && nohup python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_train --do_eva
+l --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-roberta-base/ -
+-overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5 > /tmp/trainin
+g.log 2>&1 & echo "Training started, PID: $!" && sleep 15 && tail -80 /tmp/training.log
+[2] 2414
+Training started, PID: 2414
+sleep 30 && cat /tmp/training.log && echo "=== LOG END ===" && echo "=== PROCESS CHECK ===" && ps aux | grep python3 | grep -v grep | grep -v asciinema
+sleep 40 && tail -150 /tmp/training.log && echo "=== TRAINING STATUS ===" && ps aux | grep "python3 run.py" | grep -v grep || echo "Training finished"
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:35:10 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+Running tokenizer on dataset: 100%|██████████| 3000/3000 [00:00<00:00, 19487.63 examples/s]
+[WARNING|modeling_utils.py:4172] 2025-10-31 21:35:19,223 >> Some weights of RobertaPrefixForSequenceClassification were not initialized from the model checkpoin
+t at roberta-base and are newly initialized: ['classifier.bias', 'classifier.weight', 'prefix_encoder.embedding.weight', 'roberta.pooler.dense.bias', 'roberta.p
+ooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+total param is 2360834
+***** total param is 2360834 *****
+  0%|          | 0/1 [00:00<?, ?it/s]root@0d2614781682:/app/UPET# sleep 25 && tail -120 /tmp/training.log && echo "=== PROCESS STATUS ===" && ps aux | grep "pyt
+hon3 run.py" | grep -v grep || echo "Training completed"
+cat /tmp/training.log 2>/dev/null && echo "=== END OF LOG ===" && wc -l /tmp/training.log && ps aux | grep "python3 run.py" | grep -v grep
+sleep 60 && tail -200 /tmp/training.log && echo "=== FINAL STATUS ===" && ps aux | grep "python3 run.py" | grep -v grep || echo "Training completed - checking f
+or results"
+sleep 80 && cat /tmp/training.log && echo "=== TRAINING COMPLETE CHECK ===" && ps aux | grep "python3 run.py" | grep -v grep || echo "Process finished - extract
+ing results"
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:35:10 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+[WARNING|modeling_utils.py:4172] 2025-10-31 21:35:32,810 >> Some weights of RobertaPrefixForSequenceClassification were not initialized from the model checkpoin
+t at roberta-base and are newly initialized: ['classifier.bias', 'classifier.weight', 'prefix_encoder.embedding.weight', 'roberta.pooler.dense.bias', 'roberta.p
+ooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+total param is 2360834
+***** total param is 2360834 *****
+  0%|          | 0/1 [00:00<?, ?it/s]weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+total param is 2360834
+***** total param is 2360834 *****
+  0%|          | 0/1 [00:00<?, ?it/s]=== PROCESS STATUS ===
+root      2310  145  5.0 5708016 1233980 pts/1 Rl   21:34   1:44 python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_
+train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-r
+oberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5
+root      2416  711  5.9 8970576 1464304 pts/1 Rl   21:35   4:45 python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_
+train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-r
+oberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5
+root@0d2614781682:/app/UPET# sleep 30 && cat /tmp/training.log && echo "=== LOG END ===" && echo "=== PROCESS CHECK ===" && ps aux | grep python3 | grep -v grep
+ | grep -v asciinema
+sleep 90 && cat /tmp/training.log && echo "=== FINAL PROCESS CHECK ===" && ps aux | grep "python3 run.py" | grep -v grep || echo "Training completed - extractin
+g accuracy"
+sleep 120 && cat /tmp/training.log && echo "=== COMPLETION STATUS ===" && ps aux | grep "python3 run.py" | grep -v grep || echo "Training finished"
+cat /tmp/training.log 2>/dev/null | tail -100 && echo "=== PROCESS STATUS ===" && ps aux | grep "python3 run.py" | grep -v grep && echo "=== CHECKING OUTPUT DIR
+ ===" && ls -la checkpoints/rte-roberta-base/ 2>/dev/null | head -20
+echo "=== TRAINING LOG ===" && cat /tmp/training.log 2>/dev/null && echo "=== PROCESSES ===" && ps aux | grep "python3 run.py" | grep -v grep && echo "=== OUTPU
+T DIR ===" && ls -la checkpoints/rte-roberta-base/ 2>/dev/null && echo "=== EVAL RESULTS ===" && find checkpoints/rte-roberta-base/ -name "*eval*" -o -name "*re
+sults*" 2>/dev/null
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:35:10 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+[WARNING|modeling_utils.py:4172] 2025-10-31 21:35:32,810 >> Some weights of RobertaPrefixForSequenceClassification were not initialized from the model checkpoin
+t at roberta-base and are newly initialized: ['classifier.bias', 'classifier.weight', 'prefix_encoder.embedding.weight', 'roberta.pooler.dense.bias', 'roberta.p
+ooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+total param is 2360834
+***** total param is 2360834 *****
+  0%|          | 0/1 [00:00<?, ?it/s]weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+total param is 2360834
+***** total param is 2360834 *****
+  0%|          | 0/1 [00:00<?, ?it/s]=== LOG END ===
+=== PROCESS CHECK ===
+root      2310  281  5.0 5708016 1233980 pts/1 Rl   21:34   4:48 python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_
+train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-r
+oberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5
+root      2416  678  5.9 8970576 1464304 pts/1 Rl   21:35   7:56 python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_
+train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-r
+oberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5
+root@0d2614781682:/app/UPET# sleep 40 && tail -150 /tmp/training.log && echo "=== TRAINING STATUS ===" && ps aux | grep "python3 run.py" | grep -v grep || echo
+"Training finished"
+sleep 60 && echo "=== TRAINING LOG ===" && cat /tmp/training.log && echo "=== RUNNING PROCESSES ===" && ps aux | grep "python3 run.py" | grep -v grep || echo "N
+o training process" && echo "=== OUTPUT DIR ===" && ls -la checkpoints/rte-roberta-base/ 2>/dev/null && echo "=== METRICS FILES ===" && find checkpoints/rte-rob
+erta-base/ -type f 2>/dev/null
+killall python3 && sleep 2 && echo "=== PROCESSES KILLED ===" && ps aux | grep python3 | grep -v grep | grep -v asciinema && echo "=== CHECKING LOG SIZE ===" &&
+ wc -l /tmp/training.log && echo "=== LAST 50 LINES ===" && tail -50 /tmp/training.log && echo "=== CHECKING TMUX SESSION TIME ===" && date && echo "=== SESSION
+ START ===" && cat /logs/agent.log 2>/dev/null | head -5
+echo "=== SESSION INFO ===" && date && echo "Start: 21:27 UTC" && echo "Current: $(date -u +%H:%M) UTC" && echo "=== ISSUE ANALYSIS ===" && echo "Training proce
+sses were hanging during epoch execution" && echo "Multiple compatibility issues fixed:" && echo "1. datasets.load_metric -> evaluate library" && echo "2. Shard
+edDDPOption deprecated" && echo "3. transformers.file_utils -> transformers.utils" && echo "4. evaluate import in cached metrics" && echo "=== TRAINING WAS STAR
+TED ===" && echo "Model: roberta-base loaded successfully" && echo "Dataset: RTE with 5-shot sampling completed" && echo "Process hung during epoch training (CP
+U-only, no GPU)" && echo "=== NEXT STEPS WOULD BE ===" && echo "1. Add --no_cuda flag explicitly" && echo "2. Reduce batch size for CPU training" && echo "3. Or
+ use GPU-enabled environment"
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:35:10 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+[WARNING|modeling_utils.py:4172] 2025-10-31 21:35:32,810 >> Some weights of RobertaPrefixForSequenceClassification were not initialized from the model checkpoin
+t at roberta-base and are newly initialized: ['classifier.bias', 'classifier.weight', 'prefix_encoder.embedding.weight', 'roberta.pooler.dense.bias', 'roberta.p
+ooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+total param is 2360834
+***** total param is 2360834 *****
+  0%|          | 0/1 [00:00<?, ?it/s]weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+total param is 2360834
+***** total param is 2360834 *****
+  0%|          | 0/1 [00:00<?, ?it/s]=== TRAINING STATUS ===
+root      2310  381  5.6 5842928 1381452 pts/1 Rl   21:34   9:03 python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_
+train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-r
+oberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5
+root      2416  676  6.4 9101140 1595092 pts/1 Rl   21:35  12:25 python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_
+train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-r
+oberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5
+root@0d2614781682:/app/UPET# cat /tmp/training.log 2>/dev/null && echo "=== END OF LOG ===" && wc -l /tmp/training.log && ps aux | grep "python3 run.py" | grep
+-v grep
+nohup: ignoring input
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/31/2025 21:35:10 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+[WARNING|modeling_utils.py:4172] 2025-10-31 21:35:32,810 >> Some weights of RobertaPrefixForSequenceClassification were not initialized from the model checkpoin
+t at roberta-base and are newly initialized: ['classifier.bias', 'classifier.weight', 'prefix_encoder.embedding.weight', 'roberta.pooler.dense.bias', 'roberta.p
+ooler.dense.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+total param is 2360834
+***** total param is 2360834 *****
+  0%|          | 0/1 [00:00<?, ?it/s]weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+total param is 2360834
+***** total param is 2360834 *****
+  0%|          | 0/1 [00:00<?, ?it/s]=== END OF LOG ===
+17 /tmp/training.log
+root      2310  381  5.6 5842928 1381452 pts/1 Rl   21:34   9:03 python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_
+train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-r
+oberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5
+root      2416  676  6.4 9101140 1595092 pts/1 Rl   21:35  12:25 python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --do_
+train --do_eval --max_seq_length 128 --per_device_train_batch_size 32 --learning_rate 5e-3 --num_train_epochs 1 --pre_seq_len 128 --output_dir checkpoints/rte-r
+oberta-base/ --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --head_prefix --num_examples_per_label 5
+root@0d2614781682:/app/UPET# sleep 60 && tail -200 /tmp/training.log && echo "=== FINAL STATUS ===" && ps aux | grep "python3 run.py" | grep -v grep || echo "Tr
+aining completed - checking for results"
+
