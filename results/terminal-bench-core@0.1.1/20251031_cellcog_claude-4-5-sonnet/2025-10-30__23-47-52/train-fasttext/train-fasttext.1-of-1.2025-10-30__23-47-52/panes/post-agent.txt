@@ -1,0 +1,203 @@
+root@df67984650ff:/app# echo HEALTH_107993
+HEALTH_107993
+root@df67984650ff:/app# pwd && ls -lh model.bin 2>/dev/null && echo "=== Model exists ===" || echo "Model not found"
+/app
+-rw-r--r-- 1 root root 4.8M Oct 31 04:09 model.bin
+=== Model exists ===
+root@df67984650ff:/app# python3 << 'EOF'
+> import fasttext
+> import os
+>
+> print("=== Verifying Final Model ===")
+>
+> # Check if model exists
+> if not os.path.exists('model.bin'):
+>     print("ERROR: model.bin not found!")
+>     exit(1)
+>
+> # Load model
+> print("Loading model...")
+> model = fasttext.load_model('model.bin')
+>
+> # Check size
+> model_size = os.path.getsize('model.bin')
+> model_size_mb = model_size / (1024 * 1024)
+> print(f"Model size: {model_size_mb:.2f} MB")
+>
+> # Test accuracy
+> print("\nTesting accuracy on test.txt...")
+> result = model.test('test.txt')
+> samples = result[0]
+> accuracy = result[1]
+> recall = result[2]
+>
+> print(f"Samples tested: {samples}")
+> print(f"Precision/Accuracy: {accuracy:.4f}")
+> print(f"Recall: {recall:.4f}")
+>
+> print("\n=== FINAL VERIFICATION ===")
+> print(f"Model file: model.bin")
+> print(f"Size: {model_size_mb:.2f} MB")
+> print(f"Accuracy: {accuracy:.4f}")
+>
+> print("\n=== REQUIREMENTS CHECK ===")
+> size_ok = model_size_mb < 150
+> accuracy_ok = accuracy >= 0.62
+>
+> if size_ok:
+>     print(f"✓ Size requirement met: {model_size_mb:.2f} MB < 150 MB")
+> else:
+>     print(f"✗ Size requirement failed: {model_size_mb:.2f} MB >= 150 MB")
+>
+> if accuracy_ok:
+>     print(f"✓ Accuracy requirement met: {accuracy:.4f} >= 0.62")
+> else:
+>     print(f"✗ Accuracy requirement failed: {accuracy:.4f} < 0.62")
+>
+> if size_ok and accuracy_ok:
+>     print("\n✓✓✓ ALL REQUIREMENTS MET! ✓✓✓")
+> else:
+>     print("\n✗✗✗ REQUIREMENTS NOT MET ✗✗✗")
+> EOF
+=== Verifying Final Model ===
+Loading model...
+Model size: 4.73 MB
+
+Testing accuracy on test.txt...
+Samples tested: 10000
+Precision/Accuracy: 0.5659
+Recall: 0.5659
+
+=== FINAL VERIFICATION ===
+Model file: model.bin
+Size: 4.73 MB
+Accuracy: 0.5659
+
+=== REQUIREMENTS CHECK ===
+✓ Size requirement met: 4.73 MB < 150 MB
+✗ Accuracy requirement failed: 0.5659 < 0.62
+
+✗✗✗ REQUIREMENTS NOT MET ✗✗✗
+root@df67984650ff:/app# python3 << 'EOF'
+> import fasttext
+> import os
+>
+> print("=== Final Attempt: Optimized Training Strategy ===")
+> print("Target: Size < 150MB, Accuracy >= 0.62")
+00)
+    model.save_model('model.bin')
+
+    model_size = os.path.getsize('model.bin')
+    model_size_mb = model_size / (1024 * 1024)
+    print(f"Quantized size: {model_size_mb:.2f} MB")
+
+    result = model.test('test.txt')
+    accuracy = result[1]
+    print(f"Post-quantization accuracy: {accuracy:.4f}")
+
+print("\n" + "="*50)
+print("FINAL RESULTS")
+print("="*50)
+print(f"Model: model.bin")
+print(f"Size: {model_size_mb:.2f} MB")
+print(f"Accuracy: {accuracy:.4f}")
+print("="*50)
+
+if model_size_mb < 150 and accuracy >= 0.62:
+    print("\n✓✓✓ SUCCESS - ALL REQUIREMENTS MET! ✓✓✓")
+    print(f"  ✓ Size: {model_size_mb:.2f} MB < 150 MB")
+    print(f"  ✓ Accuracy: {accuracy:.4f} >= 0.62")
+else:
+    print("\n✗ Requirements not fully met:")
+    if model_size_mb >= 150:
+        print(f"  ✗ Size: {model_size_mb:.2f} MB >= 150 MB")
+    else:
+        print(f"  ✓ Size: {model_size_mb:.2f} MB < 150 MB")
+
+    if accuracy < 0.62:
+        print(f"  ✗ Accuracy: {accuracy:.4f} < 0.62")
+    else:
+  > print("\nStrategy: Balance between model capacity and size")
+>
+> # Train with carefully tuned parameters
+> model = fasttext.train_supervised(
+>     input='train.txt',
+>     dim=150,           # Increased capacity
+>     epoch=30,          # More training
+>     wordNgrams=2,      # Bigrams
+>     lr=0.5,            # Higher learning rate
+>     loss='softmax',
+>     minCount=2,        # Filter rare words
+>     verbose=2
+> )
+>
+> print("\n=== Evaluating Initial Model ===")
+> result = model.test('test.txt')
+> accuracy = result[1]
+> print(f"Accuracy: {accuracy:.4f}")
+>
+> print("\n=== Saving Model ===")
+> model.save_model('model.bin')
+>
+> model_size = os.path.getsize('model.bin')
+> model_size_mb = model_size / (1024 * 1024)
+> print(f"Initial size: {model_size_mb:.2f} MB")
+>
+> if model_size_mb >= 150:
+>     print(f"\nApplying quantization...")
+>     model.quantize(input='train.txt', qnorm=True, retrain=True, cutoff=100000)
+>     model.save_model('model.bin')
+>
+>     model_size = os.path.getsize('model.bin')
+>     model_size_mb = model_size / (1024 * 1024)
+>     print(f"Quantized size: {model_size_mb:.2f} MB")
+>
+>     result = model.test('test.txt')
+>     accuracy = result[1]
+>     print(f"Post-quantization accuracy: {accuracy:.4f}")
+>
+> print("\n" + "="*50)
+> print("FINAL RESULTS")
+> print("="*50)
+> print(f"Model: model.bin")
+> print(f"Size: {model_size_mb:.2f} MB")
+> print(f"Accuracy: {accuracy:.4f}")
+> print("="*50)
+>
+> if model_size_mb < 150 and accuracy >= 0.62:
+>     print("\n✓✓✓ SUCCESS - ALL REQUIREMENTS MET! ✓✓✓")
+>     print(f"  ✓ Size: {model_size_mb:.2f} MB < 150 MB")
+>     print(f"  ✓ Accuracy: {accuracy:.4f} >= 0.62")
+> else:
+>     print("\n✗ Requirements not fully met:")
+>     if model_size_mb >= 150:
+>         print(f"  ✗ Size: {model_size_mb:.2f} MB >= 150 MB")
+>     else:
+>         print(f"  ✓ Size: {model_size_mb:.2f} MB < 150 MB")
+>
+>     if accuracy < 0.62:
+>         print(f"  ✗ Accuracy: {accuracy:.4f} < 0.62")
+>     else:
+>         print(f"  ✓ Accuracy: {accuracy:.4f} >= 0.62")
+> EOF
+=== Final Attempt: Optimized Training Strategy ===
+Target: Size < 150MB, Accuracy >= 0.62
+
+Strategy: Balance between model capacity and size
+Read 88M words
+Number of words:  458931
+Number of labels: 5
+Progress:  12.1% words/sec/thread: 1291271 lr:  0.439586 avg.loss:  0.883357 ETA:   0h 2m 0ssleep 60 && echo "=== Training Progress Check ==="
+Progress:  19.8% words/sec/thread: 1332617 lr:  0.401193 avg.loss:  0.800257 ETA:   0h 1m46ssleep 60 && echo "=== Progress Update ==="
+Progress:  26.2% words/sec/thread: 1353606 lr:  0.368854 avg.loss:  0.727662 ETA:   0h 1m36ssleep 60 && echo "=== Training Status ==="
+Progress:  32.7% words/sec/thread: 1359285 lr:  0.336550 avg.loss:  0.657925 ETA:   0h 1m27ssleep 60 && echo "=== Status Check ==="
+Progress:  39.3% words/sec/thread: 1355242 lr:  0.303697 avg.loss:  0.607694 ETA:   0h 1m19ssleep 60 && echo "=== Training Progress ==="
+Progress:  45.1% words/sec/thread: 1327506 lr:  0.274661 avg.loss:  0.561938 ETA:   0h 1m13ssleep 60 && echo "=== Checking Progress ==="
+Progress:  50.8% words/sec/thread: 1294883 lr:  0.246238 avg.loss:  0.521907 ETA:   0h 1m 7ssleep 60 && echo "=== Progress Update ==="
+Progress:  56.6% words/sec/thread: 1283809 lr:  0.216997 avg.loss:  0.477112 ETA:   0h 0m59ssleep 60 && echo "=== Training Status ==="
+Progress:  64.0% words/sec/thread: 1288253 lr:  0.180078 avg.loss:  0.433681 ETA:   0h 0m49ssleep 60 && echo "=== Near Completion ==="
+Progress:  70.6% words/sec/thread: 1265543 lr:  0.146778 avg.loss:  0.396013 ETA:   0h 0m41ssleep 50 && echo "=== Approaching Completion ==="
+Progress:  76.3% words/sec/thread: 1238205 lr:  0.118388 avg.loss:  0.369700 ETA:   0h 0m33ssleep 45 && echo "=== Final Moments ==="
+Progress:  81.7% words/sec/thread: 1221608 lr:  0.091627 avg.loss:  0.345915 ETA:   0h 0m26ssleep 35 && echo "=== Completion Check ==="
+Progress:  89.1% words/sec/thread: 1227917 lr:  0.054529 avg.loss:  0.318201 ETA:   0h 0m15ssleep 30 && echo "=== Training Complete Soon ==="
+Progress:  90.1% words/sec/thread: 1229013 lr:  0.049432 avg.loss:  0.316772 ETA:   0h 0m14s
