@@ -1,0 +1,13 @@
+{
+  "task_type": "explorer",
+  "task_title": "Env and network probe",
+  "llm_response": "<bash>\ncmd: |\n  set -e\n  echo \"== network_check_youtube_google ==\"\n  PYBIN=\"\"\n  if command -v python3 >/dev/null 2>&1; then PYBIN=$(command -v python3); elif command -v python >/dev/null 2>&1; then PYBIN=$(command -v python); fi\n  if [ -z \"$PYBIN\" ]; then\n    echo \"python interpreter: NOT FOUND (skipping network tests)\"\n  else\n    \"$PYBIN\" - <<'PY'\nimport ssl\nfrom urllib.request import Request, urlopen\nfrom urllib.error import URLError, HTTPError\n\nurls = [\n  \"https://www.youtube.com/watch?v=jNQXAC9IVRw\",\n  \"https://www.google.com\"\n]\n\ndef fetch(url):\n  method = \"HEAD\"\n  try:\n    req = Request(url, method=method, headers={\"User-Agent\":\"Mozilla/5.0\"})\n    resp = urlopen(req, timeout=10)\n  except HTTPError as e:\n    if e.code in (405, 501):\n      method = \"GET\"\n      try:\n        req = Request(url, method=method, headers={\"User-Agent\":\"Mozilla/5.0\"})\n        resp = urlopen(req, timeout=10)\n      except Exception as ge:\n        print(\"URL: {}\\nmethod: {}\\nerror: {}: {}\".format(url, method, type(ge).__name__, ge))\n        return\n    else:\n      print(\"URL: {}\\nmethod: {}\\nstatus: {}\\nerror: HTTPError: {}\".format(url, method, e.code, e))\n      return\n  except URLError as e:\n    print(\"URL: {}\\nmethod: {}\\nerror: URLError: {}\".format(url, method, getattr(e, \"reason\", e)))\n    return\n  except ssl.SSLError as e:\n    print(\"URL: {}\\nmethod: {}\\nerror: SSLError: {}\".format(url, method, e))\n    return\n  except Exception as e:\n    print(\"URL: {}\\nmethod: {}\\nerror: {}: {}\".format(url, method, type(e).__name__, e))\n    return\n  with resp:\n    status = getattr(resp, \"status\", None) or resp.getcode()\n    print(\"URL: {}\\nmethod: {}\\nstatus: {}\".format(url, method, status))\n    for k in (\"Content-Type\",\"Server\",\"Content-Length\",\"Location\"):\n      v = resp.headers.get(k)\n      if v:\n        print(\"{}: {}\".format(k.lower(), v))\n    if method == \"GET\":\n      try:\n        resp.read(1024)\n      except Exception:\n        pass\n\nfor u in urls:\n  fetch(u)\nPY\n  fi\nblock: true\ntimeout_secs: 60\n</bash>",
+  "actions_executed": [],
+  "env_responses": [
+    "[PARSE ERROR] [bash] YAML error: while scanning a simple key\n  in \"<unicode string>\", line 10, column 1:\n    import ssl\n    ^\ncould not find expected ':'\n  in \"<unicode string>\", line 11, column 1:\n    from urllib.request import Reque ... \n    ^"
+  ],
+  "messages_count": 10,
+  "turn_number": 4,
+  "timestamp": "2025-09-28T02:03:16.894208",
+  "prefix": "subagent_task_002"
+}

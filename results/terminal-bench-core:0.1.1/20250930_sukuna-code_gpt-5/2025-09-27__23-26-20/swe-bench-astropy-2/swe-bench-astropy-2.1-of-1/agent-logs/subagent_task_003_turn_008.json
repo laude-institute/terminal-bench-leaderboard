@@ -1,0 +1,15 @@
+{
+  "task_type": "coder",
+  "task_title": "Case-insensitive QDP commands",
+  "llm_response": "<bash>\ncmd: |\n  python - <<'PY'\n  import io, sys, re\n  path = '/app/astropy/astropy/io/ascii/qdp.py'\n  with open(path, 'r') as f:\n      lines = f.readlines()\n  start = None\n  for i,l in enumerate(lines):\n    if l.strip().startswith('def _line_type('):\n      start = i\n      break\n  if start is None:\n    print(\"EXC: _line_type not found\")\n    sys.exit(1)\n  end = len(lines)\n  for i in range(start+1, len(lines)):\n    if lines[i].strip().startswith('def '):\n      end = i\n      break\n  func_src = ''.join(lines[start:end])\n  ns = {}\n  glb = {'re': re}\n  code = 'import re\\n' + func_src\n  exec(code, glb, ns)\n  _line_type = ns.get('_line_type') or glb.get('_line_type')\n  tests = [\n      (\"read serr 1 2\", None),\n      (\"READ TERR 3 4\", None),\n      (\"No No No\", None),\n      (\"NaN 1\", None),\n      (\"1.0 no NAN\", None),\n      (\"NO,NO,NO\", ','),\n  ]\n  for line, delim in tests:\n      try:\n          t = _line_type(line, delimiter=delim)\n          print(f\"{line!r} -> {t}\")\n      except Exception as e:\n          print(f\"{line!r} -> EXC: {e.__class__.__name__}: {e}\")\n  PY\nblock: true\ntimeout_secs: 120\n</bash>",
+  "actions_executed": [
+    "cmd='python - <<\\'PY\\'\\nimport io, sys, re\\npath = \\'/app/astropy/astropy/io/ascii/qdp.py\\'\\nwith open(path, \\'r\\') as f:\\n    lines = f.readlines()\\nstart = None\\nfor i,l in enumerate(lines):\\n  if l.strip().startswith(\\'def _line_type(\\'):\\n    start = i\\n    break\\nif start is None:\\n  print(\"EXC: _line_type not found\")\\n  sys.exit(1)\\nend = len(lines)\\nfor i in range(start+1, len(lines)):\\n  if lines[i].strip().startswith(\\'def \\'):\\n    end = i\\n    break\\nfunc_src = \\'\\'.join(lines[start:end])\\nns = {}\\nglb = {\\'re\\': re}\\ncode = \\'import re\\\\n\\' + func_src\\nexec(code, glb, ns)\\n_line_type = ns.get(\\'_line_type\\') or glb.get(\\'_line_type\\')\\ntests = [\\n    (\"read serr 1 2\", None),\\n    (\"READ TERR 3 4\", None),\\n    (\"No No No\", None),\\n    (\"NaN 1\", None),\\n    (\"1.0 no NAN\", None),\\n    (\"NO,NO,NO\", \\',\\'),\\n]\\nfor line, delim in tests:\\n    try:\\n        t = _line_type(line, delimiter=delim)\\n        print(f\"{line!r} -> {t}\")\\n    except Exception as e:\\n        print(f\"{line!r} -> EXC: {e.__class__.__name__}: {e}\")\\nPY\\n' block=True timeout_secs=120"
+  ],
+  "env_responses": [
+    "<bash_output>\n'read serr 1 2' -> command\n'READ TERR 3 4' -> command\n'No No No' -> new\n'NaN 1' -> data,2\n'1.0 no NAN' -> data,3\n'NO,NO,NO' -> new\n\n</bash_output>"
+  ],
+  "messages_count": 18,
+  "turn_number": 8,
+  "timestamp": "2025-09-27T23:41:45.506424",
+  "prefix": "subagent_task_003"
+}
