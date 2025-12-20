@@ -1,0 +1,122 @@
+root@c948d0ebcd12:/app# pwd
+/app
+root@c948d0ebcd12:/app# ls -la
+total 8
+drwxr-xr-x 2 root root 4096 May 28 03:31 .
+drwxr-xr-x 1 root root 4096 Oct 15 07:18 ..
+root@c948d0ebcd12:/app# python3 --version
+Python 3.12.3
+root@c948d0ebcd12:/app# cat > /app/server.py << 'EOF'
+> #!/usr/bin/env python3
+> from http.server import BaseHTTPRequestHandler, HTTPServer
+> import json
+> from urllib.parse import urlparse, parse_qs
+>
+> class FibHandler(BaseHTTPRequestHandler):
+>     def do_GET(self):
+>         parsed = urlparse(self.path)
+>         if parsed.path != "/fib":
+>             self.send_response(404)
+>             self.send_header("Content-Type", "application/json")
+>             self.end_headers()
+>             self.wfile.write(json.dumps({"error": "Not Found"}).encode("utf-8"))
+>             return
+>
+>         qs = parse_qs(parsed.query)
+>         if 'n' not in qs or len(qs['n']) == 0:
+>             self.send_response(400)
+>             self.send_header("Content-Type", "application/json")
+>             self.end_headers()
+>             self.wfile.write(json.dumps({"error": "Missing query parameter 'n'"}).encode("utf-8"))
+>             return
+>
+>         n_str = qs['n'][0]
+>         try:
+>             n = int(n_str)
+>         except ValueError:
+>             self.send_response(400)
+>             self.send_header("Content-Type", "application/json")
+>             self.end_headers()
+>             self.wfile.write(json.dumps({"error": "Query parameter 'n' must be an integer"}).encode("utf-8"))
+>             return
+>
+>         if n < 0:
+>             self.send_response(400)
+>             self.send_header("Content-Type", "application/json")
+>             self.end_headers()
+>             self.wfile.write(json.dumps({"error": "Query parameter 'n' must be non-negative"}).encode("utf-8"))
+>             return
+>
+>         a, b = 0, 1
+>         for _ in range(n):
+>             a, b = b, a + b
+>         result = a
+>
+>         body = json.dumps({"result": result})
+>         self.send_response(200)
+>         self.send_header("Content-Type", "application/json")
+>         self.send_header("Content-Length", str(len(body)))
+>         self.end_headers()
+>         self.wfile.write(body.encode("utf-8"))
+>
+>     def log_message(self, format, *args):
+>         return
+>
+> def run():
+>     server = HTTPServer(("0.0.0.0", 3000), FibHandler)
+>     try:
+>         server.serve_forever()
+>     except KeyboardInterrupt:
+>         pass
+>     finally:
+>         server.server_close()
+>
+> if __name__ == "__main__":
+>     run()
+> EOF
+root@c948d0ebcd12:/app# chmod +x /app/server.py
+root@c948d0ebcd12:/app# nohup python3 /app/server.py >/app/server.log 2>&1 &
+[1] 135
+root@c948d0ebcd12:/app# ss -lntp | grep 3000 || true
+bash: ss: command not found
+root@c948d0ebcd12:/app# curl -sS -i http://localhost:3000/fib
+bash: curl: command not found
+root@c948d0ebcd12:/app# curl -sS -i "http://localhost:3000/fib?n=abc"
+bash: curl: command not found
+root@c948d0ebcd12:/app# curl -sS http://localhost:3000/fib?n=10
+bash: curl: command not found
+root@c948d0ebcd12:/app# ps -ef | grep -v grep | grep -E 'python3 .*server.py'
+root         135      51  0 07:19 pts/1    00:00:00 python3 /app/server.py
+root@c948d0ebcd12:/app# python3 - << 'PY'
+> import urllib.request, urllib.error
+>
+> def fetch(url):
+>     try:
+>         with urllib.request.urlopen(url) as resp:
+>             body = resp.read().decode('utf-8')
+>             print('STATUS', resp.status)
+>             print('BODY', body)
+>     except urllib.error.HTTPError as e:
+>         body = e.read().decode('utf-8')
+>         print('STATUS', e.code)
+>         print('BODY', body)
+>     except Exception as e:
+>         print('ERROR', str(e))
+>
+> print('--- missing n ---')
+> fetch('http://localhost:3000/fib')
+> print('--- non-integer ---')
+> fetch('http://localhost:3000/fib?n=abc')
+> print('--- valid 10 ---')
+> fetch('http://localhost:3000/fib?n=10')
+> PY
+--- missing n ---
+STATUS 400
+BODY {"error": "Missing query parameter 'n'"}
+--- non-integer ---
+STATUS 400
+BODY {"error": "Query parameter 'n' must be an integer"}
+--- valid 10 ---
+STATUS 200
+BODY {"result": 55}
+root@c948d0ebcd12:/app#

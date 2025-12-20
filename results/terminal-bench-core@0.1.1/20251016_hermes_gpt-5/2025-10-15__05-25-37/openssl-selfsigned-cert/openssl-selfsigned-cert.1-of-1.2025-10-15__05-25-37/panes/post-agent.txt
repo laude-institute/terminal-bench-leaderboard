@@ -1,0 +1,86 @@
+root@e6eacf69805e:/app# mkdir -p /app/ssl
+root@e6eacf69805e:/app# openssl genrsa -out /app/ssl/server.key 2048
+root@e6eacf69805e:/app# chmod 600 /app/ssl/server.key
+root@e6eacf69805e:/app# openssl req -new -x509 -key /app/ssl/server.key -out /app/ssl/server.crt -days 365 -sha256 -subj "/O=DevOps Team/CN=dev-internal.company
+.local"
+root@e6eacf69805e:/app# cat /app/ssl/server.key /app/ssl/server.crt > /app/ssl/server.pem
+root@e6eacf69805e:/app# openssl x509 -in /app/ssl/server.crt -noout -subject -nameopt RFC2253 -dates -fingerprint -sha256 > /app/ssl/verification.txt
+root@e6eacf69805e:/app# cat > /app/check_cert.py << 'PY'
+> #!/usr/bin/env python3
+> import os
+> import ssl
+> import subprocess
+> import sys
+> import datetime
+>
+> CERT = '/app/ssl/server.crt'
+> KEY = '/app/ssl/server.key'
+>
+>
+> def main():
+>     if not os.path.isfile(CERT):
+>         print(f'Certificate not found: {CERT}')
+>         sys.exit(1)
+>     if not os.path.isfile(KEY):
+>         print(f'Private key not found: {KEY}')
+>         sys.exit(1)
+>
+>     # Attempt to load cert and key into an SSLContext (verifies format and pairing)
+>     try:
+>         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+>         ctx.load_cert_chain(certfile=CERT, keyfile=KEY)
+>     except Exception as e:
+>         print(f'Failed to load certificate/key: {e}')
+>         sys.exit(1)
+>
+>     # Use openssl to retrieve subject and enddate
+>     try:
+>         res = subprocess.run(
+>             ['openssl', 'x509', '-in', CERT, '-noout', '-subject', '-enddate', '-nameopt', 'RFC2253'],
+>             check=True, capture_output=True, text=True
+>         )
+>         lines = res.stdout.strip().splitlines()
+>         subject_line = next((l for l in lines if l.startswith('subject=')), '')
+>         enddate_line = next((l for l in lines if l.startswith('notAfter=')), '')
+>     except Exception as e:
+>         print(f'Failed to read certificate via openssl: {e}')
+>         sys.exit(1)
+>
+>     # Extract CN from subject
+>     cn = None
+>     if subject_line.startswith('subject='):
+>         subj = subject_line[len('subject='):]
+>         parts = [p.strip() for p in subj.split(',')]
+>         for p in parts:
+>             if p.startswith('CN='):
+>                 cn = p.split('=', 1)[1]
+>                 break
+>
+>     # Parse enddate to YYYY-MM-DD
+>     exp_date_str = None
+>     if enddate_line.startswith('notAfter='):
+>         not_after = enddate_line[len('notAfter='):].strip()
+>         try:
+>             dt = datetime.datetime.strptime(not_after, '%b %d %H:%M:%S %Y %Z')
+>             exp_date_str = dt.date().isoformat()
+>         except Exception:
+>             try:
+>                 dt = datetime.datetime.strptime(not_after, '%b %d %H:%M:%S %Y')
+>                 exp_date_str = dt.date().isoformat()
+>             except Exception:
+>                 exp_date_str = not_after
+>
+>     print(f'Common Name: {cn if cn else "Unknown"}')
+>     print(f'Expiration Date: {exp_date_str if exp_date_str else "Unknown"}')
+>     print('Certificate verification successful')
+>
+>
+> if __name__ == '__main__':
+>     main()
+> PY
+root@e6eacf69805e:/app# chmod +x /app/check_cert.py
+root@e6eacf69805e:/app# python3 /app/check_cert.py
+Common Name: dev-internal.company.local
+Expiration Date: 2026-10-15
+Certificate verification successful
+root@e6eacf69805e:/app#

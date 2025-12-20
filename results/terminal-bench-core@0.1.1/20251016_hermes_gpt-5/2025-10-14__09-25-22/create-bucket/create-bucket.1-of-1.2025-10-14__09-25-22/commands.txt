@@ -1,0 +1,16 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'command -v aws >/dev/null 2>&1 || (apt-get update && apt-get install -y awscli)\n'
+'aws --version\n'
+'export REGION=$(aws configure get region 2>/dev/null); if [ -z "$REGION" ]; then export REGION=us-east-1; aws configure set region "$REGION"; fi; echo "Using region: $REGION"\n'
+'if [ "$REGION" = "us-east-1" ]; then aws s3api create-bucket --bucket sample-bucket; else aws s3api create-bucket --bucket sample-bucket --create-bucket-configuration LocationConstraint="$REGION"; fi\n'
+'aws s3api put-public-access-block --bucket sample-bucket --public-access-block-configuration BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false\n'
+'aws s3api put-bucket-acl --bucket sample-bucket --acl public-read\n'
+'printf \'{\n  "Version": "2012-10-17",\n  "Statement": [\n    {\n      "Sid": "AllowPublicRead",\n      "Effect": "Allow",\n      "Principal": "*",\n      "Action": "s3:GetObject",\n      "Resource": "arn:aws:s3:::sample-bucket/*"\n    }\n  ]\n}\n\' > /tmp/sample-bucket-policy.json\n'
+'aws s3api put-bucket-policy --bucket sample-bucket --policy file:///tmp/sample-bucket-policy.json\n'
+'aws s3api get-bucket-policy-status --bucket sample-bucket || aws s3api get-bucket-acl --bucket sample-bucket\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

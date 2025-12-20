@@ -1,0 +1,196 @@
+root@f62b097948ee:/app# export DEBIAN_FRONTEND=noninteractive
+root@f62b097948ee:/app# apt-get update
+Get:1 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]
+Get:2 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Get:3 http://security.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [2796 kB]
+Get:4 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+Get:5 http://archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+Get:6 http://archive.ubuntu.com/ubuntu noble/multiverse amd64 Packages [331 kB]
+Get:7 http://archive.ubuntu.com/ubuntu noble/restricted amd64 Packages [117 kB]
+Get:8 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages [19.3 MB]
+Get:9 http://security.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [33.1 kB]
+Get:10 http://security.ubuntu.com/ubuntu noble-security/main amd64 Packages [1701 kB]
+Get:11 http://security.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1182 kB]
+Get:12 http://archive.ubuntu.com/ubuntu noble/main amd64 Packages [1808 kB]
+Get:13 http://archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [2981 kB]
+Get:14 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [2083 kB]
+Get:15 http://archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [35.9 kB]
+Get:16 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1943 kB]
+Get:17 http://archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [34.3 kB]
+Get:18 http://archive.ubuntu.com/ubuntu noble-backports/main amd64 Packages [49.4 kB]
+Fetched 35.0 MB in 5s (7529 kB/s)
+Reading package lists... Done
+root@f62b097948ee:/app# apt-get install -y git openssh-server nginx openssl sshpass curl ca-certificates
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+git is already the newest version (1:2.43.0-1ubuntu7.3).
+openssh-server is already the newest version (1:9.6p1-3ubuntu13.14).
+nginx is already the newest version (1.24.0-2ubuntu7.5).
+openssl is already the newest version (3.0.13-0ubuntu3.6).
+curl is already the newest version (8.5.0-2ubuntu10.6).
+ca-certificates is already the newest version (20240203).
+The following NEW packages will be installed:
+  sshpass
+0 upgraded, 1 newly installed, 0 to remove and 0 not upgraded.
+Need to get 11.7 kB of archives.
+After this operation, 35.8 kB of additional disk space will be used.
+Get:1 http://archive.ubuntu.com/ubuntu noble/universe amd64 sshpass amd64 1.09-1 [11.7 kB]
+Fetched 11.7 kB in 0s (47.2 kB/s)
+debconf: delaying package configuration, since apt-utils is not installed
+Selecting previously unselected package sshpass.
+(Reading database ... 23986 files and directories currently installed.)
+Preparing to unpack .../sshpass_1.09-1_amd64.deb ...
+Unpacking sshpass (1.09-1) ...
+Setting up sshpass (1.09-1) ...
+root@f62b097948ee:/app# mkdir -p /var/run/sshd
+root@f62b097948ee:/app# ssh-keygen -A
+root@f62b097948ee:/app# id -u git >/dev/null 2>&1 || useradd -m -s /usr/bin/git-shell git
+root@f62b097948ee:/app# echo 'git:password' | chpasswd
+root@f62b097948ee:/app# printf '\nPasswordAuthentication yes\nUsePAM yes\n' >> /etc/ssh/sshd_config
+root@f62b097948ee:/app# /usr/sbin/sshd -D &
+[1] 343
+root@f62b097948ee:/app# mkdir -p /git
+root@f62b097948ee:/app# git init --bare /git/project
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: is subject to change. To configure the initial branch name to use in all
+hint: of your new repositories, which will suppress this warning, call:
+hint:
+hint:   git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint:   git branch -m <name>
+Initialized empty Git repository in /git/project/
+root@f62b097948ee:/app# chown -R git:git /git
+root@f62b097948ee:/app# mkdir -p /var/www/html/dev
+root@f62b097948ee:/app# chown -R git:git /var/www/html
+root@f62b097948ee:/app# printf '#!/bin/bash\nset -e\nwhile read oldrev newrev ref; do\n  branch="${ref#refs/heads/}"\n  case "$branch" in\n    main) dest="/var/
+www/html" ;;\n    dev) dest="/var/www/html/dev" ;;\n    *) continue ;;\n  esac\n  mkdir -p "$dest"\n  /usr/bin/git --git-dir=/git/project --work-tree="$dest" ch
+eckout -f "$branch"\ndone\n' > /git/project/hooks/post-receive
+root@f62b097948ee:/app# chmod +x /git/project/hooks/post-receive
+root@f62b097948ee:/app# openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/selfsigned.key -out /etc/ssl/certs/selfsigned.crt -subj "/C
+N=localhost"
+...+...+..........+..+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*.+.........+.+........+...+....+...+..+.+.....+++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++*....+.+............+.....+...+....+...........+...+....+............+.........+.....+...............+.+........+.......+.
+.....+...+..+............+...+...+.+.....+....+..........................+......+....+...........+...+.+.....+...+.+.....+.......+...+..+....+...+...+..+...+...
+.......+........+....+......+...........+...+.+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+..+..+...............+.+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*........+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+++*..............+......+.......+..+.+........+.+.........+............+.....+.......+..+...+..........+...+++++++++++++++++++++++++++++++++++++++++++++++++++++
+++++++++++++
+-----
+root@f62b097948ee:/app# printf 'server {\n    listen 8443 ssl default_server;\n    server_name localhost;\n    ssl_certificate /etc/ssl/certs/selfsigned.crt;\n
+   ssl_certificate_key /etc/ssl/private/selfsigned.key;\n\n    root /var/www/html;\n    index index.html;\n\n    location /dev/ {\n        alias /var/www/html/d
+ev/;\n        autoindex off;\n    }\n}\n' > /etc/nginx/sites-available/git_deploy
+root@f62b097948ee:/app# ln -sf /etc/nginx/sites-available/git_deploy /etc/nginx/sites-enabled/git_deploy
+root@f62b097948ee:/app# rm -f /etc/nginx/sites-enabled/default
+root@f62b097948ee:/app# nginx -t
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+root@f62b097948ee:/app# nginx -s reload || nginx
+2025/12/10 00:34:16 [notice] 430#430: signal process started
+2025/12/10 00:34:16 [error] 430#430: invalid PID number "" in "/run/nginx.pid"
+root@f62b097948ee:/app# mkdir -p /tmp/testrepo && cd /tmp/testrepo
+root@f62b097948ee:/tmp/testrepo# git init
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: is subject to change. To configure the initial branch name to use in all
+hint: of your new repositories, which will suppress this warning, call:
+hint:
+hint:   git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint:   git branch -m <name>
+Initialized empty Git repository in /tmp/testrepo/.git/
+root@f62b097948ee:/tmp/testrepo# git checkout -b main
+Switched to a new branch 'main'
+root@f62b097948ee:/tmp/testrepo# printf '<!doctype html>\n<html><body><h1>Main Branch</h1></body></html>\n' > index.html
+root@f62b097948ee:/tmp/testrepo# git add index.html && git commit -m "Add main index"
+Author identity unknown
+
+*** Please tell me who you are.
+
+Run
+
+  git config --global user.email "you@example.com"
+  git config --global user.name "Your Name"
+
+to set your account's default identity.
+Omit --global to set the identity only in this repository.
+
+fatal: unable to auto-detect email address (got 'root@f62b097948ee.(none)')
+root@f62b097948ee:/tmp/testrepo# git checkout -b dev
+Switched to a new branch 'dev'
+root@f62b097948ee:/tmp/testrepo# printf '<!doctype html>\n<html><body><h1>Dev Branch</h1></body></html>\n' > index.html
+root@f62b097948ee:/tmp/testrepo# git add index.html && git commit -m "Add dev index"
+Author identity unknown
+
+*** Please tell me who you are.
+
+Run
+
+  git config --global user.email "you@example.com"
+  git config --global user.name "Your Name"
+
+to set your account's default identity.
+Omit --global to set the identity only in this repository.
+
+fatal: unable to auto-detect email address (got 'root@f62b097948ee.(none)')
+root@f62b097948ee:/tmp/testrepo# git remote add origin git@localhost:/git/project
+root@f62b097948ee:/tmp/testrepo# GIT_SSH_COMMAND="sshpass -p password ssh -o StrictHostKeyChecking=no" git push -u origin main dev
+error: src refspec main does not match any
+error: src refspec dev does not match any
+error: failed to push some refs to 'localhost:/git/project'
+root@f62b097948ee:/tmp/testrepo# sleep 2
+curl -ks https://localhost:8443/index.html | head -n 1
+root@f62b097948ee:/tmp/testrepo# curl -ks https://localhost:8443/index.html | head -n 1
+<html>
+root@f62b097948ee:/tmp/testrepo# curl -ks https://localhost:8443/dev/index.html | head -n 1
+<html>
+root@f62b097948ee:/tmp/testrepo# git config --global user.email "ci@example.com" && git config --global user.name "CI"
+root@f62b097948ee:/tmp/testrepo# git rev-parse --abbrev-ref HEAD
+HEAD
+fatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
+root@f62b097948ee:/tmp/testrepo# git add index.html && git commit -m "Add dev index"
+[dev (root-commit) 43d6b3d] Add dev index
+ 1 file changed, 2 insertions(+)
+ create mode 100644 index.html
+root@f62b097948ee:/tmp/testrepo# git checkout main || git checkout -b main
+error: pathspec 'main' did not match any file(s) known to git
+Switched to a new branch 'main'
+root@f62b097948ee:/tmp/testrepo# printf '<!doctype html>\n<html><body><h1>Main Branch</h1></body></html>\n' > index.html
+root@f62b097948ee:/tmp/testrepo# git add index.html && git commit -m "Add main index"
+[main 0f75b4b] Add main index
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+root@f62b097948ee:/tmp/testrepo# git remote -v
+origin  git@localhost:/git/project (fetch)
+origin  git@localhost:/git/project (push)
+root@f62b097948ee:/tmp/testrepo# GIT_SSH_COMMAND="sshpass -p password ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" git push -u origin main d
+ev
+Warning: Permanently added 'localhost' (ED25519) to the list of known hosts.
+Enumerating objects: 6, done.
+Counting objects: 100% (6/6), done.
+Delta compression using up to 32 threads
+Compressing objects: 100% (4/4), done.
+Writing objects: 100% (6/6), 513 bytes | 513.00 KiB/s, done.
+Total 6 (delta 0), reused 0 (delta 0), pack-reused 0
+remote: Switched to branch 'main'
+remote: Switched to branch 'dev'
+To localhost:/git/project
+ * [new branch]      main -> main
+ * [new branch]      dev -> dev
+branch 'main' set up to track 'origin/main'.
+branch 'dev' set up to track 'origin/dev'.
+root@f62b097948ee:/tmp/testrepo# sleep 2
+echo 'Main endpoint:' && curl -ks https://localhost:8443/index.html | grep -o 'Main Branch' || true
+root@f62b097948ee:/tmp/testrepo# echo 'Main endpoint:' && curl -ks https://localhost:8443/index.html | grep -o 'Main Branch' || true
+Main endpoint:
+Main Branch
+root@f62b097948ee:/tmp/testrepo# echo 'Dev endpoint:' && curl -ks https://localhost:8443/dev/index.html | grep -o 'Dev Branch' || true
+Dev endpoint:
+Dev Branch
+root@f62b097948ee:/tmp/testrepo#

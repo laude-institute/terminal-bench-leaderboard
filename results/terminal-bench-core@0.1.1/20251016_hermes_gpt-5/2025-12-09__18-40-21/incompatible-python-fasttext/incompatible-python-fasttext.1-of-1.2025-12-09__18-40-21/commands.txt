@@ -1,0 +1,42 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'cat /etc/os-release\n'
+'python3 --version\n'
+'python --version\n'
+'which python3 || true\n'
+'which python || true\n'
+"python3 -m pip --version || echo 'no pip'\n"
+'python3 -m pip list | grep -i fast || true\n'
+'python3 -c "import fasttext, sys; print(\'fasttext import OK:\', fasttext.__version__, \'from\', fasttext.__file__)" || true\n'
+'python -c "import fasttext, sys; print(\'module file:\', fasttext.__file__); print(\'version attr:\', getattr(fasttext, \'__version__\', None)); import inspect; print(\'has load_model:\', hasattr(fasttext, \'load_model\')); print(\'has train_supervised:\', hasattr(fasttext, \'train_supervised\')); print(\'has train_unsupervised:\', hasattr(fasttext, \'train_unsupervised\'))" \n'
+"python - << 'PY'\nimport fasttext, os, sys\nprint('fasttext dir listing:')\nimport pathlib\np = pathlib.Path(fasttext.__file__).parent\nfor f in sorted(p.iterdir()):\n    print(' -', f.name)\nPY\n"
+'python -m pip show fasttext\n'
+"python - << 'PY'\n# minimal functional test\nimport os, tempfile, fasttext\ntrain_txt = 'label __label__pos I love this\\nlabel __label__neg I hate that\\n'\n# fastText expects labels like __label__pos followed by text\n# Prepare a tiny dataset\nwith open('train.txt','w') as f:\n    f.write('__label__pos I love this\\n__label__neg I hate that\\n')\ntry:\n    model = fasttext.train_supervised(input='train.txt', epoch=1, lr=0.5, wordNgrams=1, verbose=0)\n    print('train_supervised OK:', bool(model))\n    print('predict:', model.predict('I love it'))\nexcept Exception as e:\n    print('train_supervised failed:', type(e).__name__, e)\nPY\n"
+"python - << 'PY'\n# If load_model exists, try creating and saving a model (if previous step succeeded)\nimport os, fasttext\nif hasattr(fasttext, 'load_model'):\n    try:\n        if os.path.exists('train.txt'):\n            m = fasttext.train_supervised(input='train.txt', epoch=1, verbose=0)\n            m.save_model('tiny.bin')\n            m2 = fasttext.load_model('tiny.bin')\n            print('load_model OK:', bool(m2))\n    except Exception as e:\n        print('load_model failed:', type(e).__name__, e)\nelse:\n    print('load_model attribute missing')\nPY\n"
+'if python -c "import fasttext, importlib.util, pathlib; p=pathlib.Path(fasttext.__file__).parent; print(any(str(x).endswith((\'.so\',\'.pyd\')) for x in p.iterdir()))" 2>/dev/null | grep -q True; then echo \'native_ext_present\'; else echo \'native_ext_missing\'; fi\n'
+"echo 'Attempting repair: upgrading build tools and reinstalling fasttext with a compatible version'\n"
+'python -m pip install -U pip setuptools wheel\n'
+'python -m pip uninstall -y fasttext\n'
+"python -m pip install --no-cache-dir 'fasttext==0.9.2'\n"
+'python -c "import fasttext; print(\'imported fasttext from\', fasttext.__file__); print(\'has train_supervised:\', hasattr(fasttext,\'train_supervised\'))"\n'
+"python - << 'PY'\n# Re-run minimal test after reinstall\nimport fasttext\nwith open('train.txt','w') as f:\n    f.write('__label__pos I love this\\n__label__neg I hate that\\n')\ntry:\n    m = fasttext.train_supervised(input='train.txt', epoch=1, verbose=0)\n    print('train OK')\n    m.save_model('tiny.bin')\n    m2 = fasttext.load_model('tiny.bin')\n    print('load OK', bool(m2))\nexcept Exception as e:\n    print('fasttext still failing:', type(e).__name__, e)\nPY\n"
+'python -c "import sys, fasttext; print(\'Default interpreter:\', sys.executable); print(\'FastText path:\', fasttext.__file__)"\n'
+'python -c "import sys, numpy as np; print(\'Python:\', sys.version.split()[0]); print(\'NumPy:\', np.__version__)"\n'
+'python -m pip install --no-cache-dir fasttext==0.9.3\n'
+'python -c "import fasttext, pathlib; p=pathlib.Path(fasttext.__file__).parent; print(\'fasttext path:\', p); import os, sys; print(\'default python:\', sys.executable); print(\'contents:\', [x.name for x in p.iterdir()])" \n'
+'python - << \'PY\'\nimport sys, re, pathlib\ntry:\n    import fasttext\nexcept Exception as e:\n    print(\'fasttext import failed:\', e)\n    sys.exit(1)\npath = pathlib.Path(fasttext.__file__).parent / \'FastText.py\'\nprint(\'Patching file:\', path)\ntext = path.read_text()\nnew_text = re.sub(r",\\s*copy\\s*=\\s*False", "", text)\nchanged = (new_text != text)\nif changed:\n    path.write_text(new_text)\nprint(\'Patched copy=False removed:\', changed)\nPY\n'
+"python - << 'PY'\nimport fasttext, os\nwith open('train.txt','w') as f:\n    f.write('__label__pos I love this\\n__label__neg I hate that\\n')\nmodel = fasttext.train_supervised(input='train.txt', epoch=1, lr=0.5, wordNgrams=1, verbose=0)\nprint('train_supervised OK:', bool(model))\nprint('predict:', model.predict('I love it'))\nmodel.save_model('tiny.bin')\nfrom fasttext import load_model\nm2 = load_model('tiny.bin')\nprint('load_model OK:', bool(m2))\nPY\n"
+'python -c "import sys, fasttext; print(\'Default interpreter:\', sys.executable); print(\'FastText module:\', fasttext.__file__)"\n'
+''
+'python -m pip show fasttext || true\n'
+"bash -lc 'if ! python -m pip show fasttext >/dev/null 2>&1; then apt-get update && apt-get install -y --no-install-recommends build-essential; fi'\n"
+"bash -lc 'if ! python -m pip show fasttext >/dev/null 2>&1; then python -m pip install --no-cache-dir fasttext==0.9.3; else echo fasttext_already_installed; fi'\n"
+"python - << 'PY'\nimport sys, pathlib\nimport fasttext\np = pathlib.Path(fasttext.__file__).parent\nprint('fasttext path:', p)\nprint('entries:', [x.name for x in p.iterdir()])\nso = [x.name for x in p.glob('*.so')]\nprint('native .so in package:', so)\nprint('default python:', sys.executable)\nPY\n"
+'python - << \'PY\'\nimport sys, re, pathlib\nimport fasttext\npath = pathlib.Path(fasttext.__file__).parent / \'FastText.py\'\nprint(\'Patching file:\', path)\nsrc = path.read_text()\nnew_src = re.sub(r",\\s*copy\\s*=\\s*False", "", src)\nchanged = (new_src != src)\nif changed:\n    path.write_text(new_src)\nprint(\'Patched copy=False removed:\', changed)\nPY\n'
+"python - << 'PY'\nimport fasttext\nwith open('train.txt','w') as f:\n    f.write('__label__pos I love this\\n__label__neg I hate that\\n')\nmodel = fasttext.train_supervised(input='train.txt', epoch=1, lr=0.5, wordNgrams=1, verbose=0)\nprint('train_supervised OK:', bool(model))\nprint('predict:', model.predict('I love it'))\nmodel.save_model('tiny.bin')\nfrom fasttext import load_model\nm2 = load_model('tiny.bin')\nprint('load_model OK:', bool(m2))\nPY\n"
+'python -c "import sys, fasttext; print(\'Default interpreter:\', sys.executable); print(\'FastText module:\', fasttext.__file__)"\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

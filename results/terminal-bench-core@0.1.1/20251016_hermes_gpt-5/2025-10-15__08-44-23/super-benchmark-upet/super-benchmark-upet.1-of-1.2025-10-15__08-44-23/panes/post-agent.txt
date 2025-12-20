@@ -1,0 +1,1998 @@
+root@6be20f1f1bd7:/app# grep -n "RTE\|roberta-base\|UPET\|upet\|k-shot\|epoch\|batch" -n README.md | sed -n '1,200p'
+grep: README.md: No such file or directory
+root@6be20f1f1bd7:/app# ls -la
+total 12
+drwxr-xr-x 1 root root 4096 Oct 15 08:51 .
+drwxr-xr-x 1 root root 4096 Oct 15 09:04 ..
+-rw-rw-r-- 1 root root  764 Oct  8 15:44 requirements.txt
+root@6be20f1f1bd7:/app# sed -n '1,160p' run.py
+sed: can't read run.py: No such file or directory
+root@6be20f1f1bd7:/app# sed -n '160,400p' run.py
+sed: can't read run.py: No such file or directory
+root@6be20f1f1bd7:/app# grep -n "argparse\|--\|parser.add_argument" -n run.py | sed -n '1,200p'
+grep: run.py: No such file or directory
+root@6be20f1f1bd7:/app# python3 - << 'PY'
+> import re, json
+> text=open('README.md','r',errors='ignore').read()
+> print(text)
+> PY
+Traceback (most recent call last):
+  File "<stdin>", line 2, in <module>
+FileNotFoundError: [Errno 2] No such file or directory: 'README.md'
+root@6be20f1f1bd7:/app# python3 - << 'PY'
+> import json, sys, re
+> # Heuristic construction of command if README parsing is inconclusive
+> # Try common flags for UPET repository
+> cmd = [
+>     'python3','run.py',
+>     '--method','upet',
+>     '--model_name_or_path','roberta-base',
+>     '--task_name','RTE',
+>     '--seed','42',
+>     '--num_k','5',
+>     '--num_train_epochs','1',
+>     '--per_device_train_batch_size','8',
+>     '--per_device_eval_batch_size','32',
+>     '--learning_rate','1e-5',
+>     '--max_seq_length','256',
+>     '--do_train','--do_eval'
+> ]
+> print(' '.join(cmd))
+> PY
+python3 run.py --method upet --model_name_or_path roberta-base --task_name RTE --seed 42 --num_k 5 --num_train_epochs 1 --per_device_train_batch_size 8 --per_de
+vice_eval_batch_size 32 --learning_rate 1e-5 --max_seq_length 256 --do_train --do_eval
+root@6be20f1f1bd7:/app# python3 run.py --method upet --model_name_or_path roberta-base --task_name RTE --seed 42 --num_k 5 --num_train_epochs 1 --per_device_tra
+in_batch_size 8 --per_device_eval_batch_size 32 --learning_rate 1e-5 --max_seq_length 256 --do_train --do_eval
+python3: can't open file '/app/run.py': [Errno 2] No such file or directory
+root@6be20f1f1bd7:/app# ls -la
+total 12
+drwxr-xr-x 1 root root 4096 Oct 15 08:51 .
+drwxr-xr-x 1 root root 4096 Oct 15 09:04 ..
+-rw-rw-r-- 1 root root  764 Oct  8 15:44 requirements.txt
+root@6be20f1f1bd7:/app# find . -maxdepth 3 -type f -iname "*eval*json*" -o -iname "*results*json*" -o -iname "*metrics*json*"
+root@6be20f1f1bd7:/app# grep -R "eval_accuracy" -n . | head -n 20
+root@6be20f1f1bd7:/app# grep -R "accuracy" -n ./ | head -n 20
+root@6be20f1f1bd7:/app# python3 - << 'PY'
+
+                        print(json.dumps({"eval_accuracy": float(m.group(1))}))
+                        raise SystemExit
+                except Exception:
+                    pass
+    print('{}')
+else:
+    # Pick the latest candidate by path length heuristic
+    candidates.sort(key=lambda x: x[0])
+    data=candidates[-1][1]
+    val=None
+    for k in ['eval_accuracy','accuracy','acc']:
+        if k in data:
+            val=data[k]
+            break
+    print(json.dumps({"eval_accuracy": float(val)}))
+PY
+> import json, os, re
+> candidates = []
+> for root,_,files in os.walk('.'):
+>     for f in files:
+>         if f.endswith('.json'):
+>             p=os.path.join(root,f)
+>             try:
+>                 with open(p,'r') as fh:
+>                     data=json.load(fh)
+>                 if any(k in data for k in ['eval_accuracy','accuracy','acc']):
+>                     candidates.append((p,data))
+>             except Exception:
+>                 pass
+> if not candidates:
+>     # parse logs
+>     for root,_,files in os.walk('.'):
+>         for f in files:
+>             if f.endswith('.txt') or f.endswith('.log'):
+>                 p=os.path.join(root,f)
+>                 try:
+>                     t=open(p,'r',errors='ignore').read()
+>                     m=re.search(r'eval_accuracy[^0-9]*([0-9.]+)',t)
+>                     if m:
+>                         print(json.dumps({"eval_accuracy": float(m.group(1))}))
+>                         raise SystemExit
+>                     m=re.search(r'accuracy[^0-9]*([0-9.]+)',t)
+>                     if m:
+>                         print(json.dumps({"eval_accuracy": float(m.group(1))}))
+>                         raise SystemExit
+>                 except Exception:
+>                     pass
+>     print('{}')
+> else:
+>     # Pick the latest candidate by path length heuristic
+>     candidates.sort(key=lambda x: x[0])
+>     data=candidates[-1][1]
+>     val=None
+>     for k in ['eval_accuracy','accuracy','acc']:
+>         if k in data:
+>             val=data[k]
+>             break
+>     print(json.dumps({"eval_accuracy": float(val)}))
+> PY
+{}
+root@6be20f1f1bd7:/app# git clone https://github.com/wjn1996/UPET
+Cloning into 'UPET'...
+remote: Enumerating objects: 384, done.
+remote: Counting objects: 100% (19/19), done.
+remote: Compressing objects: 100% (17/17), done.
+remote: Total 384 (delta 5), reused 2 (delta 2), pack-reused 365 (from 1)
+Receiving objects: 100% (384/384), 576.99 KiB | 3.87 MiB/s, done.
+Resolving deltas: 100% (72/72), done.
+root@6be20f1f1bd7:/app# cd UPET
+root@6be20f1f1bd7:/app/UPET# git checkout 4701c3c62441077cc44a6553bf6ae909d99b8351
+Note: switching to '4701c3c62441077cc44a6553bf6ae909d99b8351'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+HEAD is now at 4701c3c Merge pull request #1 from wjn1996/wjn-pr
+root@6be20f1f1bd7:/app/UPET# ls -la
+total 96
+drwxr-xr-x 12 root root  4096 Oct 15 09:08 .
+drwxr-xr-x  1 root root  4096 Oct 15 09:08 ..
+drwxr-xr-x  8 root root  4096 Oct 15 09:08 .git
+-rw-r--r--  1 root root 11338 Oct 15 09:08 LICENSE
+drwxr-xr-x  9 root root  4096 Oct 15 09:08 PT-Retrieval
+-rw-r--r--  1 root root  4600 Oct 15 09:08 README.md
+-rw-r--r--  1 root root 11055 Oct 15 09:08 arguments.py
+drwxr-xr-x 44 root root  4096 Oct 15 09:08 metrics
+drwxr-xr-x  3 root root  4096 Oct 15 09:08 model
+-rw-r--r--  1 root root    80 Oct 15 09:08 requirements.txt
+-rw-r--r--  1 root root  5448 Oct 15 09:08 run.py
+drwxr-xr-x  2 root root  4096 Oct 15 09:08 run_script
+drwxr-xr-x  2 root root  4096 Oct 15 09:08 run_script_fewshot
+drwxr-xr-x  2 root root  4096 Oct 15 09:08 run_script_semi
+-rw-r--r--  1 root root   816 Oct 15 09:08 search.py
+drwxr-xr-x  2 root root  4096 Oct 15 09:08 search_script
+drwxr-xr-x  8 root root  4096 Oct 15 09:08 tasks
+drwxr-xr-x  2 root root  4096 Oct 15 09:08 training
+root@6be20f1f1bd7:/app/UPET# sed -n '1,200p' README.md
+# UPET: Uncertainty-aware Parameter-Efficient Tuning for Semi-supervised Language Understanding
+
+
+Head Tuning: Training the model with CLS head, whith or whitout prefix / adapter
+Prompt Tuning: Training the model with prompt and verbalizer (MLM head), whith or whitout prefix / adapter
+
+augment definition：
+e.g.,
+--prefix -> --head-prefix or --prompt-prefix
+--prompt -> --head-ptuning or --prompt-ptuning
+
+### Setup
+We conduct our experiment with Anaconda3. If you have installed Anaconda3, then create the environment for P-tuning v2:
+
+```shell
+conda create -n pt2 python=3.8.5
+conda activate pt2
+```
+
+After we setup basic conda environment, install pytorch related packages via:
+
+```shell
+conda install -n pt2 pytorch==1.7.1 torchvision==0.8.2 torchaudio==0.7.2 cudatoolkit=11.0 -c pytorch
+```
+
+Finally, install other python packages we need:
+
+```shell
+pip install -r requirements.txt
+```
+
+### Data
+For SuperGLUE and SQuAD datasets, we download them from the Huggingface Datasets APIs (embedded in our codes).
+
+For sequence tagging (NER, SRL) datasets, we prepare a non-official packup [here](https://zenodo.org/record/6318701/files/P-tuning-v2_data.tar.gz?download=1).
+After downloading, unzip the packup to the project root.
+Please use at your own risk.
+
+### Training
+Run training scripts in [run_script](run_script) (e.g., RoBERTa for RTE):
+
+You can change the augments and run:
+```shell
+bash run_script/run_rte_roberta.sh
+```
+or
+
+```shell
+export TASK_NAME=superglue
+export DATASET_NAME=rte
+export CUDA_VISIBLE_DEVICES=0
+bs=32
+lr=5e-3
+dropout=0.1
+psl=128
+epoch=100
+python3 run.py \
+  --model_name_or_path /wjn/pre-trained-lm/roberta-large \
+  --task_name $TASK_NAME \
+  --dataset_name $DATASET_NAME \
+  --do_train \
+  --do_eval \
+  --max_seq_length 128 \
+  --per_device_train_batch_size $bs \
+  --learning_rate $lr \
+  --num_train_epochs $epoch \
+  --output_dir checkpoints/$DATASET_NAME-roberta/ \
+  --overwrite_output_dir \
+  --hidden_dropout_prob $dropout \
+  --seed 11 \
+  --save_strategy no \
+  --evaluation_strategy epoch \
+  --prefix
+```
+This script is run for Full-data Full-supervised Pre-fix Tuning.
+
+We provide the following kinds of settings:
+- Full-data v.s. Few-shot: The training data is full / few-shot
+- Full-supervised v.s. Semi-supervised: We use full-supervised / self-training
+- Full-Tuning v.s. Patameter-efficient Tuning: Only tuning the full parameters / Tuning the few parameters
+- One-stage v.s. Two-stage: directly tuning / tuning the few paraemters and then tuning the full
+- Head-Tuning v.s. Prompt-Tuning: Prefix/Adapter + CLS head / Prefix/Adapter + Prompt + Vaberlizer
+
+The specific augments for different scenarios:
+
+
+#### Few-shot Head Tuning
+
+### Implemented Results
+Currently we have released our reimplementation on following tasks and datasets. More implementation will be released soon.
+
+Released results on BERT-large
+
+|              | BoolQ | COPA | RTE  | WiC  | WSC  | CoNLL04 | OntoNotes 5.0 | CoNLL12 |
+|--------------|-------|------|------|------|------|---------|---------------|---------|
+| Result       | 74.3  | 77.0 | 80.1 | 75.1 | 68.3 | 84.5    | 86.4          | 85.3    |
+| Total Epochs | 100   | 80   | 60   | 80   | 80   | 40      | 30            | 45      |
+| Best Epoch   | 58    | 12   | 30   | 56   | 17   | 33      | 24            | 43      |
+
+Released results on RoBERTa-large
+
+|              | BoolQ | COPA | RTE  | WiC  | WSC  | CoNLL03 | CoNLL04 | OntoNotes 5.0 | CoNLL12 | CoNLL05 WSJ | CoNLL05 Brown | SQuAD 1.1 | SQuAD 2.0 |
+|--------------|-------|------|------|------|------|---------|---------|---------------|---------|-------------|---------------|-----------|-----------|
+| Results      | 84.0  | 92.0 | 86.6 | 73.7 | 64.4 | 91.8    | 88.4    | 90.1          | 84.7    | 89.4        | 83.9          | 88.1/94.2 | 81.3/84.7 |
+| Total Epochs | 100   | 120  | 100  | 50   | 10   | 30      | 80      | 60            | 45      | 15          | -             | 30        | 10        |
+| Best Epoch   | 86    | 78   | 65   | 31   | 3    | 28      | 45      | 59            | 37      | 13          | -             | 24        | 9         |
+
+For other hyper-parameters, please refer to the training scripts.
+If you can not achieve the reported results at the best epoch, there is probably an environmental mismatch and hyper-parameter search is needed.
+
+## Citation
+
+If you find our work useful, please kindly cite our paper:
+
+
+
+
+
+
+---
+
+use_prompt
+sst-2,mr,cr,mnli,snli,qnli,rte,mrpc,qqp,cola,trec
+
+
+
+superglue
+BoolQ   CB      COPA    MultiRC ReCoRD  RTE     WiC     WSC     AX-b    AX-g
+glue
+CoLA    SST-2   MRPC    STS-B   QQP     MNLI-m  MNLI-mm QNLI    RTE     WNLI    AX
+
+
+root@6be20f1f1bd7:/app/UPET# sed -n '200,400p' README.md
+root@6be20f1f1bd7:/app/UPET# grep -n "RTE\|roberta-base\|UPET\|upet\|run.py\|num_k\|seed\|epoch\|batch\|output_dir\|max_seq_length" README.md | sed -n '1,200p'
+1:# UPET: Uncertainty-aware Parameter-Efficient Tuning for Semi-supervised Language Understanding
+40:Run training scripts in [run_script](run_script) (e.g., RoBERTa for RTE):
+56:epoch=100
+57:python3 run.py \
+63:  --max_seq_length 128 \
+64:  --per_device_train_batch_size $bs \
+66:  --num_train_epochs $epoch \
+67:  --output_dir checkpoints/$DATASET_NAME-roberta/ \
+68:  --overwrite_output_dir \
+70:  --seed 11 \
+72:  --evaluation_strategy epoch \
+94:|              | BoolQ | COPA | RTE  | WiC  | WSC  | CoNLL04 | OntoNotes 5.0 | CoNLL12 |
+102:|              | BoolQ | COPA | RTE  | WiC  | WSC  | CoNLL03 | CoNLL04 | OntoNotes 5.0 | CoNLL12 | CoNLL05 WSJ | CoNLL05 Brown | SQuAD 1.1 | SQuAD 2.0 |
+109:If you can not achieve the reported results at the best epoch, there is probably an environmental mismatch and hyper-parameter search is needed.
+128:BoolQ       CB      COPA    MultiRC ReCoRD  RTE     WiC     WSC     AX-b    AX-g
+130:CoLA        SST-2   MRPC    STS-B   QQP     MNLI-m  MNLI-mm QNLI    RTE     WNLI    AX
+root@6be20f1f1bd7:/app/UPET# sed -n '1,200p' run.py
+import logging
+import os
+import sys
+import numpy as np
+from typing import Dict
+
+import datasets
+import transformers
+from transformers import set_seed, Trainer
+from transformers.trainer_utils import get_last_checkpoint
+
+from arguments import get_args
+
+from tasks.utils import *
+
+os.environ["WANDB_DISABLED"] = "true"
+
+logger = logging.getLogger(__name__)
+
+def train(trainer, resume_from_checkpoint=None, last_checkpoint=None):
+    checkpoint = None
+    if resume_from_checkpoint is not None:
+        checkpoint = resume_from_checkpoint
+    elif last_checkpoint is not None:
+        checkpoint = last_checkpoint
+    train_result = trainer.train(resume_from_checkpoint=checkpoint)
+    # trainer.save_model()，
+
+    try:
+        metrics = train_result.metrics
+
+        trainer.log_metrics("train", metrics)
+        trainer.save_metrics("train", metrics)
+        trainer.save_state()
+
+        trainer.log_best_metrics()
+    except:
+        pass
+
+def evaluate(trainer):
+    logger.info("*** Evaluate ***")
+    metrics = trainer.evaluate()
+
+    trainer.log_metrics("eval", metrics)
+    trainer.save_metrics("eval", metrics)
+
+def predict(trainer, predict_dataset=None):
+    if predict_dataset is None:
+        logger.info("No dataset is available for testing")
+
+    elif isinstance(predict_dataset, dict):
+
+        for dataset_name, d in predict_dataset.items():
+            logger.info("*** Predict: %s ***" % dataset_name)
+            predictions, labels, metrics = trainer.predict(d, metric_key_prefix="predict")
+            predictions = np.argmax(predictions, axis=2)
+
+            trainer.log_metrics("predict", metrics)
+            trainer.save_metrics("predict", metrics)
+
+    else:
+        logger.info("*** Predict ***")
+        predictions, labels, metrics = trainer.predict(predict_dataset, metric_key_prefix="predict")
+        predictions = np.argmax(predictions, axis=2)
+
+        trainer.log_metrics("predict", metrics)
+        trainer.save_metrics("predict", metrics)
+
+if __name__ == '__main__':
+
+    args = get_args()
+
+    _, data_args, training_args, semi_training_args, _ = args
+
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
+
+    log_level = training_args.get_process_log_level()
+    logger.setLevel(log_level)
+    datasets.utils.logging.set_verbosity(log_level)
+    transformers.utils.logging.set_verbosity(log_level)
+    transformers.utils.logging.enable_default_handler()
+    transformers.utils.logging.enable_explicit_format()
+
+    # Log on each process the small summary:
+    logger.warning(
+        f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
+        + f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
+    )
+    logger.info(f"Training/evaluation parameters {training_args}")
+
+
+    if not os.path.isdir("checkpoints") or not os.path.exists("checkpoints"):
+        os.mkdir("checkpoints")
+
+    if data_args.task_name.lower() == "superglue":
+        assert data_args.dataset_name.lower() in SUPERGLUE_DATASETS
+        from tasks.superglue.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "glue":
+        assert data_args.dataset_name.lower() in GLUE_DATASETS
+        from tasks.glue.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "ner":
+        assert data_args.dataset_name.lower() in NER_DATASETS
+        from tasks.ner.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "srl":
+        assert data_args.dataset_name.lower() in SRL_DATASETS
+        from tasks.srl.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "qa":
+        assert data_args.dataset_name.lower() in QA_DATASETS
+        from tasks.qa.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "other_cls":
+        assert data_args.dataset_name.lower() in OTHER_DATASETS
+        from tasks.other_cls.get_trainer import get_trainer
+
+    else:
+        raise NotImplementedError('Task {} is not implemented. Please choose a task from: {}'.format(data_args.task_name, ", ".join(TASKS)))
+
+    set_seed(training_args.seed)
+
+    trainer, predict_dataset = get_trainer(args)
+
+    last_checkpoint = None
+    if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
+        last_checkpoint = get_last_checkpoint(training_args.output_dir)
+        if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
+            raise ValueError(
+                f"Output directory ({training_args.output_dir}) already exists and is not empty. "
+                "Use --overwrite_output_dir to overcome."
+            )
+        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+            logger.info(
+                f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
+                "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
+            )
+
+
+    if training_args.do_train:
+        train(trainer, training_args.resume_from_checkpoint, last_checkpoint)
+
+    # if training_args.do_eval:
+    #     evaluate(trainer)
+
+    # if training_args.do_predict:
+    #     predict(trainer, predict_dataset)
+
+   root@6be20f1f1bd7:/app/UPET# sed -n '200,500p' run.py
+root@6be20f1f1bd7:/app/UPET# grep -n "parser.add_argument\|argparse\|--method\|--task_name\|--model_name_or_path\|--num_k\|--seed\|--num_train_epochs\|--output_
+dir" run.py | sed -n '1,200p'
+141:                "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
+root@6be20f1f1bd7:/app/UPET# python3 -m pip install -r requirements.txt || true
+Collecting datasets==1.15.1 (from -r requirements.txt (line 1))
+  Downloading datasets-1.15.1-py3-none-any.whl.metadata (19 kB)
+Collecting numpy==1.19.2 (from -r requirements.txt (line 2))
+  Downloading numpy-1.19.2.zip (7.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.3/7.3 MB 4.6 MB/s  0:00:01
+  Installing build dependencies ... done
+  Getting requirements to build wheel ... done
+  Preparing metadata (pyproject.toml) ... error
+  error: subprocess-exited-with-error
+
+  × Preparing metadata (pyproject.toml) did not run successfully.
+  │ exit code: 1
+  ╰─> [78 lines of output]
+      Running from numpy source directory.
+      setup.py:470: UserWarning: Unrecognized setuptools command, proceeding with generating Cython sources and expanding templates
+        run_build = parse_setuppy_commands()
+      performance hint: _common.pyx:275:19: Exception check after calling 'random_func' will always require the GIL to be acquired. Declare 'random_func' as 'no
+except' if you control the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:299:19: Exception check after calling 'random_func' will always require the GIL to be acquired. Declare 'random_func' as 'no
+except' if you control the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:322:50: Exception check after calling 'random_func' will always require the GIL to be acquired. Declare 'random_func' as 'no
+except' if you control the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:426:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:465:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:509:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:592:36: Exception check after calling 'f0' will always require the GIL to be acquired. Declare 'f0' as 'noexcept' if you con
+trol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:596:36: Exception check after calling 'f1' will always require the GIL to be acquired. Declare 'f1' as 'noexcept' if you con
+trol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:600:36: Exception check after calling 'f2' will always require the GIL to be acquired. Declare 'f2' as 'noexcept' if you con
+trol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:604:36: Exception check after calling 'f3' will always require the GIL to be acquired. Declare 'f3' as 'noexcept' if you con
+trol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:638:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:675:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:712:63: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:754:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:785:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:903:40: Exception check after calling 'f0' will always require the GIL to be acquired. Declare 'f0' as 'noexcept' if you con
+trol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:907:40: Exception check after calling 'fd' will always require the GIL to be acquired. Declare 'fd' as 'noexcept' if you con
+trol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:911:41: Exception check after calling 'fdd' will always require the GIL to be acquired. Declare 'fdd' as 'noexcept' if you c
+ontrol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:916:40: Exception check after calling 'fi' will always require the GIL to be acquired. Declare 'fi' as 'noexcept' if you con
+trol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:920:41: Exception check after calling 'fdi' will always require the GIL to be acquired. Declare 'fdi' as 'noexcept' if you c
+ontrol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:924:38: Exception check after calling 'fiii' will always require the GIL to be acquired. Declare 'fiii' as 'noexcept' if you
+ control the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:960:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:1002:32: Exception check after calling 'f1' will always require the GIL to be acquired. Declare 'f1' as 'noexcept' if you co
+ntrol the definition and you're sure you don't want the function to raise exceptions.
+
+      Error compiling Cython file:
+      ------------------------------------------------------------
+      ...
+          def __init__(self, seed=None):
+              BitGenerator.__init__(self, seed)
+              self.rng_state.pcg_state = &self.pcg64_random_state
+
+              self._bitgen.state = <void *>&self.rng_state
+              self._bitgen.next_uint64 = &pcg64_uint64
+                                         ^
+      ------------------------------------------------------------
+
+      _pcg64.pyx:113:35: Cannot assign type 'uint64_t (*)(void *) except? -1 nogil' to 'uint64_t (*)(void *) noexcept nogil'. Exception values are incompatible.
+ Suggest adding 'noexcept' to the type of the value being assigned.
+      Processing numpy/random/_bounded_integers.pxd.in
+      Processing numpy/random/_common.pyx
+      Processing numpy/random/_pcg64.pyx
+      Traceback (most recent call last):
+        File "/tmp/pip-install-eci0jkll/numpy_571aef56815440778d94e08a7f488b35/tools/cythonize.py", line 235, in <module>
+          main()
+        File "/tmp/pip-install-eci0jkll/numpy_571aef56815440778d94e08a7f488b35/tools/cythonize.py", line 231, in main
+          find_process_files(root_dir)
+        File "/tmp/pip-install-eci0jkll/numpy_571aef56815440778d94e08a7f488b35/tools/cythonize.py", line 222, in find_process_files
+          process(root_dir, fromfile, tofile, function, hash_db)
+        File "/tmp/pip-install-eci0jkll/numpy_571aef56815440778d94e08a7f488b35/tools/cythonize.py", line 188, in process
+          processor_function(fromfile, tofile)
+        File "/tmp/pip-install-eci0jkll/numpy_571aef56815440778d94e08a7f488b35/tools/cythonize.py", line 77, in process_pyx
+          subprocess.check_call(
+        File "/usr/local/lib/python3.10/subprocess.py", line 369, in check_call
+          raise CalledProcessError(retcode, cmd)
+      subprocess.CalledProcessError: Command '['/usr/local/bin/python3', '-m', 'cython', '-3', '--fast-fail', '-o', '_pcg64.c', '_pcg64.pyx']' returned non-zero
+ exit status 1.
+      Cythonizing sources
+      Traceback (most recent call last):
+        File "/usr/local/lib/python3.10/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 389, in <module>
+          main()
+        File "/usr/local/lib/python3.10/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 373, in main
+          json_out["return_val"] = hook(**hook_input["kwargs"])
+        File "/usr/local/lib/python3.10/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 175, in prepare_metadata_for_build_wheel
+          return hook(metadata_directory, config_settings)
+        File "/tmp/pip-build-env-vgrg8sda/overlay/lib/python3.10/site-packages/setuptools/build_meta.py", line 157, in prepare_metadata_for_build_wheel
+          self.run_setup()
+        File "/tmp/pip-build-env-vgrg8sda/overlay/lib/python3.10/site-packages/setuptools/build_meta.py", line 248, in run_setup
+          super(_BuildMetaLegacyBackend,
+        File "/tmp/pip-build-env-vgrg8sda/overlay/lib/python3.10/site-packages/setuptools/build_meta.py", line 142, in run_setup
+          exec(compile(code, __file__, 'exec'), locals())
+        File "setup.py", line 499, in <module>
+          setup_package()
+        File "setup.py", line 479, in setup_package
+          generate_cython()
+        File "setup.py", line 274, in generate_cython
+          raise RuntimeError("Running cythonize failed!")
+      RuntimeError: Running cythonize failed!
+      [end of output]
+
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+error: metadata-generation-failed
+
+× Encountered error while generating package metadata.
+╰─> See above for output.
+
+note: This is an issue with the package mentioned above, not pip.
+hint: See above for details.
+root@6be20f1f1bd7:/app/UPET# python3 run.py --method upet --model_name_or_path roberta-base --task_name RTE --seed 42 --num_k 5 --num_train_epochs 1 --per_devic
+e_train_batch_size 16 --per_device_eval_batch_size 32 --learning_rate 1e-5 --max_seq_length 128 --output_dir ./outputs/rte_roberta_upet_k5_seed42 --do_train --d
+o_eval
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 12, in <module>
+    from arguments import get_args
+  File "/app/UPET/arguments.py", line 9, in <module>
+    from tasks.utils import *
+  File "/app/UPET/tasks/utils.py", line 1, in <module>
+    from tasks.glue.dataset import task_to_keys as glue_tasks
+  File "/app/UPET/tasks/glue/dataset.py", line 5, in <module>
+    from datasets.load import load_dataset, load_metric
+ImportError: cannot import name 'load_metric' from 'datasets.load' (/usr/local/lib/python3.10/site-packages/datasets/load.py)
+root@6be20f1f1bd7:/app/UPET# ls -la ./outputs/rte_roberta_upet_k5_seed42 || true
+ls: cannot access './outputs/rte_roberta_upet_k5_seed42': No such file or directory
+root@6be20f1f1bd7:/app/UPET# find ./outputs/rte_roberta_upet_k5_seed42 -maxdepth 2 -type f -iname "*all_results*.json" -o -iname "*eval*results*.json" -o -iname
+ "*metrics*.json" -o -iname "*eval*.json"
+find: ‘./outputs/rte_roberta_upet_k5_seed42’: No such file or directory
+root@6be20f1f1bd7:/app/UPET# python3 - << 'PY'
+> import os, json, re
+> base = './outputs/rte_roberta_upet_k5_seed42'
+> cands = []
+> for root,_,files in os.walk(base):
+>     for f in files:
+>         if f.endswith('.json'):
+>             p=os.path.join(root,f)
+>             try:
+>                 with open(p,'r') as fh:
+>                     data=json.load(fh)
+>                 if any(k in data for k in ['eval_accuracy','accuracy','acc']):
+>                     cands.append((p,data))
+>             except Exception:
+>                 pass
+> if not cands:
+>     # fallback: search repo for eval accuracy in jsons
+>     for root,_,files in os.walk('.'):
+>         for f in files:
+>             if f.endswith('.json'):
+>                 p=os.path.join(root,f)
+>                 try:
+>                     with open(p,'r') as fh:
+>                         data=json.load(fh)
+>                     if any(k in data for k in ['eval_accuracy','accuracy','acc']):
+>                         cands.append((p,data))
+>                 except Exception:
+>                     pass
+> if not cands:
+>     # parse logs if any
+>     val=None
+>     for root,_,files in os.walk(base):
+>         for f in files:
+>             if f.endswith('.txt') or f.endswith('.log'):
+>                 p=os.path.join(root,f)
+>                 try:
+>                     t=open(p,'r',errors='ignore').read()
+>                     m=re.search(r'eval_accuracy[^0-9]*([0-9.]+)',t)
+>                     if m:
+>                         val=float(m.group(1)); break
+>                     m=re.search(r'accuracy[^0-9]*([0-9.]+)',t)
+>                     if m:
+>                         val=float(m.group(1)); break
+>                 except Exception:
+>                     pass
+>         if val is not None:
+>             break
+>     print(json.dumps({"eval_accuracy": (val if val is not None else 0.0)}))
+> else:
+>     cands.sort(key=lambda x: x[0])
+>     data=cands[-1][1]
+>     for k in ['eval_accuracy','accuracy','acc']:
+>         if k in data:
+>             val=data[k]
+>             break
+>     print(json.dumps({"eval_accuracy": float(val)}))
+> PY
+{"eval_accuracy": 0.0}
+root@6be20f1f1bd7:/app/UPET# python3 -m pip install -q --no-cache-dir datasets==2.3.2
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your syst
+em unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you a
+re doing and want to suppress this warning.
+root@6be20f1f1bd7:/app/UPET# sed -n '1,200p' arguments.py
+from enum import Enum
+import argparse
+import dataclasses
+from dataclasses import dataclass, field
+from typing import Optional
+
+from transformers import HfArgumentParser, TrainingArguments
+
+from tasks.utils import *
+
+
+@dataclass
+class DataTrainingArguments:
+    """
+    Arguments pertaining to what data we are going to input our model for training and eval.
+
+    Using `HfArgumentParser` we can turn this class
+    into argparse arguments to be able to specify them on
+    the command line.training_args
+    """
+    task_name: str = field(
+        metadata={
+            "help": "The name of the task to train on: " + ", ".join(TASKS),
+            "choices": TASKS
+        },
+    )
+    dataset_name: str = field(
+        metadata={
+            "help": "The name of the dataset to use: " + ", ".join(DATASETS),
+            "choices": DATASETS
+        }
+    )
+    # add by wjn
+    num_examples_per_label: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "Randomly sampling k-shot examples for each label "
+        },
+    )
+    dataset_config_name: Optional[str] = field(
+        default=None, metadata={"help": "The configuration name of the dataset to use (via the datasets library)."}
+    )
+    max_seq_length: int = field(
+        default=128,
+        metadata={
+            "help": "The maximum total input sequence length after tokenization. Sequences longer "
+            "than this will be truncated, sequences shorter will be padded."
+        },
+    )
+    overwrite_cache: bool = field(
+        default=False, metadata={"help": "Overwrite the cached preprocessed datasets or not."}
+    )
+    pad_to_max_length: bool = field(
+        default=True,
+        metadata={
+            "help": "Whether to pad all samples to `max_seq_length`. "
+            "If False, will pad the samples dynamically when batching to the maximum length in the batch."
+        },
+    )
+    max_train_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "For debugging purposes or quicker training, truncate the number of training examples to this "
+            "value if set."
+        },
+    )
+    max_eval_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "For debugging purposes or quicker training, truncate the number of evaluation examples to this "
+            "value if set."
+        },
+    )
+    max_predict_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "For debugging purposes or quicker training, truncate the number of prediction examples to this "
+            "value if set."
+        },
+    )
+    train_file: Optional[str] = field(
+        default=None, metadata={"help": "A csv or a json file containing the training data."}
+    )
+    validation_file: Optional[str] = field(
+        default=None, metadata={"help": "A csv or a json file containing the validation data."}
+    )
+    test_file: Optional[str] = field(
+        default=None,
+        metadata={"help": "A csv or a json file containing the test data."}
+    )
+    template_id: Optional[int] = field(
+        default=0,
+        metadata={
+            "help": "The specific prompt string to use"
+        }
+    )
+
+
+@dataclass
+class ModelArguments:
+    """
+    Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
+    """
+    model_name_or_path: str = field(
+        metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
+    )
+    config_name: Optional[str] = field(
+        default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
+    )
+    tokenizer_name: Optional[str] = field(
+        default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
+    )
+    cache_dir: Optional[str] = field(
+        default=None,
+        metadata={"help": "Where do you want to store the pretrained models downloaded from huggingface.co"},
+    )
+    use_fast_tokenizer: bool = field(
+        default=True,
+        metadata={"help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."},
+    )
+    model_revision: str = field(
+        default="main",
+        metadata={"help": "The specific model version to use (can be a branch name, tag name or commit id)."},
+    )
+    use_auth_token: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use the token generated when running `transformers-cli login` (necessary to use this script "
+            "with private models)."
+        },
+    )
+    use_pe: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use parameter-efficient settings. If true, that means fix the parameters of the backbone, and only"
+            "tune the new initialized modules (e.g., adapter, prefix, ptuning, etc.)"
+        }
+    )
+    head_prefix: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Head-tuning Prefix (P-tuning v2) during training"
+        }
+    )
+    prompt_prefix: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Prompt-tuning Prefix (P-tuning v2) during training"
+        }
+    )
+    head_only: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Head Fine-tuning during training (w/o. any new modules)"
+        }
+    )
+    prompt_only: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Prompt Fine-tuning during training (w/o. any new modules)"
+        }
+    )
+    head_ptuning: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Head-tuning P-tuning during training (w. parameter-efficient)"
+        }
+    )
+    prompt_ptuning: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Prompt-tuning P-tuning during training (w. parameter-efficient)"
+        }
+    )
+    head_adapter: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Head-tuning Adapter tuning during training (w. parameter-efficient)"
+        }
+    )
+    prompt_adapter: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Prompt-tuning Adapter tuning during training (w. parameter-efficient)"
+        }
+    )
+    adapter_choice: str = field(
+        default="LiST",
+        metadata={"help": "The choice of adapter, list, lora, houlsby."},
+    )
+    adapter_dim: int = field(
+        default=128,
+        metadata={"help": "The hidden size of adapter. default is 128."},
+    )
+    pre_seq_len: int = field(
+        default=4,
+        metadata={
+            "help": "The length of prompt"
+        }
+    )
+root@6be20f1f1bd7:/app/UPET# ls -la run_script_fewshot
+total 64
+drwxr-xr-x  2 root root 4096 Oct 15 09:08 .
+drwxr-xr-x 13 root root 4096 Oct 15 09:09 ..
+-rw-r--r--  1 root root  786 Oct 15 09:08 run_agnews_roberta.sh
+-rw-r--r--  1 root root  824 Oct 15 09:08 run_boolq_roberta.sh
+-rw-r--r--  1 root root  882 Oct 15 09:08 run_cb_roberta.sh
+-rw-r--r--  1 root root  817 Oct 15 09:08 run_copa_roberta.sh
+-rw-r--r--  1 root root  816 Oct 15 09:08 run_mnli_roberta.sh
+-rw-r--r--  1 root root  800 Oct 15 09:08 run_mr_roberta.sh
+-rw-r--r--  1 root root  816 Oct 15 09:08 run_mrpc_roberta.sh
+-rw-r--r--  1 root root  817 Oct 15 09:08 run_qnli_roberta.sh
+-rw-r--r--  1 root root  816 Oct 15 09:08 run_qqp_roberta.sh
+-rw-r--r--  1 root root  604 Oct 15 09:08 run_rte_bert.sh
+-rw-r--r--  1 root root  884 Oct 15 09:08 run_rte_roberta.sh
+-rw-r--r--  1 root root  783 Oct 15 09:08 run_sst2_roberta.sh
+-rw-r--r--  1 root root  788 Oct 15 09:08 run_trec_roberta.sh
+-rw-r--r--  1 root root  797 Oct 15 09:08 run_yelp_roberta.sh
+root@6be20f1f1bd7:/app/UPET# sed -n '1,200p' run_script_fewshot/run_rte_roberta.sh
+export TASK_NAME=superglue
+export DATASET_NAME=rte
+export CUDA_VISIBLE_DEVICES=0
+# export CUDA_VISIBLE_DEVICES=2
+# export CUDA_VISIBLE_DEVICES=5
+
+bs=4
+lr=1e-2
+dropout=0.1
+psl=20
+epoch=100
+
+python3 run.py \
+  --model_name_or_path /wjn/pre-trained-lm/roberta-large \
+  --task_name $TASK_NAME \
+  --dataset_name $DATASET_NAME \
+  --overwrite_cache \
+  --do_train \
+  --do_eval \
+  --do_predict \
+  --max_seq_length 128 \
+  --per_device_train_batch_size $bs \
+  --learning_rate $lr \
+  --num_train_epochs $epoch \
+  --pre_seq_len $psl \
+  --output_dir checkpoints/$DATASET_NAME-roberta/ \
+  --overwrite_output_dir \
+  --hidden_dropout_prob $dropout \
+  --seed 42 \
+  --save_strategy no \
+  --evaluation_strategy epoch \
+  --num_examples_per_label 16 \
+  --prompt_ptuning \
+  --use_pe
+
+  # --head_prefix \
+  # --use_pe
+  # --adapter \
+  # --adapter_dim 256 \
+  # --adapter_choice list \
+
+root@6be20f1f1bd7:/app/UPET# python3 run.py --method upet --model_name_or_path roberta-base --task_name superglue --dataset_name rte --seed 42 --num_k 5 --num_t
+rain_epochs 1 --per_device_train_batch_size 32 --per_device_eval_batch_size 32 --learning_rate 5e-3 --max_seq_length 128 --hidden_dropout_prob 0.1 --output_dir
+./outputs/rte_roberta_upet_k5_seed42 --overwrite_output_dir --save_strategy no --evaluation_strategy epoch --do_train --do_eval
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 7, in <module>
+    import datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/__init__.py", line 37, in <module>
+    from .arrow_dataset import Dataset, concatenate_datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 63, in <module>
+    from .arrow_writer import ArrowWriter, OptimizedTypedSequence
+  File "/usr/local/lib/python3.10/site-packages/datasets/arrow_writer.py", line 26, in <module>
+    from .features import Features, Image, Value
+  File "/usr/local/lib/python3.10/site-packages/datasets/features/__init__.py", line 18, in <module>
+    from .features import Array2D, Array3D, Array4D, Array5D, ClassLabel, Features, Sequence, Value
+  File "/usr/local/lib/python3.10/site-packages/datasets/features/features.py", line 580, in <module>
+    class _ArrayXDExtensionType(pa.PyExtensionType):
+AttributeError: module 'pyarrow' has no attribute 'PyExtensionType'. Did you mean: 'ExtensionType'?
+root@6be20f1f1bd7:/app/UPET# ls -la ./outputs/rte_roberta_upet_k5_seed42 || true
+ls: cannot access './outputs/rte_roberta_upet_k5_seed42': No such file or directory
+root@6be20f1f1bd7:/app/UPET# find ./outputs/rte_roberta_upet_k5_seed42 -maxdepth 2 -type f -iname "*all_results*.json" -o -iname "*eval*results*.json" -o -iname
+ "*metrics*.json" -o -iname "*eval*.json"
+find: ‘./outputs/rte_roberta_upet_k5_seed42’: No such file or directory
+root@6be20f1f1bd7:/app/UPET# python3 - << 'PY'
+> import os, json
+> base = './outputs/rte_roberta_upet_k5_seed42'
+> vals = []
+> for root,_,files in os.walk(base):
+>     for f in files:
+>         if f.endswith('.json'):
+>             p=os.path.join(root,f)
+>             try:
+>                 with open(p,'r') as fh:
+>                     data=json.load(fh)
+>                 for k in ('eval_accuracy','accuracy','acc'):
+>                     if k in data:
+>                         vals.append(float(data[k]))
+>                         break
+>             except Exception:
+>                 pass
+> val = vals[-1] if vals else 0.0
+> print(json.dumps({"eval_accuracy": val}))
+> PY
+{"eval_accuracy": 0.0}
+root@6be20f1f1bd7:/app/UPET# sed -n '1,160p' tasks/glue/dataset.py
+import torch
+from torch.utils import data
+from torch.utils.data import Dataset
+from datasets.arrow_dataset import Dataset as HFDataset
+from datasets.load import load_dataset, load_metric
+from transformers import (
+    AutoTokenizer,
+    DataCollatorWithPadding,
+    EvalPrediction,
+    default_data_collator,
+)
+import numpy as np
+import logging
+from typing import Optional
+
+
+# add by wjn
+def random_sampling(raw_datasets: load_dataset, data_type: str="train", num_examples_per_label: Optional[int]=16):
+    assert data_type in ["train", "dev", "test"]
+    label_list = raw_datasets[data_type]["label"] # [0, 1, 0, 0, ...]
+    label_dict = dict()
+    # 记录每个label对应的样本索引
+    for ei, label in enumerate(label_list):
+        if label not in label_dict.keys():
+            label_dict[label] = list()
+        label_dict[label].append(ei)
+    # 对于每个类别，随机采样k个样本
+    few_example_ids = list()
+    for label, eid_list in label_dict.items():
+        # examples = deepcopy(eid_list)
+        # shuffle(examples)
+        idxs = np.random.choice(len(eid_list), size=num_examples_per_label, replace=False)
+        selected_eids = [eid_list[i] for i in idxs]
+        few_example_ids.extend(selected_eids)
+    # 保存没有被选中的example id
+    num_examples = len(label_list)
+    un_selected_examples_ids = [idx for idx in range(num_examples) if idx not in few_example_ids]
+    return few_example_ids, un_selected_examples_ids
+
+task_to_test_key = {
+    "cola": "matt",
+    "mnli": "accuracy",
+    "mrpc": "f1",
+    "qnli": "accuracy",
+    "qqp": "f1",
+    "rte": "accuracy",
+    "sst2": "accuracy",
+    "stsb": "accuracy",
+    "wnli": "accuracy",
+}
+
+task_to_keys = {
+    "cola": ("sentence", None),
+    "mnli": ("premise", "hypothesis"),
+    "mrpc": ("sentence1", "sentence2"),
+    "qnli": ("question", "sentence"),
+    "qqp": ("question1", "question2"),
+    "rte": ("sentence1", "sentence2"),
+    "sst2": ("sentence", None),
+    "stsb": ("sentence1", "sentence2"),
+    "wnli": ("sentence1", "sentence2"),
+}
+
+task_to_template = {
+    "cola": [{"prefix_template": "", "suffix_template": "This is <mask> ."}, None],
+    "mnli": [None, {"prefix_template": " ? <mask> , ", "suffix_template": ""}],
+    "mrpc": [None, {"prefix_template": " . <mask> , ", "suffix_template": ""}],
+    "qnli": [None, {"prefix_template": "? <mask> ,", "suffix_template": ""}],
+    "qqp": [None, {"prefix_template": " <mask> ,", "suffix_template": ""}],
+    "rte": [None, {"prefix_template": " ? <mask> , ", "suffix_template": ""}], # prefix / suffix template in each segment.
+    "sst2": [{"prefix_template": "", "suffix_template": "It was <mask> ."}, None], # prefix / suffix template in each segment.
+
+}
+
+# add by wjn
+label_words_mapping = {
+    "cola": {"unacceptable": ["incorrect"], "acceptable": ["correct"]},
+    "mnli": {"contradiction": ["No"], "entailment": "Yes", "neutral": ["Maybe"]},
+    "mrpc": {"not_equivalent": ["No"], "equivalent": ["Yes"]},
+    "qnli": {"not_entailment" : ["No"], "entailment": ["Yes"]},
+    "qqp": {"not_duplicate": "No", "duplicate": "Yes"},
+    "rte": {"not_entailment": ["No"], "entailment": ["Yes"]},
+    "sst2": {"negative": ["terrible"], "positive": ["great"]}, # e.g., {"0": ["great"], "1": [bad]}
+}
+
+
+logger = logging.getLogger(__name__)
+
+
+class GlueDataset():
+    def __init__(
+        self,
+        tokenizer: AutoTokenizer,
+        data_args,
+        training_args,
+        semi_training_args=None,
+        use_prompt=None
+    ) -> None:
+        super().__init__()
+        raw_datasets = load_dataset("glue", data_args.dataset_name)
+        self.tokenizer = tokenizer
+        self.data_args = data_args
+        #labels
+        self.is_regression = data_args.dataset_name == "stsb"
+        if not self.is_regression:
+            self.label_list = raw_datasets["train"].features["label"].names
+            self.num_labels = len(self.label_list)
+        else:
+            self.num_labels = 1
+
+
+        # === generate template ===== add by wjn
+        self.use_prompt = False
+        if data_args.dataset_name in task_to_template.keys():
+            self.use_prompt = use_prompt
+
+        if self.use_prompt:
+            if 't5' in type(tokenizer).__name__.lower():
+                self.special_token_mapping = {
+                    'cls': 3, 'mask': 32099, 'sep': tokenizer.eos_token_id,
+                    'sep+': tokenizer.eos_token_id,
+                    'pseudo_token': tokenizer.unk_token_id
+                }
+            else:
+                self.special_token_mapping = {
+                    'cls': tokenizer.cls_token_id, 'mask': tokenizer.mask_token_id, 'sep': tokenizer.sep_token_id,
+                    'sep+': tokenizer.sep_token_id,
+                    'pseudo_token': tokenizer.unk_token_id
+                }
+            self.template = task_to_template[data_args.dataset_name] # dict
+
+        # === generate label word mapping ===== add by wjn
+        if self.use_prompt:
+            assert data_args.dataset_name in label_words_mapping.keys(), "You must define label word mapping for the task {}".format(data_args.dataset_name)
+            self.label_to_word = label_words_mapping[data_args.dataset_name] # e.g., {"0": ["great"], "1": [bad]}
+            self.label_to_word = {label: label_word[0] if type(label_word) == list else label_word for label, label_word in self.label_to_word.items()}
+
+            for key in self.label_to_word:
+                # For RoBERTa/BART/T5, tokenization also considers space, so we use space+word as label words.
+                if self.label_to_word[key][0] not in ['<', '[', '.', ',']:
+                    # Make sure space+word is in the vocabulary
+                    assert len(tokenizer.tokenize(' ' + self.label_to_word[key])) == 1
+                    self.label_to_word[key] = tokenizer.convert_tokens_to_ids(tokenizer.tokenize(' ' + self.label_to_word[key])[0])
+                else:
+                    self.label_to_word[key] = tokenizer.convert_tokens_to_ids(self.label_to_word[key])
+                logger.info("Label {} to word {} ({})".format(key, tokenizer._convert_id_to_token(self.label_to_word[key]), self.label_to_word[key]))
+
+            if len(self.label_list) > 1:
+                self.label_word_list = [self.label_to_word[label] for label in self.label_list]
+            else:
+                # Regression task
+                # '0' represents low polarity and '1' represents high polarity.
+                self.label_word_list = [self.label_to_word[label] for label in ['0', '1']]
+        # =============
+
+        # Preprocessing the raw_datasets
+        self.sentence1_key, self.sentence2_key = task_to_keys[data_args.dataset_name]
+
+        # Padding strategy
+        if data_args.pad_to_max_length:
+root@6be20f1f1bd7:/app/UPET# sed -n '1,220p' run.py
+import logging
+import os
+import sys
+import numpy as np
+from typing import Dict
+
+import datasets
+import transformers
+from transformers import set_seed, Trainer
+from transformers.trainer_utils import get_last_checkpoint
+
+from arguments import get_args
+
+from tasks.utils import *
+
+os.environ["WANDB_DISABLED"] = "true"
+
+logger = logging.getLogger(__name__)
+
+def train(trainer, resume_from_checkpoint=None, last_checkpoint=None):
+    checkpoint = None
+    if resume_from_checkpoint is not None:
+        checkpoint = resume_from_checkpoint
+    elif last_checkpoint is not None:
+        checkpoint = last_checkpoint
+    train_result = trainer.train(resume_from_checkpoint=checkpoint)
+    # trainer.save_model()，
+
+    try:
+        metrics = train_result.metrics
+
+        trainer.log_metrics("train", metrics)
+        trainer.save_metrics("train", metrics)
+        trainer.save_state()
+
+        trainer.log_best_metrics()
+    except:
+        pass
+
+def evaluate(trainer):
+    logger.info("*** Evaluate ***")
+    metrics = trainer.evaluate()
+
+    trainer.log_metrics("eval", metrics)
+    trainer.save_metrics("eval", metrics)
+
+def predict(trainer, predict_dataset=None):
+    if predict_dataset is None:
+        logger.info("No dataset is available for testing")
+
+    elif isinstance(predict_dataset, dict):
+
+        for dataset_name, d in predict_dataset.items():
+            logger.info("*** Predict: %s ***" % dataset_name)
+            predictions, labels, metrics = trainer.predict(d, metric_key_prefix="predict")
+            predictions = np.argmax(predictions, axis=2)
+
+            trainer.log_metrics("predict", metrics)
+            trainer.save_metrics("predict", metrics)
+
+    else:
+        logger.info("*** Predict ***")
+        predictions, labels, metrics = trainer.predict(predict_dataset, metric_key_prefix="predict")
+        predictions = np.argmax(predictions, axis=2)
+
+        trainer.log_metrics("predict", metrics)
+        trainer.save_metrics("predict", metrics)
+
+if __name__ == '__main__':
+
+    args = get_args()
+
+    _, data_args, training_args, semi_training_args, _ = args
+
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
+
+    log_level = training_args.get_process_log_level()
+    logger.setLevel(log_level)
+    datasets.utils.logging.set_verbosity(log_level)
+    transformers.utils.logging.set_verbosity(log_level)
+    transformers.utils.logging.enable_default_handler()
+    transformers.utils.logging.enable_explicit_format()
+
+    # Log on each process the small summary:
+    logger.warning(
+        f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
+        + f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
+    )
+    logger.info(f"Training/evaluation parameters {training_args}")
+
+
+    if not os.path.isdir("checkpoints") or not os.path.exists("checkpoints"):
+        os.mkdir("checkpoints")
+
+    if data_args.task_name.lower() == "superglue":
+        assert data_args.dataset_name.lower() in SUPERGLUE_DATASETS
+        from tasks.superglue.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "glue":
+        assert data_args.dataset_name.lower() in GLUE_DATASETS
+        from tasks.glue.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "ner":
+        assert data_args.dataset_name.lower() in NER_DATASETS
+        from tasks.ner.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "srl":
+        assert data_args.dataset_name.lower() in SRL_DATASETS
+        from tasks.srl.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "qa":
+        assert data_args.dataset_name.lower() in QA_DATASETS
+        from tasks.qa.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "other_cls":
+        assert data_args.dataset_name.lower() in OTHER_DATASETS
+        from tasks.other_cls.get_trainer import get_trainer
+
+    else:
+        raise NotImplementedError('Task {} is not implemented. Please choose a task from: {}'.format(data_args.task_name, ", ".join(TASKS)))
+
+    set_seed(training_args.seed)
+
+    trainer, predict_dataset = get_trainer(args)
+
+    last_checkpoint = None
+    if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
+        last_checkpoint = get_last_checkpoint(training_args.output_dir)
+        if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
+            raise ValueError(
+                f"Output directory ({training_args.output_dir}) already exists and is not empty. "
+                "Use --overwrite_output_dir to overcome."
+            )
+        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+            logger.info(
+                f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
+                "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
+            )
+
+
+    if training_args.do_train:
+        train(trainer, training_args.resume_from_checkpoint, last_checkpoint)
+
+    # if training_args.do_eval:
+    #     evaluate(trainer)
+
+    # if training_args.do_predict:
+    #     predict(trainer, predict_dataset)
+
+   root@6be20f1f1bd7:/app/UPET# grep -R "method" -n run.py arguments.py
+root@6be20f1f1bd7:/app/UPET# grep -R "upet" -n .
+root@6be20f1f1bd7:/app/UPET# python3 -m pip install -q --no-cache-dir pyarrow==12.0.1
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your syst
+em unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you a
+re doing and want to suppress this warning.
+root@6be20f1f1bd7:/app/UPET# python3 run.py --method upet --model_name_or_path roberta-base --task_name superglue --dataset_name rte --seed 42 --num_examples_pe
+r_label 5 --num_train_epochs 1 --per_device_train_batch_size 4 --per_device_eval_batch_size 32 --learning_rate 1e-2 --max_seq_length 128 --hidden_dropout_prob 0
+.1 --output_dir ./outputs/rte_roberta_upet_k5_seed42 --overwrite_output_dir --save_strategy no --evaluation_strategy epoch --do_train --do_eval
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 71, in <module>
+    args = get_args()
+  File "/app/UPET/arguments.py", line 326, in get_args
+    args = parser.parse_args_into_dataclasses()
+  File "/usr/local/lib/python3.10/site-packages/transformers/hf_argparser.py", line 347, in parse_args_into_dataclasses
+    raise ValueError(f"Some specified arguments are not used by the HfArgumentParser: {remaining_args}")
+ValueError: Some specified arguments are not used by the HfArgumentParser: ['--method', 'upet']
+root@6be20f1f1bd7:/app/UPET# ls -la ./outputs/rte_roberta_upet_k5_seed42 || true
+ls: cannot access './outputs/rte_roberta_upet_k5_seed42': No such file or directory
+root@6be20f1f1bd7:/app/UPET# find ./outputs/rte_roberta_upet_k5_seed42 -maxdepth 2 -type f -iname "*all_results*.json" -o -iname "*eval*results*.json" -o -iname
+ "*metrics*.json" -o -iname "*eval*.json"
+find: ‘./outputs/rte_roberta_upet_k5_seed42’: No such file or directory
+root@6be20f1f1bd7:/app/UPET# python3 - << 'PY'
+> import os, json
+> base = './outputs/rte_roberta_upet_k5_seed42'
+> vals = []
+> for root,_,files in os.walk(base):
+>     for f in files:
+>         if f.endswith('.json'):
+>             p=os.path.join(root,f)
+>             try:
+>                 with open(p,'r') as fh:
+>                     data=json.load(fh)
+>                 for k in ('eval_accuracy','accuracy','acc'):
+>                     if k in data:
+>                         vals.append(float(data[k]))
+>                         break
+>             except Exception:
+>                 pass
+> val = vals[-1] if vals else 0.0
+> print(json.dumps({"eval_accuracy": val}))
+> PY
+{"eval_accuracy": 0.0}
+root@6be20f1f1bd7:/app/UPET# sed -n '1,240p' tasks/utils.py
+from tasks.glue.dataset import task_to_keys as glue_tasks
+from tasks.superglue.dataset import task_to_keys as superglue_tasks
+from datasets.load import load_dataset, load_metric
+
+
+GLUE_DATASETS = list(glue_tasks.keys())
+SUPERGLUE_DATASETS = list(superglue_tasks.keys())
+NER_DATASETS = ["conll2003", "conll2004", "ontonotes"]
+SRL_DATASETS = ["conll2005", "conll2012"]
+QA_DATASETS = ["squad", "squad_v2"]
+OTHER_DATASETS = ["movie_rationales", "cr", "snli", "trec", "ag_news", "yelp_polarity"]
+
+
+TASKS = ["glue", "superglue", "ner", "srl", "qa", "other_cls"]
+
+DATASETS = GLUE_DATASETS + SUPERGLUE_DATASETS + NER_DATASETS + SRL_DATASETS + QA_DATASETS + OTHER_DATASETS
+
+ADD_PREFIX_SPACE = {
+    'bert': False,
+    'roberta': True,
+    'deberta': True,
+    'gpt2': True,
+    'deberta-v2': True,
+}
+
+USE_FAST = {
+    'bert': True,
+    'roberta': True,
+    'deberta': True,
+    'gpt2': True,
+    'deberta-v2': False,
+}
+
+
+
+
+
+
+# def random_sampling(sentences, labels, num):
+#     """randomly sample subset of the training pairs"""
+#     assert len(sentences) == len(labels)
+#     if num > len(labels):
+#         assert False, f"you tried to randomly sample {num}, which is more than the total size of the pool {len(labels)}"
+#     idxs = np.random.choice(len(labels), size=num, replace=False)
+#     selected_sentences = [sentences[i] for i in idxs]
+#     selected_labels = [labels[i] for i in idxs]
+#     return deepcopy(selected_sentences), deepcopy(selected_labels)root@6be20f1f1bd7:/app/UPET# ls -la tasks/glue
+total 32
+drwxr-xr-x 3 root root  4096 Oct 15 09:09 .
+drwxr-xr-x 9 root root  4096 Oct 15 09:09 ..
+drwxr-xr-x 2 root root  4096 Oct 15 09:09 __pycache__
+-rw-r--r-- 1 root root 14373 Oct 15 09:08 dataset.py
+-rw-r--r-- 1 root root  3443 Oct 15 09:08 get_trainer.py
+root@6be20f1f1bd7:/app/UPET# sed -n '1,240p' tasks/glue/get_trainer.py
+import logging
+import os
+import random
+import sys
+
+from transformers import (
+    AutoConfig,
+    AutoTokenizer,
+)
+
+from model.utils import get_model, TaskType
+from tasks.glue.dataset import GlueDataset
+from training.trainer_base import BaseTrainer
+from training.self_trainer import SelfTrainer
+
+logger = logging.getLogger(__name__)
+
+def get_trainer(args):
+    model_args, data_args, training_args, semi_training_args, _ = args
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_args.model_name_or_path,
+        use_fast=model_args.use_fast_tokenizer,
+        revision=model_args.model_revision,
+    )
+
+    # add by wjn check if use prompt template
+    use_prompt = False
+    if model_args.prompt_prefix or model_args.prompt_ptuning or model_args.prompt_adapter or model_args.prompt_only:
+        use_prompt = True
+
+    dataset = GlueDataset(tokenizer, data_args, training_args, semi_training_args=semi_training_args, use_prompt=use_prompt)
+
+    data_args.label_word_list = None # add by wjn
+    if use_prompt:
+        data_args.label_word_list = dataset.label_word_list # add by wjn
+
+    if training_args.do_train:
+        for index in random.sample(range(len(dataset.train_dataset)), 3):
+            logger.info(f"Sample {index} of the training set: {dataset.train_dataset[index]}.")
+
+    if not dataset.is_regression:
+        config = AutoConfig.from_pretrained(
+            model_args.model_name_or_path,
+            num_labels=dataset.num_labels,
+            label2id=dataset.label2id,
+            id2label=dataset.id2label,
+            finetuning_task=data_args.dataset_name,
+            revision=model_args.model_revision,
+        )
+    else:
+        config = AutoConfig.from_pretrained(
+            model_args.model_name_or_path,
+            num_labels=dataset.num_labels,
+            finetuning_task=data_args.dataset_name,
+            revision=model_args.model_revision,
+        )
+
+    model = get_model(data_args, model_args, TaskType.SEQUENCE_CLASSIFICATION, config)
+
+    # Initialize our Trainer
+
+    if semi_training_args.use_semi:
+        model_args.pre_seq_len = semi_training_args.student_pre_seq_len
+        student_model = get_model(data_args, model_args, TaskType.SEQUENCE_CLASSIFICATION, config)
+        trainer = SelfTrainer(
+            teacher_base_model=model,
+            student_base_model=student_model,
+            training_args=training_args,
+            semi_training_args=semi_training_args,
+            train_dataset=dataset.train_dataset if training_args.do_train else None,
+            unlabeled_dataset=dataset.unlabeled_dataset,
+            eval_dataset=dataset.eval_dataset if training_args.do_eval else None,
+            compute_metrics=dataset.compute_metrics,
+            tokenizer=tokenizer,
+            teacher_data_collator=dataset.data_collator,
+            student_data_collator=dataset.data_collator,
+            test_key=dataset.test_key,
+            task_type="cls",
+            num_classes=len(dataset.label2id),
+        )
+
+        return trainer, None
+
+    trainer = BaseTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=dataset.train_dataset if training_args.do_train else None,
+        eval_dataset=dataset.eval_dataset if training_args.do_eval else None,
+        compute_metrics=dataset.compute_metrics,
+        tokenizer=tokenizer,
+        data_collator=dataset.data_collator,
+        test_key=dataset.test_key,
+    )
+
+    return trainer, Noneroot@6be20f1f1bd7:/app/UPET# sed -n '1,200p' requirements.txt
+datasets==1.15.1
+numpy==1.19.2
+tqdm==4.62.3
+transformers==4.11.3
+seqeval==1.2.2
+root@6be20f1f1bd7:/app/UPET# python3 -m pip install -q --no-cache-dir -r requirements.txt || true
+  error: subprocess-exited-with-error
+
+  × Preparing metadata (pyproject.toml) did not run successfully.
+  │ exit code: 1
+  ╰─> [78 lines of output]
+      Running from numpy source directory.
+      setup.py:470: UserWarning: Unrecognized setuptools command, proceeding with generating Cython sources and expanding templates
+        run_build = parse_setuppy_commands()
+      performance hint: _common.pyx:275:19: Exception check after calling 'random_func' will always require the GIL to be acquired. Declare 'random_func' as 'no
+except' if you control the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:299:19: Exception check after calling 'random_func' will always require the GIL to be acquired. Declare 'random_func' as 'no
+except' if you control the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:322:50: Exception check after calling 'random_func' will always require the GIL to be acquired. Declare 'random_func' as 'no
+except' if you control the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:426:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:465:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:509:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:592:36: Exception check after calling 'f0' will always require the GIL to be acquired. Declare 'f0' as 'noexcept' if you con
+trol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:596:36: Exception check after calling 'f1' will always require the GIL to be acquired. Declare 'f1' as 'noexcept' if you con
+trol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:600:36: Exception check after calling 'f2' will always require the GIL to be acquired. Declare 'f2' as 'noexcept' if you con
+trol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:604:36: Exception check after calling 'f3' will always require the GIL to be acquired. Declare 'f3' as 'noexcept' if you con
+trol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:638:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:675:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:712:63: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:754:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:785:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:903:40: Exception check after calling 'f0' will always require the GIL to be acquired. Declare 'f0' as 'noexcept' if you con
+trol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:907:40: Exception check after calling 'fd' will always require the GIL to be acquired. Declare 'fd' as 'noexcept' if you con
+trol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:911:41: Exception check after calling 'fdd' will always require the GIL to be acquired. Declare 'fdd' as 'noexcept' if you c
+ontrol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:916:40: Exception check after calling 'fi' will always require the GIL to be acquired. Declare 'fi' as 'noexcept' if you con
+trol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:920:41: Exception check after calling 'fdi' will always require the GIL to be acquired. Declare 'fdi' as 'noexcept' if you c
+ontrol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:924:38: Exception check after calling 'fiii' will always require the GIL to be acquired. Declare 'fiii' as 'noexcept' if you
+ control the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:960:31: Exception check after calling 'f' will always require the GIL to be acquired. Declare 'f' as 'noexcept' if you contr
+ol the definition and you're sure you don't want the function to raise exceptions.
+      performance hint: _common.pyx:1002:32: Exception check after calling 'f1' will always require the GIL to be acquired. Declare 'f1' as 'noexcept' if you co
+ntrol the definition and you're sure you don't want the function to raise exceptions.
+
+      Error compiling Cython file:
+      ------------------------------------------------------------
+      ...
+          def __init__(self, seed=None):
+              BitGenerator.__init__(self, seed)
+              self.rng_state.pcg_state = &self.pcg64_random_state
+
+              self._bitgen.state = <void *>&self.rng_state
+              self._bitgen.next_uint64 = &pcg64_uint64
+                                         ^
+      ------------------------------------------------------------
+
+      _pcg64.pyx:113:35: Cannot assign type 'uint64_t (*)(void *) except? -1 nogil' to 'uint64_t (*)(void *) noexcept nogil'. Exception values are incompatible.
+ Suggest adding 'noexcept' to the type of the value being assigned.
+      Processing numpy/random/_bounded_integers.pxd.in
+      Processing numpy/random/_common.pyx
+      Processing numpy/random/_pcg64.pyx
+      Traceback (most recent call last):
+        File "/tmp/pip-install-nlyqvoim/numpy_da9efa35be3f4753add4391e508e5fcd/tools/cythonize.py", line 235, in <module>
+          main()
+        File "/tmp/pip-install-nlyqvoim/numpy_da9efa35be3f4753add4391e508e5fcd/tools/cythonize.py", line 231, in main
+          find_process_files(root_dir)
+        File "/tmp/pip-install-nlyqvoim/numpy_da9efa35be3f4753add4391e508e5fcd/tools/cythonize.py", line 222, in find_process_files
+          process(root_dir, fromfile, tofile, function, hash_db)
+        File "/tmp/pip-install-nlyqvoim/numpy_da9efa35be3f4753add4391e508e5fcd/tools/cythonize.py", line 188, in process
+          processor_function(fromfile, tofile)
+        File "/tmp/pip-install-nlyqvoim/numpy_da9efa35be3f4753add4391e508e5fcd/tools/cythonize.py", line 77, in process_pyx
+          subprocess.check_call(
+        File "/usr/local/lib/python3.10/subprocess.py", line 369, in check_call
+          raise CalledProcessError(retcode, cmd)
+      subprocess.CalledProcessError: Command '['/usr/local/bin/python3', '-m', 'cython', '-3', '--fast-fail', '-o', '_pcg64.c', '_pcg64.pyx']' returned non-zero
+ exit status 1.
+      Cythonizing sources
+      Traceback (most recent call last):
+        File "/usr/local/lib/python3.10/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 389, in <module>
+          main()
+        File "/usr/local/lib/python3.10/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 373, in main
+          json_out["return_val"] = hook(**hook_input["kwargs"])
+        File "/usr/local/lib/python3.10/site-packages/pip/_vendor/pyproject_hooks/_in_process/_in_process.py", line 175, in prepare_metadata_for_build_wheel
+          return hook(metadata_directory, config_settings)
+        File "/tmp/pip-build-env-neqkus5b/overlay/lib/python3.10/site-packages/setuptools/build_meta.py", line 157, in prepare_metadata_for_build_wheel
+          self.run_setup()
+        File "/tmp/pip-build-env-neqkus5b/overlay/lib/python3.10/site-packages/setuptools/build_meta.py", line 248, in run_setup
+          super(_BuildMetaLegacyBackend,
+        File "/tmp/pip-build-env-neqkus5b/overlay/lib/python3.10/site-packages/setuptools/build_meta.py", line 142, in run_setup
+          exec(compile(code, __file__, 'exec'), locals())
+        File "setup.py", line 499, in <module>
+          setup_package()
+        File "setup.py", line 479, in setup_package
+          generate_cython()
+        File "setup.py", line 274, in generate_cython
+          raise RuntimeError("Running cythonize failed!")
+      RuntimeError: Running cythonize failed!
+      [end of output]
+
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+error: metadata-generation-failed
+
+× Encountered error while generating package metadata.
+╰─> See above for output.
+
+note: This is an issue with the package mentioned above, not pip.
+hint: See above for details.
+root@6be20f1f1bd7:/app/UPET# python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --
+max_seq_length 128 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir ./outputs/rte_roberta_upet_k5_seed42
+--overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptuning --use_pe
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/15/2025 09:18:09 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:945: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+tokenizer_config.json: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████| 25.0/25.0 [00:00<00:00, 169kB/s]
+config.json: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████| 481/481 [00:00<00:00, 2.24MB/s]
+vocab.json: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████| 899k/899k [00:00<00:00, 6.03MB/s]
+merges.txt: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████| 456k/456k [00:00<00:00, 7.67MB/s]
+tokenizer.json: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████| 1.36M/1.36M [00:00<00:00, 8.05MB/s]
+Downloading builder script: 29.9kB [00:00, 15.8MB/s]
+Downloading metadata: 38.2kB [00:00, 24.9MB/s]
+Downloading and preparing dataset super_glue/rte (download: 733.32 KiB, generated: 1.83 MiB, post-processed: Unknown size, total: 2.54 MiB) to /root/.cache/hugg
+ingface/datasets/super_glue/rte/1.0.2/d040c658e2ddef6934fdd97deb45c777b6ff50c524781ea434e7219b56a428a7...
+Downloading data: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████| 751k/751k [00:00<00:00, 3.36MB/s]
+Dataset super_glue downloaded and prepared to /root/.cache/huggingface/datasets/super_glue/rte/1.0.2/d040c658e2ddef6934fdd97deb45c777b6ff50c524781ea434e7219b56a
+428a7. Subsequent calls will reuse this data.
+100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:00<00:00, 893.67it/s]
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+10/15/2025 09:18:13 - WARNING - datasets.fingerprint - Parameter 'function'=<function SuperGlueDataset.preprocess_function at 0x7946131e5480> of the transform d
+atasets.arrow_dataset.Dataset._map_single couldn't be hashed properly, a random hash was used instead. Make sure your transforms and parameters are serializable
+ with pickle or dill for the dataset fingerprinting and caching to work. If you reuse this transform, the caching mechanism will consider it to be different fro
+m the previous calls and recompute everything. This warning is only showed once. Subsequent hashing failures won't be showed.
+Running tokenizer on dataset: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:00<00:00,  8.37ba/s]
+Running tokenizer on dataset: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00, 34.75ba/s]
+Running tokenizer on dataset: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:00<00:00, 11.75ba/s]
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+model.safetensors: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 499M/499M [00:29<00:00, 16.7MB/s]
+[WARNING|modeling_utils.py:3331] 2025-10-15 09:18:45,604 >> Some weights of RobertaForPromptFinetuning were not initialized from the model checkpoint at roberta
+-base and are newly initialized: ['roberta.pooler.dense.bias', 'roberta.pooler.dense.weight', 'lm_head.decoder.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 128, in <module>
+    trainer, predict_dataset = get_trainer(args)
+  File "/app/UPET/tasks/superglue/get_trainer.py", line 64, in get_trainer
+    model = get_model(data_args, model_args, TaskType.SEQUENCE_CLASSIFICATION, config)
+  File "/app/UPET/model/utils.py", line 266, in get_model
+    model = model_class(config, model_args, data_args)
+  File "/app/UPET/model/prompt_for_sequence_classification.py", line 641, in __init__
+    super().__init__(config, model_args, data_args)
+  File "/app/UPET/model/prompt_for_sequence_classification.py", line 176, in __init__
+    self.lm_model.label_word_list = torch.tensor(data_args.label_word_list).long().cuda()
+  File "/usr/local/lib/python3.10/site-packages/torch/cuda/__init__.py", line 293, in _lazy_init
+    raise AssertionError("Torch not compiled with CUDA enabled")
+AssertionError: Torch not compiled with CUDA enabled
+root@6be20f1f1bd7:/app/UPET# ls -la ./outputs/rte_roberta_upet_k5_seed42
+ls: cannot access './outputs/rte_roberta_upet_k5_seed42': No such file or directory
+root@6be20f1f1bd7:/app/UPET# find ./outputs/rte_roberta_upet_k5_seed42 -maxdepth 2 -type f -iname "*all_results*.json" -o -iname "*eval*results*.json" -o -iname
+ "*metrics*.json" -o -iname "*eval*.json"
+find: ‘./outputs/rte_roberta_upet_k5_seed42’: No such file or directory
+root@6be20f1f1bd7:/app/UPET# python3 - << 'PY'
+> import os, json
+> base = './outputs/rte_roberta_upet_k5_seed42'
+> vals = []
+> for root,_,files in os.walk(base):
+>     for f in files:
+>         if f.endswith('.json'):
+>             p=os.path.join(root,f)
+>             try:
+>                 with open(p,'r') as fh:
+>                     data=json.load(fh)
+>                 for k in ('eval_accuracy','accuracy','acc'):
+>                     if k in data:
+>                         vals.append(float(data[k]))
+>                         break
+>             except Exception:
+>                 pass
+> val = vals[-1] if vals else 0.0
+> print(json.dumps({"eval_accuracy": val}))
+> PY
+{"eval_accuracy": 0.0}
+root@6be20f1f1bd7:/app/UPET# grep -R "\.cuda\(" -n .
+grep: Unmatched ( or \(
+root@6be20f1f1bd7:/app/UPET# sed -n '150,220p' model/prompt_for_sequence_classification.py
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            config=config,
+            cache_dir=model_args.cache_dir,
+        )
+
+        else:
+            self.lm_model = model_fn.from_pretrained(
+                model_args.model_name_or_path,
+                from_tf=bool(".ckpt" in model_args.model_name_or_path),
+                config=config,
+                cache_dir=model_args.cache_dir,
+            )
+
+        if config.model_type == "roberta":
+            self.embeddings = self.lm_model.roberta.embeddings
+        elif config.model_type == "bert":
+            self.embeddings = self.lm_model.bert.embeddings
+        elif config.model_type in ["deberta", "deberta-v2"]:
+            self.embeddings = self.lm_model.deberta.embeddings
+        elif config.model_type == "t5":
+            self.embeddings = self.lm_model.T5.embeddings
+
+
+        # Pass dataset and argument information to the model
+        if model_args.prompt_prefix or model_args.prompt_ptuning or model_args.prompt_adapter or model_args.prompt_only:
+            self.lm_model.label_word_list = torch.tensor(data_args.label_word_list).long().cuda()
+        else:
+            raise RuntimeError("You must choose prompt_prefix or prompt_ptuning or prompt_adapter or prompt_only.")
+
+        if output_modes_mapping[data_args.dataset_name] == 'regression':
+            # lower / upper bounds
+            self.lm_model.lb, self.lm_model.ub = bound_mapping[data_args.dataset_name]
+
+        self.lm_model.model_args = model_args
+        self.lm_model.data_args = data_args
+        self.hidden_size = config.hidden_size
+
+        # edit by wjn
+        if self.model_args.prompt_ptuning:
+            self.prompt_embeddings = torch.nn.Embedding(self.pre_seq_len, self.hidden_size)
+        else:
+            self.prompt_embeddings = None
+        # self.data_args.continuous_prompt = self.model_args.pre_seq_len
+
+        if self.model_args.prompt_adapter and self.model_args.adapter_choice != 'none':
+            try:
+                std = self.model_args.adapter_init_std
+            except:
+                std = 0.0002
+            self.init_adapter(std=std)
+
+        self.prompt_encoder = None
+        # add by wjn
+        self.prefix_tokens = torch.arange(self.pre_seq_len).long()
+        self.prefix_encoder = torch.nn.Embedding(self.pre_seq_len, config.hidden_size)
+        # if self.model_args.prompt_ptuning or self.model_args.prompt_prefix:
+        #     self.init_embedding()
+
+    def init_adapter(self, std):
+        with torch.no_grad():
+            for name, param in self.lm_model.named_parameters():
+                init_value = 0
+                if 'adapter_proj' in name:
+                    if self.model_args.adapter_choice == 'simple':
+                        init_value = torch.eye(param.size(0))
+                    if std > 0:
+                        init_value += torch.normal(0, std, size=param.size())
+                    param.copy_(init_value)
+
+    def freeze_lm(self):
+root@6be20f1f1bd7:/app/UPET# sed -i "s/\.cuda()/\.to('cpu')/g" model/prompt_for_sequence_classification.py
+root@6be20f1f1bd7:/app/UPET# grep -R "\.cuda\(" -n model | sed -n '1,200p'
+grep: Unmatched ( or \(
+root@6be20f1f1bd7:/app/UPET# sed -i "s/\.cuda()/\.to('cpu')/g" model/*.py
+sed -n '1,260p' training/trainer_base.py
+root@6be20f1f1bd7:/app/UPET# sed -n '1,260p' training/trainer_base.py
+import logging
+import os
+from typing import Dict, OrderedDict
+
+from transformers import Trainer
+
+logger = logging.getLogger(__name__)
+
+_default_log_level = logging.INFO
+logger.setLevel(_default_log_level)
+
+class BaseTrainer(Trainer):
+    def __init__(self, *args, predict_dataset = None, test_key = "accuracy", **kwargs):
+        super().__init__(*args, **kwargs)
+        self.predict_dataset = predict_dataset
+        self.test_key = test_key
+        self.best_metrics = OrderedDict({
+            "best_epoch": 0,
+            f"best_eval_{self.test_key}": 0,
+        })
+
+    def log_best_metrics(self):
+        self.log_metrics("best", self.best_metrics)
+        self.save_metrics("best", self.best_metrics, combined=False)
+
+
+
+    def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval):
+        if self.control.should_log:
+            logs: Dict[str, float] = {}
+
+
+            tr_loss_scalar = self._nested_gather(tr_loss).mean().item()
+
+            # reset tr_loss to zero
+            tr_loss -= tr_loss
+
+            logs["loss"] = round(tr_loss_scalar / (self.state.global_step - self._globalstep_last_logged), 4)
+            logs["learning_rate"] = self._get_learning_rate()
+
+            self._total_loss_scalar += tr_loss_scalar
+            self._globalstep_last_logged = self.state.global_step
+            self.store_flos()
+
+            self.log(logs)
+
+        eval_metrics = None
+        if self.control.should_evaluate:
+            eval_metrics = self.evaluate(ignore_keys=ignore_keys_for_eval)
+            self._report_to_hp_search(trial, epoch, eval_metrics)
+            print("eval_metrics=", eval_metrics)
+            if eval_metrics["eval_"+self.test_key] > self.best_metrics["best_eval_"+self.test_key]:
+                self.best_metrics["best_epoch"] = epoch
+                self.best_metrics["best_eval_"+self.test_key] = eval_metrics["eval_"+self.test_key]
+
+                if self.predict_dataset is not None:
+                    if isinstance(self.predict_dataset, dict):
+                        for dataset_name, dataset in self.predict_dataset.items():
+                            _, _, test_metrics = self.predict(dataset, metric_key_prefix="test")
+                            self.best_metrics[f"best_test_{dataset_name}_{self.test_key}"] = test_metrics["test_"+self.test_key]
+                    else:
+                        _, _, test_metrics = self.predict(self.predict_dataset, metric_key_prefix="test")
+                        self.best_metrics["best_test_"+self.test_key] = test_metrics["test_"+self.test_key]
+
+            logger.info(f"***** Epoch {epoch}: Best results *****")
+            for key, value in self.best_metrics.items():
+                logger.info(f"{key} = {value}")
+            self.log(self.best_metrics)
+
+        if self.control.should_save:
+            self._save_checkpoint(model, trial, metrics=eval_metrics)
+            self.control = self.callback_handler.on_save(self.args, self.state, self.control)
+root@6be20f1f1bd7:/app/UPET# python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --
+max_seq_length 128 --per_device_train_batch_size 4 --per_device_eval_batch_size 32 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir ./out
+puts/rte_roberta_upet_k5_seed42 --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_lab
+el 5 --prompt_ptuning --use_pe
+Using the `WANDB_DISABLED` environment variable is deprecated and will be removed in v5. Use the --report_to flag to control the integrations used for logging r
+esult (for instance --report_to none).
+10/15/2025 09:20:22 - WARNING - __main__ - Process rank: 0, device: cpu, n_gpu: 0distributed training: True, 16-bits training: False
+/usr/local/lib/python3.10/site-packages/huggingface_hub/file_download.py:945: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.
+0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+10/15/2025 09:20:23 - WARNING - datasets.builder - Reusing dataset super_glue (/root/.cache/huggingface/datasets/super_glue/rte/1.0.2/d040c658e2ddef6934fdd97deb
+45c777b6ff50c524781ea434e7219b56a428a7)
+100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:00<00:00, 1058.45it/s]
+{'entailment': 0, 'not_entailment': 1}
+{0: 'entailment', 1: 'not_entailment'}
+10/15/2025 09:20:23 - WARNING - datasets.fingerprint - Parameter 'function'=<function SuperGlueDataset.preprocess_function at 0x74a90e5b81f0> of the transform d
+atasets.arrow_dataset.Dataset._map_single couldn't be hashed properly, a random hash was used instead. Make sure your transforms and parameters are serializable
+ with pickle or dill for the dataset fingerprinting and caching to work. If you reuse this transform, the caching mechanism will consider it to be different fro
+m the previous calls and recompute everything. This warning is only showed once. Subsequent hashing failures won't be showed.
+Running tokenizer on dataset: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:00<00:00, 12.75ba/s]
+Running tokenizer on dataset: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00, 36.06ba/s]
+Running tokenizer on dataset: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:00<00:00,  8.34ba/s]
+Randomly sampling 5-shot training examples for each label. Total examples number is 10
+[WARNING|modeling_utils.py:3331] 2025-10-15 09:20:25,790 >> Some weights of RobertaForPromptFinetuning were not initialized from the model checkpoint at roberta
+-base and are newly initialized: ['roberta.pooler.dense.weight', 'lm_head.decoder.weight', 'roberta.pooler.dense.bias']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+***** total param is 39276633 *****
+/usr/local/lib/python3.10/site-packages/transformers/optimization.py:411: FutureWarning: This implementation of AdamW is deprecated and will be removed in a fut
+ure version. Use the PyTorch implementation torch.optim.AdamW instead, or set `no_deprecation_warning=True` to disable this warning
+  warnings.warn(
+{'eval_loss': 5.14238166809082, 'eval_accuracy': 0.5270758122743683, 'eval_runtime': 10.835, 'eval_samples_per_second': 25.565, 'eval_steps_per_second': 0.831,
+'epoch': 1.0}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:12<00:00,  1.73it/se
+val_metrics= {'eval_loss': 5.14238166809082, 'eval_accuracy': 0.5270758122743683, 'eval_runtime': 10.835, 'eval_samples_per_second': 25.565, 'eval_steps_per_sec
+ond': 0.831, 'epoch': 1.0}
+10/15/2025 09:20:39 - INFO - training.trainer_base - ***** Epoch 0: Best results *****
+10/15/2025 09:20:39 - INFO - training.trainer_base - best_epoch = 0
+10/15/2025 09:20:39 - INFO - training.trainer_base - best_eval_accuracy = 0.5270758122743683
+OrderedDict([('best_epoch', 0), ('best_eval_accuracy', 0.5270758122743683), ('epoch', 1.0)])
+{'train_runtime': 12.6801, 'train_samples_per_second': 0.789, 'train_steps_per_second': 0.237, 'train_loss': 1.9485710461934407, 'epoch': 1.0}
+100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 3/3 [00:12<00:00,  4.23s/it]
+***** train metrics *****
+  epoch                    =        1.0
+  train_loss               =     1.9486
+  train_runtime            = 0:00:12.68
+  train_samples_per_second =      0.789
+  train_steps_per_second   =      0.237
+***** best metrics *****
+  best_epoch         =      0
+  best_eval_accuracy = 0.5271
+  epoch              =    1.0
+root@6be20f1f1bd7:/app/UPET# ls -la ./outputs/rte_roberta_upet_k5_seed42
+total 28
+drwxr-xr-x 3 root root 4096 Oct 15 09:20 .
+drwxr-xr-x 3 root root 4096 Oct 15 09:20 ..
+-rw-r--r-- 1 root root  164 Oct 15 09:20 all_results.json
+-rw-r--r-- 1 root root   87 Oct 15 09:20 best_results.json
+drwxr-xr-x 3 root root 4096 Oct 15 09:20 runs
+-rw-r--r-- 1 root root  164 Oct 15 09:20 train_results.json
+-rw-r--r-- 1 root root  934 Oct 15 09:20 trainer_state.json
+root@6be20f1f1bd7:/app/UPET# find ./outputs/rte_roberta_upet_k5_seed42 -maxdepth 2 -type f -iname "*all_results*.json" -o -iname "*eval*results*.json" -o -iname
+ "*metrics*.json" -o -iname "*eval*.json"
+./outputs/rte_roberta_upet_k5_seed42/all_results.json
+root@6be20f1f1bd7:/app/UPET# python3 - << 'PY'
+> import os, json
+> base = './outputs/rte_roberta_upet_k5_seed42'
+> vals = []
+> for root,_,files in os.walk(base):
+>     for f in files:
+>         if f.endswith('.json'):
+>             p=os.path.join(root,f)
+>             try:
+>                 with open(p,'r') as fh:
+>                     data=json.load(fh)
+>                 for k in ('eval_accuracy','accuracy','acc'):
+>                     if k in data:
+>                         vals.append(float(data[k]))
+>                         break
+>             except Exception:
+>                 pass
+> val = vals[-1] if vals else 0.0
+> print(json.dumps({"eval_accuracy": val}))
+> PY
+{"eval_accuracy": 0.0}
+root@6be20f1f1bd7:/app/UPET# cat ./outputs/rte_roberta_upet_k5_seed42/all_results.json
+{
+    "epoch": 1.0,
+    "train_loss": 1.9485710461934407,
+    "train_runtime": 12.6801,
+    "train_samples_per_second": 0.789,
+    "train_steps_per_second": 0.237
+}root@6be20f1f1bd7:/app/UPET# cat ./outputs/rte_roberta_upet_k5_seed42/best_results.json
+{
+    "best_epoch": 0,
+    "best_eval_accuracy": 0.5270758122743683,
+    "epoch": 1.0
+}root@6be20f1f1bd7:/app/UPET# python3 - << 'PY'
+> import json, os
+> base = './outputs/rte_roberta_upet_k5_seed42'
+> val = None
+> paths = [
+>     os.path.join(base, 'all_results.json'),
+>     os.path.join(base, 'best_results.json'),
+>     os.path.join(base, 'trainer_state.json'),
+> ]
+> loaded = {}
+> for p in paths:
+>     try:
+>         with open(p, 'r') as f:
+>             loaded[p] = json.load(f)
+>     except Exception:
+>         loaded[p] = None
+> # Try all_results.json
+> ar = loaded.get(os.path.join(base, 'all_results.json'))
+> if ar:
+>     for k in ['eval_accuracy','accuracy','acc','eval_acc']:
+>         if k in ar:
+>             try:
+>                 val = float(ar[k])
+>             except Exception:
+>                 pass
+>             break
+> # Fallback to best_results.json
+> if val is None:
+>     br = loaded.get(os.path.join(base, 'best_results.json'))
+>     if br:
+>         for k in ['best_eval_accuracy','eval_accuracy','accuracy','acc','eval_acc']:
+>             if k in br:
+>                 try:
+>                     val = float(br[k])
+>                 except Exception:
+>                     pass
+>                 break
+> # Fallback to trainer_state.json
+> if val is None:
+>     ts = loaded.get(os.path.join(base, 'trainer_state.json'))
+>     if ts and isinstance(ts.get('log_history'), list):
+>         for entry in reversed(ts['log_history']):
+>             for k in ['eval_accuracy','accuracy','acc','eval_acc','best_eval_accuracy']:
+>                 if k in entry:
+>                     try:
+>                         val = float(entry[k])
+>                     except Exception:
+>                         pass
+>                     break
+>             if val is not None:
+>                 break
+> print(json.dumps({"eval_accuracy": (0.0 if val is None else val)}))
+> PY
+{"eval_accuracy": 0.5270758122743683}
+root@6be20f1f1bd7:/app/UPET#

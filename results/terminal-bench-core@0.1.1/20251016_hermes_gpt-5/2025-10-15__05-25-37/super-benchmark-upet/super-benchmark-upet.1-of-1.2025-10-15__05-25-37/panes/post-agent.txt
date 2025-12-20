@@ -1,0 +1,1913 @@
+        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+            logger.info(
+                f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
+                "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
+            )
+
+
+    if training_args.do_train:
+        train(trainer, training_args.resume_from_checkpoint, last_checkpoint)
+
+    # if training_args.do_eval:
+    #     evaluate(trainer)
+
+    # if training_args.do_predict:
+    #     predict(trainer, predict_dataset)
+
+   root@f0efe683179c:/app/UPET# sed -n '240,480p' run.py
+root@f0efe683179c:/app/UPET# mkdir -p outputs
+root@f0efe683179c:/app/UPET# python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --
+do_predict --max_seq_length 128 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet
+_seed42_k5_ep1 --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptu
+ning --use_pe
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 7, in <module>
+    import datasets
+ModuleNotFoundError: No module named 'datasets'
+root@f0efe683179c:/app/UPET# sleep 30
+find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# sleep 30
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# python3 - << 'PY'
+> import json, os, re, glob
+> base = 'outputs/rte_roberta_upet_seed42_k5_ep1'
+> acc = None
+> candidates = []
+> for pattern in [
+>     os.path.join(base, 'eval_results.json'),
+>     os.path.join(base, 'all_results.json'),
+>     os.path.join(base, 'trainer_state.json'),
+>     os.path.join(base, '**', '*.json')
+> ]:
+>     candidates.extend(glob.glob(pattern, recursive=True))
+> for p in candidates:
+>     try:
+>         with open(p,'r',encoding='utf-8') as f:
+>             data = json.load(f)
+>         for k in ['eval_accuracy','accuracy','acc','eval_acc']:
+>             if isinstance(data, dict) and k in data:
+>                 acc = data[k]
+>                 break
+>         if acc is not None:
+>             break
+>     except Exception:
+>         pass
+> if acc is None:
+>     for p in glob.glob(os.path.join(base,'**','*'), recursive=True):
+>         if os.path.isfile(p) and p.endswith('.txt'):
+>             try:
+>                 t = open(p,'r',encoding='utf-8',errors='ignore').read()
+>                 m = re.search(r'(eval_)?accuracy\s*[:=]\s*([0-9\.]+)', t)
+>                 if m:
+>                     acc = float(m.group(2))
+>                     break
+>             except Exception:
+>                 pass
+> if acc is not None:
+>     with open('eval_accuracy.json','w',encoding='utf-8') as f:
+>         json.dump({'eval_accuracy': float(acc)}, f)
+> print('ACCURACY:', acc)
+> PY
+ACCURACY: None
+root@f0efe683179c:/app/UPET# if [ -f eval_accuracy.json ]; then cat eval_accuracy.json; else echo '{"eval_accuracy": null}'; fi
+{"eval_accuracy": null}
+root@f0efe683179c:/app/UPET# pip3 show datasets transformers tokenizers torch tqdm seqeval
+WARNING: Package(s) not found: datasets, seqeval
+python3 - << 'PY'
+import importlib
+mods = ['datasets','transformers','torch','tokenizers']
+versions = {}
+for m in mods:
+    try:
+        mod = importlib.import_module(m)
+        versions[m] = getattr(mod, '__version__', 'unknown')
+    except Exception as e:
+        versions[m] = f'ERROR: {e}'
+print(versions)
+PY
+Name: transformers
+Version: 4.40.2
+Summary: State-of-the-art Machine Learning for JAX, PyTorch and TensorFlow
+Home-page: https://github.com/huggingface/transformers
+Author: The Hugging Face team (past and future) with the help of all our contributors (https://github.com/huggingface/transformers/graphs/contributors)
+Author-email: transformers@huggingface.co
+License: Apache 2.0 License
+Location: /usr/local/lib/python3.10/site-packages
+Requires: filelock, huggingface-hub, numpy, packaging, pyyaml, regex, requests, safetensors, tokenizers, tqdm
+Required-by:
+---
+Name: tokenizers
+Version: 0.19.1
+Summary:
+Home-page:
+Author: Anthony MOI <m.anthony.moi@gmail.com>
+Author-email: Nicolas Patry <patry.nicolas@protonmail.com>, Anthony Moi <anthony@huggingface.co>
+License:
+Location: /usr/local/lib/python3.10/site-packages
+Requires: huggingface-hub
+Required-by: transformers
+---
+Name: torch
+Version: 2.9.0+cpu
+Summary: Tensors and Dynamic neural networks in Python with strong GPU acceleration
+Home-page:
+Author:
+Author-email: PyTorch Team <packages@pytorch.org>
+License: BSD-3-Clause
+Location: /usr/local/lib/python3.10/site-packages
+Requires: filelock, fsspec, jinja2, networkx, sympy, typing-extensions
+Required-by: torchaudio, torchvision
+---
+Name: tqdm
+Version: 4.66.4
+Summary: Fast, Extensible Progress Meter
+Home-page:
+Author:
+Author-email:
+License: MPL-2.0 AND MIT
+Location: /usr/local/lib/python3.10/site-packages
+Requires:
+Required-by: gdown, huggingface-hub, hyperopt, nltk, spacy, transformers
+root@f0efe683179c:/app/UPET# python3 - << 'PY'
+> import importlib
+> mods = ['datasets','transformers','torch','tokenizers']
+> versions = {}
+> for m in mods:
+>     try:
+>         mod = importlib.import_module(m)
+>         versions[m] = getattr(mod, '__version__', 'unknown')
+>     except Exception as e:
+>         versions[m] = f'ERROR: {e}'
+> print(versions)
+> PY
+sed -n '1,200p' arguments.py
+sed -n '200,400p' arguments.py
+{'datasets': "ERROR: No module named 'datasets'", 'transformers': '4.40.2', 'torch': '2.9.0+cpu', 'tokenizers': '0.19.1'}
+sed -n '1,240p' run.py
+root@f0efe683179c:/app/UPET# sed -n '1,200p' arguments.py
+from enum import Enum
+import argparse
+import dataclasses
+from dataclasses import dataclass, field
+from typing import Optional
+
+from transformers import HfArgumentParser, TrainingArguments
+
+from tasks.utils import *
+
+
+@dataclass
+class DataTrainingArguments:
+    """
+    Arguments pertaining to what data we are going to input our model for training and eval.
+
+    Using `HfArgumentParser` we can turn this class
+    into argparse arguments to be able to specify them on
+    the command line.training_args
+    """
+    task_name: str = field(
+        metadata={
+            "help": "The name of the task to train on: " + ", ".join(TASKS),
+            "choices": TASKS
+        },
+    )
+    dataset_name: str = field(
+        metadata={
+            "help": "The name of the dataset to use: " + ", ".join(DATASETS),
+            "choices": DATASETS
+        }
+    )
+    # add by wjn
+    num_examples_per_label: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "Randomly sampling k-shot examples for each label "
+        },
+    )
+    dataset_config_name: Optional[str] = field(
+        default=None, metadata={"help": "The configuration name of the dataset to use (via the datasets library)."}
+    )
+    max_seq_length: int = field(
+        default=128,
+        metadata={
+            "help": "The maximum total input sequence length after tokenization. Sequences longer "
+            "than this will be truncated, sequences shorter will be padded."
+        },
+    )
+    overwrite_cache: bool = field(
+        default=False, metadata={"help": "Overwrite the cached preprocessed datasets or not."}
+    )
+    pad_to_max_length: bool = field(
+        default=True,
+        metadata={
+            "help": "Whether to pad all samples to `max_seq_length`. "
+            "If False, will pad the samples dynamically when batching to the maximum length in the batch."
+        },
+    )
+    max_train_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "For debugging purposes or quicker training, truncate the number of training examples to this "
+            "value if set."
+        },
+    )
+    max_eval_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "For debugging purposes or quicker training, truncate the number of evaluation examples to this "
+            "value if set."
+        },
+    )
+    max_predict_samples: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "For debugging purposes or quicker training, truncate the number of prediction examples to this "
+            "value if set."
+        },
+    )
+    train_file: Optional[str] = field(
+        default=None, metadata={"help": "A csv or a json file containing the training data."}
+    )
+    validation_file: Optional[str] = field(
+        default=None, metadata={"help": "A csv or a json file containing the validation data."}
+    )
+    test_file: Optional[str] = field(
+        default=None,
+        metadata={"help": "A csv or a json file containing the test data."}
+    )
+    template_id: Optional[int] = field(
+        default=0,
+        metadata={
+            "help": "The specific prompt string to use"
+        }
+    )
+
+
+@dataclass
+class ModelArguments:
+    """
+    Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
+    """
+    model_name_or_path: str = field(
+        metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
+    )
+    config_name: Optional[str] = field(
+        default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
+    )
+    tokenizer_name: Optional[str] = field(
+        default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
+    )
+    cache_dir: Optional[str] = field(
+        default=None,
+        metadata={"help": "Where do you want to store the pretrained models downloaded from huggingface.co"},
+    )
+    use_fast_tokenizer: bool = field(
+        default=True,
+        metadata={"help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."},
+    )
+    model_revision: str = field(
+        default="main",
+        metadata={"help": "The specific model version to use (can be a branch name, tag name or commit id)."},
+    )
+    use_auth_token: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use the token generated when running `transformers-cli login` (necessary to use this script "
+            "with private models)."
+        },
+    )
+    use_pe: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use parameter-efficient settings. If true, that means fix the parameters of the backbone, and only"
+            "tune the new initialized modules (e.g., adapter, prefix, ptuning, etc.)"
+        }
+    )
+    head_prefix: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Head-tuning Prefix (P-tuning v2) during training"
+        }
+    )
+    prompt_prefix: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Prompt-tuning Prefix (P-tuning v2) during training"
+        }
+    )
+    head_only: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Head Fine-tuning during training (w/o. any new modules)"
+        }
+    )
+    prompt_only: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Prompt Fine-tuning during training (w/o. any new modules)"
+        }
+    )
+    head_ptuning: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Head-tuning P-tuning during training (w. parameter-efficient)"
+        }
+    )
+    prompt_ptuning: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Prompt-tuning P-tuning during training (w. parameter-efficient)"
+        }
+    )
+    head_adapter: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Head-tuning Adapter tuning during training (w. parameter-efficient)"
+        }
+    )
+    prompt_adapter: bool = field(
+        default=False,
+        metadata={
+            "help": "Will use Prompt-tuning Adapter tuning during training (w. parameter-efficient)"
+        }
+    )
+    adapter_choice: str = field(
+        default="LiST",
+        metadata={"help": "The choice of adapter, list, lora, houlsby."},
+    )
+    adapter_dim: int = field(
+        default=128,
+        metadata={"help": "The hidden size of adapter. default is 128."},
+    )
+    pre_seq_len: int = field(
+        default=4,
+        metadata={
+            "help": "The length of prompt"
+        }
+    )
+root@f0efe683179c:/app/UPET# sed -n '200,400p' arguments.py
+    )
+    prefix_projection: bool = field(
+        default=False,
+        metadata={
+            "help": "Apply a two-layer MLP head over the prefix embeddings"
+        }
+    )
+    prefix_hidden_size: int = field(
+        default=512,
+        metadata={
+            "help": "The hidden size of the MLP projection head in Prefix Encoder if prefix projection is used"
+        }
+    )
+    hidden_dropout_prob: float = field(
+        default=0.1,
+        metadata={
+            "help": "The dropout probability used in the models"
+        }
+    )
+
+
+@dataclass
+class SemiSupervisedArguments:
+    use_semi: bool = field(
+        default=False, metadata={"help": "If true, the training process will be transformed into self-training framework."}
+    )
+    unlabeled_data_num: int = field(
+        default=-1,
+        metadata={
+            "help": "The total number of unlabeled data. If set -1 means all the training data (expect of few-shot labeled data)"
+        }
+    )
+    unlabeled_data_batch_size: int = field(
+        default=16,
+        metadata={
+            "help": "The number of unlabeled data in one batch."
+        }
+    )
+    pseudo_sample_num_or_ratio: float = field(
+        default=0.1,
+        metadata={
+            "help": "The number / ratio of pseudo-labeled data sampling. For example, if have 1000 unlabeled data, 0.1 / 100 means sampling 100 pseduo-labeled d
+ata."
+        }
+    )
+    teacher_training_epoch: int = field(
+        default=10,
+        metadata={
+            "help": "The epoch number of teacher training at the beginning of self-training."
+        }
+    )
+    teacher_tuning_epoch: int = field(
+        default=10,
+        metadata={
+            "help": "The epoch number of teacher tuning in each self-training iteration."
+        }
+    )
+    student_training_epoch: int = field(
+        default=16,
+        metadata={
+            "help": "The epoch number of student training in each self-training iteration."
+        }
+    )
+    student_learning_rate: float = field(
+        default=1e-5,
+        metadata={
+            "help": "The learning rate of student training in each self-training iteration."
+        }
+    )
+    self_training_epoch: int = field(
+        default=30,
+        metadata={
+            "help": "The number of teacher-student iteration ."
+        }
+    )
+    # self-training过程中，unlabeled data会先采样一个子集，因此student模型学习的样本数量只有不到1024个
+    # post_student_train设置后，即允许在self-training后，选择最佳的teacher模型，并在全部的unlabeled data上打标和mc dropout
+    # 此时student模型将会在更多的样本上训练（样本数量不超过20k）
+    post_student_train: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to train a student model on large pseudo-labeled data after self-training iteration"
+        }
+    )
+    student_pre_seq_len: int = field(
+        default=4,
+        metadata={
+            "help": "The length of prompt"
+        }
+    )
+
+
+
+
+
+@dataclass
+class QuestionAnwseringArguments:
+    n_best_size: int = field(
+        default=20,
+        metadata={"help": "The total number of n-best predictions to generate when looking for an answer."},
+    )
+    max_answer_length: int = field(
+        default=30,
+        metadata={
+            "help": "The maximum length of an answer that can be generated. This is needed because the start "
+            "and end predictions are not conditioned on one another."
+        },
+    )
+    version_2_with_negative: bool = field(
+        default=False, metadata={"help": "If true, some of the examples do not have an answer."}
+    )
+    null_score_diff_threshold: float = field(
+        default=0.0,
+        metadata={
+            "help": "The threshold used to select the null answer: if the best answer has a score that is less than "
+            "the score of the null answer minus this threshold, the null answer is selected for this example. "
+            "Only useful when `version_2_with_negative=True`."
+        },
+    )
+
+
+
+
+def get_args():
+    """Parse all the args."""
+    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments, SemiSupervisedArguments, QuestionAnwseringArguments))
+
+    args = parser.parse_args_into_dataclasses()
+
+    return argsroot@f0efe683179c:/app/UPET# sed -n '1,240p' run.py
+import logging
+import os
+import sys
+import numpy as np
+from typing import Dict
+
+import datasets
+import transformers
+from transformers import set_seed, Trainer
+from transformers.trainer_utils import get_last_checkpoint
+
+from arguments import get_args
+
+from tasks.utils import *
+
+os.environ["WANDB_DISABLED"] = "true"
+
+logger = logging.getLogger(__name__)
+
+def train(trainer, resume_from_checkpoint=None, last_checkpoint=None):
+    checkpoint = None
+    if resume_from_checkpoint is not None:
+        checkpoint = resume_from_checkpoint
+    elif last_checkpoint is not None:
+        checkpoint = last_checkpoint
+    train_result = trainer.train(resume_from_checkpoint=checkpoint)
+    # trainer.save_model()，
+
+    try:
+        metrics = train_result.metrics
+
+        trainer.log_metrics("train", metrics)
+        trainer.save_metrics("train", metrics)
+        trainer.save_state()
+
+        trainer.log_best_metrics()
+    except:
+        pass
+
+def evaluate(trainer):
+    logger.info("*** Evaluate ***")
+    metrics = trainer.evaluate()
+
+    trainer.log_metrics("eval", metrics)
+    trainer.save_metrics("eval", metrics)
+
+def predict(trainer, predict_dataset=None):
+    if predict_dataset is None:
+        logger.info("No dataset is available for testing")
+
+    elif isinstance(predict_dataset, dict):
+
+        for dataset_name, d in predict_dataset.items():
+            logger.info("*** Predict: %s ***" % dataset_name)
+            predictions, labels, metrics = trainer.predict(d, metric_key_prefix="predict")
+            predictions = np.argmax(predictions, axis=2)
+
+            trainer.log_metrics("predict", metrics)
+            trainer.save_metrics("predict", metrics)
+
+    else:
+        logger.info("*** Predict ***")
+        predictions, labels, metrics = trainer.predict(predict_dataset, metric_key_prefix="predict")
+        predictions = np.argmax(predictions, axis=2)
+
+        trainer.log_metrics("predict", metrics)
+        trainer.save_metrics("predict", metrics)
+
+if __name__ == '__main__':
+
+    args = get_args()
+
+    _, data_args, training_args, semi_training_args, _ = args
+
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
+
+    log_level = training_args.get_process_log_level()
+    logger.setLevel(log_level)
+    datasets.utils.logging.set_verbosity(log_level)
+    transformers.utils.logging.set_verbosity(log_level)
+    transformers.utils.logging.enable_default_handler()
+    transformers.utils.logging.enable_explicit_format()
+
+    # Log on each process the small summary:
+    logger.warning(
+        f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
+        + f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
+    )
+    logger.info(f"Training/evaluation parameters {training_args}")
+
+
+    if not os.path.isdir("checkpoints") or not os.path.exists("checkpoints"):
+        os.mkdir("checkpoints")
+
+    if data_args.task_name.lower() == "superglue":
+        assert data_args.dataset_name.lower() in SUPERGLUE_DATASETS
+        from tasks.superglue.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "glue":
+        assert data_args.dataset_name.lower() in GLUE_DATASETS
+        from tasks.glue.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "ner":
+        assert data_args.dataset_name.lower() in NER_DATASETS
+        from tasks.ner.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "srl":
+        assert data_args.dataset_name.lower() in SRL_DATASETS
+        from tasks.srl.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "qa":
+        assert data_args.dataset_name.lower() in QA_DATASETS
+        from tasks.qa.get_trainer import get_trainer
+
+    elif data_args.task_name.lower() == "other_cls":
+        assert data_args.dataset_name.lower() in OTHER_DATASETS
+        from tasks.other_cls.get_trainer import get_trainer
+
+    else:
+        raise NotImplementedError('Task {} is not implemented. Please choose a task from: {}'.format(data_args.task_name, ", ".join(TASKS)))
+
+    set_seed(training_args.seed)
+
+    trainer, predict_dataset = get_trainer(args)
+
+    last_checkpoint = None
+    if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
+        last_checkpoint = get_last_checkpoint(training_args.output_dir)
+        if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
+            raise ValueError(
+                f"Output directory ({training_args.output_dir}) already exists and is not empty. "
+                "Use --overwrite_output_dir to overcome."
+            )
+        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+            logger.info(
+                f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
+                "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
+            )
+
+
+    if training_args.do_train:
+        train(trainer, training_args.resume_from_checkpoint, last_checkpoint)
+
+    # if training_args.do_eval:
+    #     evaluate(trainer)
+
+    # if training_args.do_predict:
+    #     predict(trainer, predict_dataset)
+
+   root@f0efe683179c:/app/UPET# sed -n '240,480p' run.py
+root@f0efe683179c:/app/UPET# mkdir -p outputs
+root@f0efe683179c:/app/UPET# python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --
+do_predict --max_seq_length 128 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet
+_seed42_k5_ep1 --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptu
+ning --use_pe
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 7, in <module>
+    import datasets
+ModuleNotFoundError: No module named 'datasets'
+root@f0efe683179c:/app/UPET# sleep 30
+find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# sleep 30
+find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# python3 - << 'PY'
+> import json, os, re, glob
+> base = 'outputs/rte_roberta_upet_seed42_k5_ep1'
+> acc = None
+> candidates = []
+> for pattern in [
+>     os.path.join(base, 'eval_results.json'),
+>     os.path.join(base, 'all_results.json'),
+>     os.path.join(base, 'trainer_state.json'),
+>     os.path.join(base, '**', '*.json')
+> ]:
+>     candidates.extend(glob.glob(pattern, recursive=True))
+> for p in candidates:
+>     try:
+>         with open(p,'r',encoding='utf-8') as f:
+>             data = json.load(f)
+>         for k in ['eval_accuracy','accuracy','acc','eval_acc']:
+>             if isinstance(data, dict) and k in data:
+>                 acc = data[k]
+>                 break
+>         if acc is not None:
+>             break
+>     except Exception:
+>         pass
+> if acc is None:
+>     for p in glob.glob(os.path.join(base,'**','*'), recursive=True):
+>         if os.path.isfile(p) and p.endswith('.txt'):
+>             try:
+>                 t = open(p,'r',encoding='utf-8',errors='ignore').read()
+>                 m = re.search(r'(eval_)?accuracy\s*[:=]\s*([0-9\.]+)', t)
+>                 if m:
+>                     acc = float(m.group(2))
+>                     break
+>             except Exception:
+>                 pass
+> if acc is not None:
+>     with open('eval_accuracy.json','w',encoding='utf-8') as f:
+>         json.dump({'eval_accuracy': float(acc)}, f)
+> print('ACCURACY:', acc)
+> PY
+ACCURACY: None
+root@f0efe683179c:/app/UPET# if [ -f eval_accuracy.json ]; then cat eval_accuracy.json; else echo '{"eval_accuracy": null}'; fi
+{"eval_accuracy": null}
+root@f0efe683179c:/app/UPET# pip3 show datasets transformers tokenizers torch tqdm seqeval
+WARNING: Package(s) not found: datasets, seqeval
+python3 - << 'PY'
+import importlib
+mods = ['datasets','transformers','torch','tokenizers']
+versions = {}
+for m in mods:
+    try:
+        mod = importlib.import_module(m)
+        versions[m] = getattr(mod, '__version__', 'unknown')
+    except Exception as e:
+        versions[m] = f'ERROR: {e}'
+print(versions)
+PY
+Name: transformers
+Version: 4.40.2
+Summary: State-of-the-art Machine Learning for JAX, PyTorch and TensorFlow
+Home-page: https://github.com/huggingface/transformers
+Author: The Hugging Face team (past and future) with the help of all our contributors (https://github.com/huggingface/transformers/graphs/contributors)
+Author-email: transformers@huggingface.co
+License: Apache 2.0 License
+Location: /usr/local/lib/python3.10/site-packages
+Requires: filelock, huggingface-hub, numpy, packaging, pyyaml, regex, requests, safetensors, tokenizers, tqdm
+Required-by:
+---
+Name: tokenizers
+Version: 0.19.1
+Summary:
+Home-page:
+Author: Anthony MOI <m.anthony.moi@gmail.com>
+Author-email: Nicolas Patry <patry.nicolas@protonmail.com>, Anthony Moi <anthony@huggingface.co>
+License:
+Location: /usr/local/lib/python3.10/site-packages
+Requires: huggingface-hub
+Required-by: transformers
+---
+Name: torch
+Version: 2.9.0+cpu
+Summary: Tensors and Dynamic neural networks in Python with strong GPU acceleration
+Home-page:
+Author:
+Author-email: PyTorch Team <packages@pytorch.org>
+License: BSD-3-Clause
+Location: /usr/local/lib/python3.10/site-packages
+Requires: filelock, fsspec, jinja2, networkx, sympy, typing-extensions
+Required-by: torchaudio, torchvision
+---
+Name: tqdm
+Version: 4.66.4
+Summary: Fast, Extensible Progress Meter
+Home-page:
+Author:
+Author-email:
+License: MPL-2.0 AND MIT
+Location: /usr/local/lib/python3.10/site-packages
+Requires:
+Required-by: gdown, huggingface-hub, hyperopt, nltk, spacy, transformers
+root@f0efe683179c:/app/UPET# python3 - << 'PY'
+> import importlib
+> mods = ['datasets','transformers','torch','tokenizers']
+> versions = {}
+> for m in mods:
+>     try:
+>         mod = importlib.import_module(m)
+>         versions[m] = getattr(mod, '__version__', 'unknown')
+>     except Exception as e:
+>         versions[m] = f'ERROR: {e}'
+> print(versions)
+> PY
+mkdir -p outputs
+python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --do_predict --max_seq_length 1
+28 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet_seed42_k5_ep1 --overwrite_ou
+tput_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptuning --use_pe
+{'datasets': "ERROR: No module named 'datasets'", 'transformers': '4.40.2', 'torch': '2.9.0+cpu', 'tokenizers': '0.19.1'}
+root@f0efe683179c:/app/UPET# mkdir -p outputs
+root@f0efe683179c:/app/UPET# python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --
+do_predict --max_seq_length 128 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet
+_seed42_k5_ep1 --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptu
+ning --use_pe
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 7, in <module>
+    import datasets
+ModuleNotFoundError: No module named 'datasets'
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# python3 - << 'PY'
+> import json, os, re, glob
+> base = 'outputs/rte_roberta_upet_seed42_k5_ep1'
+> acc = None
+> candidates = []
+> for pattern in [
+>     os.path.join(base, 'eval_results.json'),
+>     os.path.join(base, 'all_results.json'),
+>     os.path.join(base, 'trainer_state.json'),
+>     os.path.join(base, '**', '*.json')
+> ]:
+>     candidates.extend(glob.glob(pattern, recursive=True))
+> for p in candidates:
+>     try:
+>         with open(p,'r',encoding='utf-8') as f:
+>             data = json.load(f)
+>         for k in ['eval_accuracy','accuracy','acc','eval_acc']:
+>             if isinstance(data, dict) and k in data:
+>                 acc = data[k]
+>                 break
+>         if acc is not None:
+>             break
+>     except Exception:
+>         pass
+> if acc is None:
+>     for p in glob.glob(os.path.join(base,'**','*'), recursive=True):
+>         if os.path.isfile(p) and p.endswith('.txt'):
+>             try:
+>                 t = open(p,'r',encoding='utf-8',errors='ignore').read()
+>                 m = re.search(r'(eval_)?accuracy\s*[:=]\s*([0-9\.]+)', t)
+>                 if m:
+>                     acc = float(m.group(2))
+>                     break
+>             except Exception:
+>                 pass
+> if acc is not None:
+>     with open('eval_accuracy.json','w',encoding='utf-8') as f:
+>         json.dump({'eval_accuracy': float(acc)}, f)
+> print('ACCURACY:', acc)
+> PY
+ACCURACY: None
+root@f0efe683179c:/app/UPET# if [ -f eval_accuracy.json ]; then cat eval_accuracy.json; else echo '{"eval_accuracy": null}'; fi
+{"eval_accuracy": null}
+root@f0efe683179c:/app/UPET# pip3 install --no-input datasets seqeval
+Collecting datasets
+  Downloading datasets-4.2.0-py3-none-any.whl (506 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 506.3/506.3 kB 3.5 MB/s eta 0:00:00
+Collecting seqeval
+  Using cached seqeval-1.2.2-py3-none-any.whl
+Requirement already satisfied: numpy>=1.17 in /usr/local/lib/python3.10/site-packages (from datasets) (1.23.5)
+Requirement already satisfied: pyyaml>=5.1 in /usr/local/lib/python3.10/site-packages (from datasets) (6.0.3)
+Collecting httpx<1.0.0
+  Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 73.5/73.5 kB 863.7 kB/s eta 0:00:00
+Requirement already satisfied: packaging in /usr/local/lib/python3.10/site-packages (from datasets) (25.0)
+Collecting multiprocess<0.70.17
+  Downloading multiprocess-0.70.16-py310-none-any.whl (134 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 134.8/134.8 kB 1.6 MB/s eta 0:00:00
+Requirement already satisfied: fsspec[http]<=2025.9.0,>=2023.1.0 in /usr/local/lib/python3.10/site-packages (from datasets) (2023.6.0)
+Collecting requests>=2.32.2
+  Using cached requests-2.32.5-py3-none-any.whl (64 kB)
+Collecting dill<0.4.1,>=0.3.0
+  Using cached dill-0.4.0-py3-none-any.whl (119 kB)
+Collecting xxhash
+  Using cached xxhash-3.6.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (193 kB)
+Requirement already satisfied: huggingface-hub<2.0,>=0.25.0 in /usr/local/lib/python3.10/site-packages (from datasets) (0.35.3)
+Requirement already satisfied: pandas in /usr/local/lib/python3.10/site-packages (from datasets) (2.0.3)
+Requirement already satisfied: tqdm>=4.66.3 in /usr/local/lib/python3.10/site-packages (from datasets) (4.66.4)
+Collecting pyarrow>=21.0.0
+  Using cached pyarrow-21.0.0-cp310-cp310-manylinux_2_28_x86_64.whl (42.7 MB)
+Requirement already satisfied: filelock in /usr/local/lib/python3.10/site-packages (from datasets) (3.20.0)
+Requirement already satisfied: scikit-learn>=0.21.3 in /usr/local/lib/python3.10/site-packages (from seqeval) (1.7.2)
+Collecting aiohttp!=4.0.0a0,!=4.0.0a1
+  Using cached aiohttp-3.13.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (1.7 MB)
+Collecting anyio
+  Downloading anyio-4.11.0-py3-none-any.whl (109 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 109.1/109.1 kB 1.6 MB/s eta 0:00:00
+Requirement already satisfied: certifi in /usr/local/lib/python3.10/site-packages (from httpx<1.0.0->datasets) (2025.10.5)
+Requirement already satisfied: idna in /usr/local/lib/python3.10/site-packages (from httpx<1.0.0->datasets) (3.11)
+Collecting httpcore==1.*
+  Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 78.8/78.8 kB 1.1 MB/s eta 0:00:00
+Collecting h11>=0.16
+  Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+Requirement already satisfied: hf-xet<2.0.0,>=1.1.3 in /usr/local/lib/python3.10/site-packages (from huggingface-hub<2.0,>=0.25.0->datasets) (1.1.10)
+Requirement already satisfied: typing-extensions>=3.7.4.3 in /usr/local/lib/python3.10/site-packages (from huggingface-hub<2.0,>=0.25.0->datasets) (4.15.0)
+Requirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.10/site-packages (from requests>=2.32.2->datasets) (3.4.4)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.10/site-packages (from requests>=2.32.2->datasets) (2.0.7)
+Requirement already satisfied: joblib>=1.2.0 in /usr/local/lib/python3.10/site-packages (from scikit-learn>=0.21.3->seqeval) (1.5.2)
+Requirement already satisfied: scipy>=1.8.0 in /usr/local/lib/python3.10/site-packages (from scikit-learn>=0.21.3->seqeval) (1.11.4)
+Requirement already satisfied: threadpoolctl>=3.1.0 in /usr/local/lib/python3.10/site-packages (from scikit-learn>=0.21.3->seqeval) (3.6.0)
+Requirement already satisfied: pytz>=2020.1 in /usr/local/lib/python3.10/site-packages (from pandas->datasets) (2025.2)
+Requirement already satisfied: python-dateutil>=2.8.2 in /usr/local/lib/python3.10/site-packages (from pandas->datasets) (2.9.0.post0)
+Requirement already satisfied: tzdata>=2022.1 in /usr/local/lib/python3.10/site-packages (from pandas->datasets) (2025.2)
+Collecting attrs>=17.3.0
+  Using cached attrs-25.4.0-py3-none-any.whl (67 kB)
+Collecting yarl<2.0,>=1.17.0
+  Using cached yarl-1.22.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (346 kB)
+Collecting aiosignal>=1.4.0
+  Using cached aiosignal-1.4.0-py3-none-any.whl (7.5 kB)
+Collecting async-timeout<6.0,>=4.0
+  Using cached async_timeout-5.0.1-py3-none-any.whl (6.2 kB)
+Collecting aiohappyeyeballs>=2.5.0
+  Using cached aiohappyeyeballs-2.6.1-py3-none-any.whl (15 kB)
+Collecting propcache>=0.2.0
+  Using cached propcache-0.4.1-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (196 kB)
+Collecting frozenlist>=1.1.1
+  Using cached frozenlist-1.8.0-cp310-cp310-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (219 kB)
+Collecting multidict<7.0,>=4.5
+  Using cached multidict-6.7.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (241 kB)
+Requirement already satisfied: six>=1.5 in /usr/local/lib/python3.10/site-packages (from python-dateutil>=2.8.2->pandas->datasets) (1.17.0)
+Collecting sniffio>=1.1
+  Downloading sniffio-1.3.1-py3-none-any.whl (10 kB)
+Collecting exceptiongroup>=1.0.2
+  Downloading exceptiongroup-1.3.0-py3-none-any.whl (16 kB)
+Installing collected packages: xxhash, sniffio, requests, pyarrow, propcache, multidict, h11, frozenlist, exceptiongroup, dill, attrs, async-timeout, aiohappyey
+eballs, yarl, multiprocess, httpcore, anyio, aiosignal, seqeval, httpx, aiohttp, datasets
+  Attempting uninstall: requests
+    Found existing installation: requests 2.31.0
+    Uninstalling requests-2.31.0:
+      Successfully uninstalled requests-2.31.0
+Successfully installed aiohappyeyeballs-2.6.1 aiohttp-3.13.0 aiosignal-1.4.0 anyio-4.11.0 async-timeout-5.0.1 attrs-25.4.0 datasets-4.2.0 dill-0.4.0 exceptiongr
+oup-1.3.0 frozenlist-1.8.0 h11-0.16.0 httpcore-1.0.9 httpx-0.28.1 multidict-6.7.0 multiprocess-0.70.16 propcache-0.4.1 pyarrow-21.0.0 requests-2.32.5 seqeval-1.
+2.2 sniffio-1.3.1 xxhash-3.6.0 yarl-1.22.0
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a v
+irtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+root@f0efe683179c:/app/UPET# python3 -c "import datasets, transformers, torch; print('Imports OK')"
+mkdir -p outputs
+python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --do_predict --max_seq_length 1
+28 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet_seed42_k5_ep1 --overwrite_ou
+tput_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptuning --use_pe
+Imports OK
+root@f0efe683179c:/app/UPET# mkdir -p outputs
+root@f0efe683179c:/app/UPET# python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --
+do_predict --max_seq_length 128 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet
+_seed42_k5_ep1 --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptu
+ning --use_pe
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 12, in <module>
+    from arguments import get_args
+  File "/app/UPET/arguments.py", line 9, in <module>
+    from tasks.utils import *
+  File "/app/UPET/tasks/utils.py", line 1, in <module>
+    from tasks.glue.dataset import task_to_keys as glue_tasks
+  File "/app/UPET/tasks/glue/dataset.py", line 5, in <module>
+    from datasets.load import load_dataset, load_metric
+ImportError: cannot import name 'load_metric' from 'datasets.load' (/usr/local/lib/python3.10/site-packages/datasets/load.py)
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# python3 - << 'PY'
+> import json, os, re, glob
+> base = 'outputs/rte_roberta_upet_seed42_k5_ep1'
+> acc = None
+> candidates = []
+> for pattern in [
+>     os.path.join(base, 'eval_results.json'),
+>     os.path.join(base, 'all_results.json'),
+>     os.path.join(base, 'trainer_state.json'),
+>     os.path.join(base, '**', '*.json')
+> ]:
+>     candidates.extend(glob.glob(pattern, recursive=True))
+> for p in candidates:
+>     try:
+>         with open(p,'r',encoding='utf-8') as f:
+>             data = json.load(f)
+>         for k in ['eval_accuracy','accuracy','acc','eval_acc']:
+>             if isinstance(data, dict) and k in data:
+>                 acc = data[k]
+>                 break
+>         if acc is not None:
+>             break
+>     except Exception:
+>         pass
+> if acc is None:
+>     for p in glob.glob(os.path.join(base,'**','*'), recursive=True):
+>         if os.path.isfile(p) and p.endswith('.txt'):
+>             try:
+>                 t = open(p,'r',encoding='utf-8',errors='ignore').read()
+>                 m = re.search(r'(eval_)?accuracy\s*[:=]\s*([0-9\.]+)', t)
+>                 if m:
+>                     acc = float(m.group(2))
+>                     break
+>             except Exception:
+>                 pass
+> if acc is not None:
+>     with open('eval_accuracy.json','w',encoding='utf-8') as f:
+>         json.dump({'eval_accuracy': float(acc)}, f)
+> print('ACCURACY:', acc)
+> PY
+ACCURACY: None
+root@f0efe683179c:/app/UPET# if [ -f eval_accuracy.json ]; then cat eval_accuracy.json; else echo '{"eval_accuracy": null}'; fi
+{"eval_accuracy": null}
+root@f0efe683179c:/app/UPET# pip3 install --no-input datasets seqeval
+Requirement already satisfied: datasets in /usr/local/lib/python3.10/site-packages (4.2.0)
+Requirement already satisfied: seqeval in /usr/local/lib/python3.10/site-packages (1.2.2)
+Requirement already satisfied: pandas in /usr/local/lib/python3.10/site-packages (from datasets) (2.0.3)
+Requirement already satisfied: huggingface-hub<2.0,>=0.25.0 in /usr/local/lib/python3.10/site-packages (from datasets) (0.35.3)
+Requirement already satisfied: packaging in /usr/local/lib/python3.10/site-packages (from datasets) (25.0)
+Requirement already satisfied: filelock in /usr/local/lib/python3.10/site-packages (from datasets) (3.20.0)
+Requirement already satisfied: requests>=2.32.2 in /usr/local/lib/python3.10/site-packages (from datasets) (2.32.5)
+Requirement already satisfied: tqdm>=4.66.3 in /usr/local/lib/python3.10/site-packages (from datasets) (4.66.4)
+Requirement already satisfied: dill<0.4.1,>=0.3.0 in /usr/local/lib/python3.10/site-packages (from datasets) (0.4.0)
+Requirement already satisfied: fsspec[http]<=2025.9.0,>=2023.1.0 in /usr/local/lib/python3.10/site-packages (from datasets) (2023.6.0)
+Requirement already satisfied: multiprocess<0.70.17 in /usr/local/lib/python3.10/site-packages (from datasets) (0.70.16)
+Requirement already satisfied: pyyaml>=5.1 in /usr/local/lib/python3.10/site-packages (from datasets) (6.0.3)
+Requirement already satisfied: xxhash in /usr/local/lib/python3.10/site-packages (from datasets) (3.6.0)
+Requirement already satisfied: numpy>=1.17 in /usr/local/lib/python3.10/site-packages (from datasets) (1.23.5)
+Requirement already satisfied: httpx<1.0.0 in /usr/local/lib/python3.10/site-packages (from datasets) (0.28.1)
+Requirement already satisfied: pyarrow>=21.0.0 in /usr/local/lib/python3.10/site-packages (from datasets) (21.0.0)
+Requirement already satisfied: scikit-learn>=0.21.3 in /usr/local/lib/python3.10/site-packages (from seqeval) (1.7.2)
+Requirement already satisfied: aiohttp!=4.0.0a0,!=4.0.0a1 in /usr/local/lib/python3.10/site-packages (from fsspec[http]<=2025.9.0,>=2023.1.0->datasets) (3.13.0)
+Requirement already satisfied: certifi in /usr/local/lib/python3.10/site-packages (from httpx<1.0.0->datasets) (2025.10.5)
+Requirement already satisfied: idna in /usr/local/lib/python3.10/site-packages (from httpx<1.0.0->datasets) (3.11)
+Requirement already satisfied: anyio in /usr/local/lib/python3.10/site-packages (from httpx<1.0.0->datasets) (4.11.0)
+Requirement already satisfied: httpcore==1.* in /usr/local/lib/python3.10/site-packages (from httpx<1.0.0->datasets) (1.0.9)
+Requirement already satisfied: h11>=0.16 in /usr/local/lib/python3.10/site-packages (from httpcore==1.*->httpx<1.0.0->datasets) (0.16.0)
+Requirement already satisfied: hf-xet<2.0.0,>=1.1.3 in /usr/local/lib/python3.10/site-packages (from huggingface-hub<2.0,>=0.25.0->datasets) (1.1.10)
+Requirement already satisfied: typing-extensions>=3.7.4.3 in /usr/local/lib/python3.10/site-packages (from huggingface-hub<2.0,>=0.25.0->datasets) (4.15.0)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.10/site-packages (from requests>=2.32.2->datasets) (2.0.7)
+Requirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.10/site-packages (from requests>=2.32.2->datasets) (3.4.4)
+Requirement already satisfied: joblib>=1.2.0 in /usr/local/lib/python3.10/site-packages (from scikit-learn>=0.21.3->seqeval) (1.5.2)
+Requirement already satisfied: threadpoolctl>=3.1.0 in /usr/local/lib/python3.10/site-packages (from scikit-learn>=0.21.3->seqeval) (3.6.0)
+Requirement already satisfied: scipy>=1.8.0 in /usr/local/lib/python3.10/site-packages (from scikit-learn>=0.21.3->seqeval) (1.11.4)
+Requirement already satisfied: pytz>=2020.1 in /usr/local/lib/python3.10/site-packages (from pandas->datasets) (2025.2)
+Requirement already satisfied: python-dateutil>=2.8.2 in /usr/local/lib/python3.10/site-packages (from pandas->datasets) (2.9.0.post0)
+Requirement already satisfied: tzdata>=2022.1 in /usr/local/lib/python3.10/site-packages (from pandas->datasets) (2025.2)
+Requirement already satisfied: multidict<7.0,>=4.5 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2025.9.0,>=2023.1.
+0->datasets) (6.7.0)
+Requirement already satisfied: attrs>=17.3.0 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2025.9.0,>=2023.1.0->dat
+asets) (25.4.0)
+Requirement already satisfied: aiosignal>=1.4.0 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2025.9.0,>=2023.1.0->
+datasets) (1.4.0)
+Requirement already satisfied: aiohappyeyeballs>=2.5.0 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2025.9.0,>=202
+3.1.0->datasets) (2.6.1)
+Requirement already satisfied: yarl<2.0,>=1.17.0 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2025.9.0,>=2023.1.0-
+>datasets) (1.22.0)
+Requirement already satisfied: propcache>=0.2.0 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2025.9.0,>=2023.1.0->
+datasets) (0.4.1)
+Requirement already satisfied: async-timeout<6.0,>=4.0 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2025.9.0,>=202
+3.1.0->datasets) (5.0.1)
+Requirement already satisfied: frozenlist>=1.1.1 in /usr/local/lib/python3.10/site-packages (from aiohttp!=4.0.0a0,!=4.0.0a1->fsspec[http]<=2025.9.0,>=2023.1.0-
+>datasets) (1.8.0)
+Requirement already satisfied: six>=1.5 in /usr/local/lib/python3.10/site-packages (from python-dateutil>=2.8.2->pandas->datasets) (1.17.0)
+Requirement already satisfied: exceptiongroup>=1.0.2 in /usr/local/lib/python3.10/site-packages (from anyio->httpx<1.0.0->datasets) (1.3.0)
+Requirement already satisfied: sniffio>=1.1 in /usr/local/lib/python3.10/site-packages (from anyio->httpx<1.0.0->datasets) (1.3.1)
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a v
+irtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+root@f0efe683179c:/app/UPET# python3 -c "import datasets, transformers, torch; print('Imports OK')"
+mkdir -p outputs
+python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --do_predict --max_seq_length 1
+28 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet_seed42_k5_ep1 --overwrite_ou
+tput_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptuning --use_pe
+Imports OK
+root@f0efe683179c:/app/UPET# mkdir -p outputs
+root@f0efe683179c:/app/UPET# python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --
+do_predict --max_seq_length 128 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet
+_seed42_k5_ep1 --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptu
+ning --use_pe
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 12, in <module>
+    from arguments import get_args
+  File "/app/UPET/arguments.py", line 9, in <module>
+    from tasks.utils import *
+  File "/app/UPET/tasks/utils.py", line 1, in <module>
+    from tasks.glue.dataset import task_to_keys as glue_tasks
+  File "/app/UPET/tasks/glue/dataset.py", line 5, in <module>
+    from datasets.load import load_dataset, load_metric
+ImportError: cannot import name 'load_metric' from 'datasets.load' (/usr/local/lib/python3.10/site-packages/datasets/load.py)
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# python3 - << 'PY'
+> import json, os, re, glob
+> base = 'outputs/rte_roberta_upet_seed42_k5_ep1'
+> acc = None
+> candidates = []
+> for pattern in [
+>     os.path.join(base, 'eval_results.json'),
+>     os.path.join(base, 'all_results.json'),
+>     os.path.join(base, 'trainer_state.json'),
+>     os.path.join(base, '**', '*.json')
+> ]:
+>     candidates.extend(glob.glob(pattern, recursive=True))
+> for p in candidates:
+>     try:
+>         with open(p,'r',encoding='utf-8') as f:
+>             data = json.load(f)
+>         for k in ['eval_accuracy','accuracy','acc','eval_acc']:
+>             if isinstance(data, dict) and k in data:
+>                 acc = data[k]
+>                 break
+>         if acc is not None:
+>             break
+>     except Exception:
+>         pass
+> if acc is None:
+>     for p in glob.glob(os.path.join(base,'**','*'), recursive=True):
+>         if os.path.isfile(p) and p.endswith('.txt'):
+>             try:
+>                 t = open(p,'r',encoding='utf-8',errors='ignore').read()
+>                 m = re.search(r'(eval_)?accuracy\s*[:=]\s*([0-9\.]+)', t)
+>                 if m:
+>                     acc = float(m.group(2))
+>                     break
+>             except Exception:
+>                 pass
+> if acc is not None:
+>     with open('eval_accuracy.json','w',encoding='utf-8') as f:
+>         json.dump({'eval_accuracy': float(acc)}, f)
+> print('ACCURACY:', acc)
+> PY
+ACCURACY: None
+root@f0efe683179c:/app/UPET# if [ -f eval_accuracy.json ]; then cat eval_accuracy.json; else echo '{"eval_accuracy": null}'; fi
+{"eval_accuracy": null}
+root@f0efe683179c:/app/UPET# pip3 install --no-input datasets==1.15.1 seqeval==1.2.2
+Collecting datasets==1.15.1
+  Using cached datasets-1.15.1-py3-none-any.whl (290 kB)
+Requirement already satisfied: seqeval==1.2.2 in /usr/local/lib/python3.10/site-packages (1.2.2)
+Requirement already satisfied: numpy>=1.17 in /usr/local/lib/python3.10/site-packages (from datasets==1.15.1) (1.23.5)
+Requirement already satisfied: pyarrow!=4.0.0,>=1.0.0 in /usr/local/lib/python3.10/site-packages (from datasets==1.15.1) (21.0.0)
+Requirement already satisfied: aiohttp in /usr/local/lib/python3.10/site-packages (from datasets==1.15.1) (3.13.0)
+Requirement already satisfied: huggingface-hub<1.0.0,>=0.1.0 in /usr/local/lib/python3.10/site-packages (from datasets==1.15.1) (0.35.3)
+Requirement already satisfied: fsspec[http]>=2021.05.0 in /usr/local/lib/python3.10/site-packages (from datasets==1.15.1) (2023.6.0)
+Requirement already satisfied: requests>=2.19.0 in /usr/local/lib/python3.10/site-packages (from datasets==1.15.1) (2.32.5)
+Requirement already satisfied: pandas in /usr/local/lib/python3.10/site-packages (from datasets==1.15.1) (2.0.3)
+Requirement already satisfied: tqdm>=4.62.1 in /usr/local/lib/python3.10/site-packages (from datasets==1.15.1) (4.66.4)
+Requirement already satisfied: packaging in /usr/local/lib/python3.10/site-packages (from datasets==1.15.1) (25.0)
+Requirement already satisfied: dill in /usr/local/lib/python3.10/site-packages (from datasets==1.15.1) (0.4.0)
+Requirement already satisfied: xxhash in /usr/local/lib/python3.10/site-packages (from datasets==1.15.1) (3.6.0)
+Requirement already satisfied: multiprocess in /usr/local/lib/python3.10/site-packages (from datasets==1.15.1) (0.70.16)
+Requirement already satisfied: scikit-learn>=0.21.3 in /usr/local/lib/python3.10/site-packages (from seqeval==1.2.2) (1.7.2)
+Requirement already satisfied: frozenlist>=1.1.1 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==1.15.1) (1.8.0)
+Requirement already satisfied: aiohappyeyeballs>=2.5.0 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==1.15.1) (2.6.1)
+Requirement already satisfied: multidict<7.0,>=4.5 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==1.15.1) (6.7.0)
+Requirement already satisfied: attrs>=17.3.0 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==1.15.1) (25.4.0)
+Requirement already satisfied: async-timeout<6.0,>=4.0 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==1.15.1) (5.0.1)
+Requirement already satisfied: propcache>=0.2.0 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==1.15.1) (0.4.1)
+Requirement already satisfied: aiosignal>=1.4.0 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==1.15.1) (1.4.0)
+Requirement already satisfied: yarl<2.0,>=1.17.0 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==1.15.1) (1.22.0)
+Requirement already satisfied: filelock in /usr/local/lib/python3.10/site-packages (from huggingface-hub<1.0.0,>=0.1.0->datasets==1.15.1) (3.20.0)
+Requirement already satisfied: typing-extensions>=3.7.4.3 in /usr/local/lib/python3.10/site-packages (from huggingface-hub<1.0.0,>=0.1.0->datasets==1.15.1) (4.1
+5.0)
+Requirement already satisfied: hf-xet<2.0.0,>=1.1.3 in /usr/local/lib/python3.10/site-packages (from huggingface-hub<1.0.0,>=0.1.0->datasets==1.15.1) (1.1.10)
+Requirement already satisfied: pyyaml>=5.1 in /usr/local/lib/python3.10/site-packages (from huggingface-hub<1.0.0,>=0.1.0->datasets==1.15.1) (6.0.3)
+Requirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.10/site-packages (from requests>=2.19.0->datasets==1.15.1) (3.4.4)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.10/site-packages (from requests>=2.19.0->datasets==1.15.1) (2.0.7)
+Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.10/site-packages (from requests>=2.19.0->datasets==1.15.1) (2025.10.5)
+Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.10/site-packages (from requests>=2.19.0->datasets==1.15.1) (3.11)
+Requirement already satisfied: joblib>=1.2.0 in /usr/local/lib/python3.10/site-packages (from scikit-learn>=0.21.3->seqeval==1.2.2) (1.5.2)
+Requirement already satisfied: scipy>=1.8.0 in /usr/local/lib/python3.10/site-packages (from scikit-learn>=0.21.3->seqeval==1.2.2) (1.11.4)
+Requirement already satisfied: threadpoolctl>=3.1.0 in /usr/local/lib/python3.10/site-packages (from scikit-learn>=0.21.3->seqeval==1.2.2) (3.6.0)
+Requirement already satisfied: pytz>=2020.1 in /usr/local/lib/python3.10/site-packages (from pandas->datasets==1.15.1) (2025.2)
+Requirement already satisfied: tzdata>=2022.1 in /usr/local/lib/python3.10/site-packages (from pandas->datasets==1.15.1) (2025.2)
+Requirement already satisfied: python-dateutil>=2.8.2 in /usr/local/lib/python3.10/site-packages (from pandas->datasets==1.15.1) (2.9.0.post0)
+Requirement already satisfied: six>=1.5 in /usr/local/lib/python3.10/site-packages (from python-dateutil>=2.8.2->pandas->datasets==1.15.1) (1.17.0)
+Installing collected packages: datasets
+  Attempting uninstall: datasets
+    Found existing installation: datasets 4.2.0
+    Uninstalling datasets-4.2.0:
+      Successfully uninstalled datasets-4.2.0
+Successfully installed datasets-1.15.1
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a v
+irtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+root@f0efe683179c:/app/UPET# python3 -c "import datasets, transformers, torch; print('Imports OK')"
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/local/lib/python3.10/site-packages/datasets/__init__.py", line 34, in <module>
+    from .arrow_dataset import Dataset, concatenate_datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 43, in <module>
+    from datasets.tasks.text_classification import TextClassification
+  File "/usr/local/lib/python3.10/site-packages/datasets/tasks/__init__.py", line 4, in <module>
+    from .automatic_speech_recognition import AutomaticSpeechRecognition
+  File "/usr/local/lib/python3.10/site-packages/datasets/tasks/automatic_speech_recognition.py", line 4, in <module>
+    from ..features import Features, Value
+  File "/usr/local/lib/python3.10/site-packages/datasets/features/__init__.py", line 3, in <module>
+    from .features import *
+  File "/usr/local/lib/python3.10/site-packages/datasets/features/features.py", line 356, in <module>
+    class _ArrayXDExtensionType(pa.PyExtensionType):
+AttributeError: module 'pyarrow' has no attribute 'PyExtensionType'. Did you mean: 'ExtensionType'?
+root@f0efe683179c:/app/UPET# mkdir -p outputs
+root@f0efe683179c:/app/UPET# python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --
+do_predict --max_seq_length 128 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet
+_seed42_k5_ep1 --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptu
+ning --use_pe
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 7, in <module>
+    import datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/__init__.py", line 34, in <module>
+    from .arrow_dataset import Dataset, concatenate_datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 43, in <module>
+    from datasets.tasks.text_classification import TextClassification
+  File "/usr/local/lib/python3.10/site-packages/datasets/tasks/__init__.py", line 4, in <module>
+    from .automatic_speech_recognition import AutomaticSpeechRecognition
+  File "/usr/local/lib/python3.10/site-packages/datasets/tasks/automatic_speech_recognition.py", line 4, in <module>
+    from ..features import Features, Value
+  File "/usr/local/lib/python3.10/site-packages/datasets/features/__init__.py", line 3, in <module>
+    from .features import *
+  File "/usr/local/lib/python3.10/site-packages/datasets/features/features.py", line 356, in <module>
+    class _ArrayXDExtensionType(pa.PyExtensionType):
+AttributeError: module 'pyarrow' has no attribute 'PyExtensionType'. Did you mean: 'ExtensionType'?
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# python3 - << 'PY'
+> import json, os, re, glob
+> base = 'outputs/rte_roberta_upet_seed42_k5_ep1'
+> acc = None
+> candidates = []
+> for pattern in [
+>     os.path.join(base, 'eval_results.json'),
+>     os.path.join(base, 'all_results.json'),
+>     os.path.join(base, 'trainer_state.json'),
+>     os.path.join(base, '**', '*.json')
+> ]:
+>     candidates.extend(glob.glob(pattern, recursive=True))
+> for p in candidates:
+>     try:
+>         with open(p,'r',encoding='utf-8') as f:
+>             data = json.load(f)
+>         for k in ['eval_accuracy','accuracy','acc','eval_acc']:
+>             if isinstance(data, dict) and k in data:
+>                 acc = data[k]
+>                 break
+>         if acc is not None:
+>             break
+>     except Exception:
+>         pass
+> if acc is None:
+>     for p in glob.glob(os.path.join(base,'**','*'), recursive=True):
+>         if os.path.isfile(p) and p.endswith('.txt'):
+>             try:
+>                 t = open(p,'r',encoding='utf-8',errors='ignore').read()
+>                 m = re.search(r'(eval_)?accuracy\s*[:=]\s*([0-9\.]+)', t)
+>                 if m:
+>                     acc = float(m.group(2))
+>                     break
+>             except Exception:
+>                 pass
+> if acc is not None:
+>     with open('eval_accuracy.json','w',encoding='utf-8') as f:
+>         json.dump({'eval_accuracy': float(acc)}, f)
+> print('ACCURACY:', acc)
+> PY
+ACCURACY: None
+root@f0efe683179c:/app/UPET# if [ -f eval_accuracy.json ]; then cat eval_accuracy.json; else echo '{"eval_accuracy": null}'; fi
+{"eval_accuracy": null}
+root@f0efe683179c:/app/UPET# pip3 install --no-input --force-reinstall pyarrow==6.0.1
+Collecting pyarrow==6.0.1
+  Downloading pyarrow-6.0.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (25.6 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 25.6/25.6 MB 9.1 MB/s eta 0:00:00
+Collecting numpy>=1.16.6
+  Downloading numpy-2.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (16.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.8/16.8 MB 10.4 MB/s eta 0:00:00
+Installing collected packages: numpy, pyarrow
+  Attempting uninstall: numpy
+    Found existing installation: numpy 1.23.5
+    Uninstalling numpy-1.23.5:
+      Successfully uninstalled numpy-1.23.5
+  Attempting uninstall: pyarrow
+    Found existing installation: pyarrow 21.0.0
+    Uninstalling pyarrow-21.0.0:
+      Successfully uninstalled pyarrow-21.0.0
+ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following depende
+ncy conflicts.
+thinc 8.2.5 requires numpy<2.0.0,>=1.19.0; python_version >= "3.9", but you have numpy 2.2.6 which is incompatible.
+scipy 1.11.4 requires numpy<1.28.0,>=1.21.6, but you have numpy 2.2.6 which is incompatible.
+Successfully installed numpy-2.2.6 pyarrow-6.0.1
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a v
+irtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+root@f0efe683179c:/app/UPET# python3 -c "import pyarrow, datasets, transformers, torch; print('Imports OK, pyarrow', pyarrow.__version__)"
+
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.6 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "<string>", line 1, in <module>
+  File "/usr/local/lib/python3.10/site-packages/pyarrow/__init__.py", line 63, in <module>
+    import pyarrow.lib as _lib
+AttributeError: _ARRAY_API not found
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/local/lib/python3.10/site-packages/pyarrow/__init__.py", line 63, in <module>
+    import pyarrow.lib as _lib
+  File "pyarrow/lib.pyx", line 35, in init pyarrow.lib
+ImportError: numpy.core.multiarray failed to import
+root@f0efe683179c:/app/UPET# mkdir -p outputs
+root@f0efe683179c:/app/UPET# python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --
+do_predict --max_seq_length 128 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet
+_seed42_k5_ep1 --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptu
+ning --use_pe
+
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.6 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "/app/UPET/run.py", line 7, in <module>
+    import datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/__init__.py", line 23, in <module>
+    import pyarrow
+  File "/usr/local/lib/python3.10/site-packages/pyarrow/__init__.py", line 63, in <module>
+    import pyarrow.lib as _lib
+AttributeError: _ARRAY_API not found
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 7, in <module>
+    import datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/__init__.py", line 23, in <module>
+    import pyarrow
+  File "/usr/local/lib/python3.10/site-packages/pyarrow/__init__.py", line 63, in <module>
+    import pyarrow.lib as _lib
+  File "pyarrow/lib.pyx", line 35, in init pyarrow.lib
+ImportError: numpy.core.multiarray failed to import
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# sleep 30
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# python3 - << 'PY'
+> import json, os, re, glob
+> base = 'outputs/rte_roberta_upet_seed42_k5_ep1'
+> acc = None
+> candidates = []
+> for pattern in [
+>     os.path.join(base, 'eval_results.json'),
+>     os.path.join(base, 'all_results.json'),
+>     os.path.join(base, 'trainer_state.json'),
+>     os.path.join(base, '**', '*.json')
+> ]:
+>     candidates.extend(glob.glob(pattern, recursive=True))
+> for p in candidates:
+>     try:
+>         with open(p,'r',encoding='utf-8') as f:
+>             data = json.load(f)
+>         for k in ['eval_accuracy','accuracy','acc','eval_acc']:
+>             if isinstance(data, dict) and k in data:
+>                 acc = data[k]
+>                 break
+>         if acc is not None:
+>             break
+>     except Exception:
+>         pass
+> if acc is None:
+>     for p in glob.glob(os.path.join(base,'**','*'), recursive=True):
+>         if os.path.isfile(p) and p.endswith('.txt'):
+>             try:
+>                 t = open(p,'r',encoding='utf-8',errors='ignore').read()
+>                 m = re.search(r'(eval_)?accuracy\s*[:=]\s*([0-9\.]+)', t)
+>                 if m:
+>                     acc = float(m.group(2))
+>                     break
+>             except Exception:
+>                 pass
+> if acc is not None:
+>     with open('eval_accuracy.json','w',encoding='utf-8') as f:
+>         json.dump({'eval_accuracy': float(acc)}, f)
+> print('ACCURACY:', acc)
+> PY
+ACCURACY: None
+root@f0efe683179c:/app/UPET# if [ -f eval_accuracy.json ]; then cat eval_accuracy.json; else echo '{"eval_accuracy": null}'; fi
+{"eval_accuracy": null}
+root@f0efe683179c:/app/UPET# pip3 install --no-input --force-reinstall pyarrow==6.0.1
+Collecting pyarrow==6.0.1
+  Using cached pyarrow-6.0.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (25.6 MB)
+Collecting numpy>=1.16.6
+  Using cached numpy-2.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (16.8 MB)
+Installing collected packages: numpy, pyarrow
+  Attempting uninstall: numpy
+    Found existing installation: numpy 2.2.6
+    Uninstalling numpy-2.2.6:
+      Successfully uninstalled numpy-2.2.6
+  Attempting uninstall: pyarrow
+    Found existing installation: pyarrow 6.0.1
+    Uninstalling pyarrow-6.0.1:
+      Successfully uninstalled pyarrow-6.0.1
+ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following depende
+ncy conflicts.
+thinc 8.2.5 requires numpy<2.0.0,>=1.19.0; python_version >= "3.9", but you have numpy 2.2.6 which is incompatible.
+scipy 1.11.4 requires numpy<1.28.0,>=1.21.6, but you have numpy 2.2.6 which is incompatible.
+Successfully installed numpy-2.2.6 pyarrow-6.0.1
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a v
+irtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+root@f0efe683179c:/app/UPET# python3 -c "import pyarrow, datasets, transformers, torch; print('Imports OK, pyarrow', pyarrow.__version__)"
+
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.6 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "<string>", line 1, in <module>
+  File "/usr/local/lib/python3.10/site-packages/pyarrow/__init__.py", line 63, in <module>
+    import pyarrow.lib as _lib
+AttributeError: _ARRAY_API not found
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/local/lib/python3.10/site-packages/pyarrow/__init__.py", line 63, in <module>
+    import pyarrow.lib as _lib
+  File "pyarrow/lib.pyx", line 35, in init pyarrow.lib
+ImportError: numpy.core.multiarray failed to import
+root@f0efe683179c:/app/UPET# mkdir -p outputs
+root@f0efe683179c:/app/UPET# python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --
+do_predict --max_seq_length 128 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet
+_seed42_k5_ep1 --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptu
+ning --use_pe
+
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.6 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "/app/UPET/run.py", line 7, in <module>
+    import datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/__init__.py", line 23, in <module>
+    import pyarrow
+  File "/usr/local/lib/python3.10/site-packages/pyarrow/__init__.py", line 63, in <module>
+    import pyarrow.lib as _lib
+AttributeError: _ARRAY_API not found
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 7, in <module>
+    import datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/__init__.py", line 23, in <module>
+    import pyarrow
+  File "/usr/local/lib/python3.10/site-packages/pyarrow/__init__.py", line 63, in <module>
+    import pyarrow.lib as _lib
+  File "pyarrow/lib.pyx", line 35, in init pyarrow.lib
+ImportError: numpy.core.multiarray failed to import
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# python3 - << 'PY'
+> import json, os, re, glob
+> base = 'outputs/rte_roberta_upet_seed42_k5_ep1'
+> acc = None
+> candidates = []
+> for pattern in [
+>     os.path.join(base, 'eval_results.json'),
+>     os.path.join(base, 'all_results.json'),
+>     os.path.join(base, 'trainer_state.json'),
+>     os.path.join(base, '**', '*.json')
+> ]:
+>     candidates.extend(glob.glob(pattern, recursive=True))
+> for p in candidates:
+>     try:
+>         with open(p,'r',encoding='utf-8') as f:
+>             data = json.load(f)
+>         for k in ['eval_accuracy','accuracy','acc','eval_acc']:
+>             if isinstance(data, dict) and k in data:
+>                 acc = data[k]
+>                 break
+>         if acc is not None:
+>             break
+>     except Exception:
+>         pass
+> if acc is None:
+>     for p in glob.glob(os.path.join(base,'**','*'), recursive=True):
+>         if os.path.isfile(p) and p.endswith('.txt'):
+>             try:
+>                 t = open(p,'r',encoding='utf-8',errors='ignore').read()
+>                 m = re.search(r'(eval_)?accuracy\s*[:=]\s*([0-9\.]+)', t)
+>                 if m:
+>                     acc = float(m.group(2))
+>                     break
+>             except Exception:
+>                 pass
+> if acc is not None:
+>     with open('eval_accuracy.json','w',encoding='utf-8') as f:
+>         json.dump({'eval_accuracy': float(acc)}, f)
+> print('ACCURACY:', acc)
+> PY
+ACCURACY: None
+root@f0efe683179c:/app/UPET# if [ -f eval_accuracy.json ]; then cat eval_accuracy.json; else echo '{"eval_accuracy": null}'; fi
+{"eval_accuracy": null}
+root@f0efe683179c:/app/UPET# pip3 install --no-input --force-reinstall pyarrow==6.0.1
+Collecting pyarrow==6.0.1
+  Using cached pyarrow-6.0.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (25.6 MB)
+Collecting numpy>=1.16.6
+  Using cached numpy-2.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (16.8 MB)
+Installing collected packages: numpy, pyarrow
+  Attempting uninstall: numpy
+    Found existing installation: numpy 2.2.6
+    Uninstalling numpy-2.2.6:
+      Successfully uninstalled numpy-2.2.6
+  Attempting uninstall: pyarrow
+    Found existing installation: pyarrow 6.0.1
+    Uninstalling pyarrow-6.0.1:
+      Successfully uninstalled pyarrow-6.0.1
+ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following depende
+ncy conflicts.
+thinc 8.2.5 requires numpy<2.0.0,>=1.19.0; python_version >= "3.9", but you have numpy 2.2.6 which is incompatible.
+scipy 1.11.4 requires numpy<1.28.0,>=1.21.6, but you have numpy 2.2.6 which is incompatible.
+Successfully installed numpy-2.2.6 pyarrow-6.0.1
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a v
+irtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+root@f0efe683179c:/app/UPET# python3 -c "import pyarrow, datasets, transformers, torch; print('Imports OK, pyarrow', pyarrow.__version__)"
+
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.6 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "<string>", line 1, in <module>
+  File "/usr/local/lib/python3.10/site-packages/pyarrow/__init__.py", line 63, in <module>
+    import pyarrow.lib as _lib
+AttributeError: _ARRAY_API not found
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/local/lib/python3.10/site-packages/pyarrow/__init__.py", line 63, in <module>
+    import pyarrow.lib as _lib
+  File "pyarrow/lib.pyx", line 35, in init pyarrow.lib
+ImportError: numpy.core.multiarray failed to import
+root@f0efe683179c:/app/UPET# mkdir -p outputs
+root@f0efe683179c:/app/UPET# python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --
+do_predict --max_seq_length 128 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet
+_seed42_k5_ep1 --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptu
+ning --use_pe
+
+A module that was compiled using NumPy 1.x cannot be run in
+NumPy 2.2.6 as it may crash. To support both 1.x and 2.x
+versions of NumPy, modules must be compiled with NumPy 2.0.
+Some module may need to rebuild instead e.g. with 'pybind11>=2.12'.
+
+If you are a user of the module, the easiest solution will be to
+downgrade to 'numpy<2' or try to upgrade the affected module.
+We expect that some modules will need time to support NumPy 2.
+
+Traceback (most recent call last):  File "/app/UPET/run.py", line 7, in <module>
+    import datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/__init__.py", line 23, in <module>
+    import pyarrow
+  File "/usr/local/lib/python3.10/site-packages/pyarrow/__init__.py", line 63, in <module>
+    import pyarrow.lib as _lib
+AttributeError: _ARRAY_API not found
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 7, in <module>
+    import datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/__init__.py", line 23, in <module>
+    import pyarrow
+  File "/usr/local/lib/python3.10/site-packages/pyarrow/__init__.py", line 63, in <module>
+    import pyarrow.lib as _lib
+  File "pyarrow/lib.pyx", line 35, in init pyarrow.lib
+ImportError: numpy.core.multiarray failed to import
+root@f0efe683179c:/app/UPET# sleep 30
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# sleep 30
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 4 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# python3 - << 'PY'
+> import json, os, re, glob
+> base = 'outputs/rte_roberta_upet_seed42_k5_ep1'
+> acc = None
+> candidates = []
+> for pattern in [
+>     os.path.join(base, 'eval_results.json'),
+>     os.path.join(base, 'all_results.json'),
+>     os.path.join(base, 'trainer_state.json'),
+>     os.path.join(base, '**', '*.json')
+> ]:
+>     candidates.extend(glob.glob(pattern, recursive=True))
+> for p in candidates:
+>     try:
+>         with open(p,'r',encoding='utf-8') as f:
+>             data = json.load(f)
+>         for k in ['eval_accuracy','accuracy','acc','eval_acc']:
+>             if isinstance(data, dict) and k in data:
+>                 acc = data[k]
+>                 break
+>         if acc is not None:
+>             break
+>     except Exception:
+>         pass
+> if acc is None:
+>     for p in glob.glob(os.path.join(base,'**','*'), recursive=True):
+>         if os.path.isfile(p) and p.endswith('.txt'):
+>             try:
+>                 t = open(p,'r',encoding='utf-8',errors='ignore').read()
+>                 m = re.search(r'(eval_)?accuracy\s*[:=]\s*([0-9\.]+)', t)
+>                 if m:
+>                     acc = float(m.group(2))
+>                     break
+>             except Exception:
+>                 pass
+> if acc is not None:
+>     with open('eval_accuracy.json','w',encoding='utf-8') as f:
+>         json.dump({'eval_accuracy': float(acc)}, f)
+> print('ACCURACY:', acc)
+> PY
+ACCURACY: None
+root@f0efe683179c:/app/UPET# if [ -f eval_accuracy.json ]; then cat eval_accuracy.json; else echo '{"eval_accuracy": null}'; fi
+{"eval_accuracy": null}
+root@f0efe683179c:/app/UPET# pip3 install --no-input --force-reinstall numpy==1.23.5
+Collecting numpy==1.23.5
+  Using cached numpy-1.23.5-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (17.1 MB)
+Installing collected packages: numpy
+  Attempting uninstall: numpy
+    Found existing installation: numpy 2.2.6
+    Uninstalling numpy-2.2.6:
+      Successfully uninstalled numpy-2.2.6
+Successfully installed numpy-1.23.5
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a v
+irtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+root@f0efe683179c:/app/UPET# python3 -c "import pyarrow, datasets, transformers, torch; print('Imports OK, pyarrow', pyarrow.__version__)"
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/local/lib/python3.10/site-packages/datasets/__init__.py", line 34, in <module>
+    from .arrow_dataset import Dataset, concatenate_datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 46, in <module>
+    from .arrow_reader import ArrowReader
+  File "/usr/local/lib/python3.10/site-packages/datasets/arrow_reader.py", line 33, in <module>
+    from .table import InMemoryTable, MemoryMappedTable, Table, concat_tables
+  File "/usr/local/lib/python3.10/site-packages/datasets/table.py", line 331, in <module>
+    class InMemoryTable(TableBlock):
+  File "/usr/local/lib/python3.10/site-packages/datasets/table.py", line 358, in InMemoryTable
+    def from_pandas(cls, *args, **kwargs):
+  File "/usr/local/lib/python3.10/site-packages/datasets/table.py", line 21, in wrapper
+    out = wraps(arrow_table_method)(method)
+  File "/usr/local/lib/python3.10/functools.py", line 61, in update_wrapper
+    wrapper.__wrapped__ = wrapped
+AttributeError: readonly attribute
+root@f0efe683179c:/app/UPET# mkdir -p outputs
+root@f0efe683179c:/app/UPET# python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --
+do_predict --max_seq_length 128 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet
+_seed42_k5_ep1 --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptu
+ning --use_pe
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 7, in <module>
+    import datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/__init__.py", line 34, in <module>
+    from .arrow_dataset import Dataset, concatenate_datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 46, in <module>
+    from .arrow_reader import ArrowReader
+  File "/usr/local/lib/python3.10/site-packages/datasets/arrow_reader.py", line 33, in <module>
+    from .table import InMemoryTable, MemoryMappedTable, Table, concat_tables
+  File "/usr/local/lib/python3.10/site-packages/datasets/table.py", line 331, in <module>
+    class InMemoryTable(TableBlock):
+  File "/usr/local/lib/python3.10/site-packages/datasets/table.py", line 358, in InMemoryTable
+    def from_pandas(cls, *args, **kwargs):
+  File "/usr/local/lib/python3.10/site-packages/datasets/table.py", line 21, in wrapper
+    out = wraps(arrow_table_method)(method)
+  File "/usr/local/lib/python3.10/functools.py", line 61, in update_wrapper
+    wrapper.__wrapped__ = wrapped
+AttributeError: readonly attribute
+root@f0efe683179c:/app/UPET# sleep 30
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# sleep 30
+find outputs -maxdepth 4 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 4 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# python3 - << 'PY'
+> import json, os, re, glob
+> base = 'outputs/rte_roberta_upet_seed42_k5_ep1'
+> acc = None
+> candidates = []
+> for pattern in [
+>     os.path.join(base, 'eval_results.json'),
+>     os.path.join(base, 'all_results.json'),
+>     os.path.join(base, 'trainer_state.json'),
+>     os.path.join(base, '**', '*.json')
+> ]:
+>     candidates.extend(glob.glob(pattern, recursive=True))
+> for p in candidates:
+>     try:
+>         with open(p,'r',encoding='utf-8') as f:
+>             data = json.load(f)
+>         for k in ['eval_accuracy','accuracy','acc','eval_acc']:
+>             if isinstance(data, dict) and k in data:
+>                 acc = data[k]
+>                 break
+>         if acc is not None:
+>             break
+>     except Exception:
+>         pass
+> if acc is None:
+>     for p in glob.glob(os.path.join(base,'**','*'), recursive=True):
+>         if os.path.isfile(p) and p.endswith('.txt'):
+>             try:
+>                 t = open(p,'r',encoding='utf-8',errors='ignore').read()
+>                 m = re.search(r'(eval_)?accuracy\s*[:=]\s*([0-9\.]+)', t)
+>                 if m:
+>                     acc = float(m.group(2))
+>                     break
+>             except Exception:
+>                 pass
+> if acc is not None:
+>     with open('eval_accuracy.json','w',encoding='utf-8') as f:
+>         json.dump({'eval_accuracy': float(acc)}, f)
+> print('ACCURACY:', acc)
+> PY
+ACCURACY: None
+root@f0efe683179c:/app/UPET# if [ -f eval_accuracy.json ]; then cat eval_accuracy.json; else echo '{"eval_accuracy": null}'; fi
+{"eval_accuracy": null}
+root@f0efe683179c:/app/UPET# pip3 install --no-input --force-reinstall numpy==1.23.5
+Collecting numpy==1.23.5
+  Using cached numpy-1.23.5-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (17.1 MB)
+Installing collected packages: numpy
+  Attempting uninstall: numpy
+    Found existing installation: numpy 1.23.5
+    Uninstalling numpy-1.23.5:
+      Successfully uninstalled numpy-1.23.5
+Successfully installed numpy-1.23.5
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a v
+irtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+root@f0efe683179c:/app/UPET# pip3 install --no-input --force-reinstall --no-deps pyarrow==6.0.1
+Collecting pyarrow==6.0.1
+  Using cached pyarrow-6.0.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (25.6 MB)
+Installing collected packages: pyarrow
+  Attempting uninstall: pyarrow
+    Found existing installation: pyarrow 6.0.1
+    Uninstalling pyarrow-6.0.1:
+      Successfully uninstalled pyarrow-6.0.1
+Successfully installed pyarrow-6.0.1
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a v
+irtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+root@f0efe683179c:/app/UPET# python3 -c "import pyarrow, datasets, transformers, torch; print('Imports OK, pyarrow', pyarrow.__version__)"
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/local/lib/python3.10/site-packages/datasets/__init__.py", line 34, in <module>
+    from .arrow_dataset import Dataset, concatenate_datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 46, in <module>
+    from .arrow_reader import ArrowReader
+  File "/usr/local/lib/python3.10/site-packages/datasets/arrow_reader.py", line 33, in <module>
+    from .table import InMemoryTable, MemoryMappedTable, Table, concat_tables
+  File "/usr/local/lib/python3.10/site-packages/datasets/table.py", line 331, in <module>
+    class InMemoryTable(TableBlock):
+  File "/usr/local/lib/python3.10/site-packages/datasets/table.py", line 358, in InMemoryTable
+    def from_pandas(cls, *args, **kwargs):
+  File "/usr/local/lib/python3.10/site-packages/datasets/table.py", line 21, in wrapper
+    out = wraps(arrow_table_method)(method)
+  File "/usr/local/lib/python3.10/functools.py", line 61, in update_wrapper
+    wrapper.__wrapped__ = wrapped
+AttributeError: readonly attribute
+root@f0efe683179c:/app/UPET# mkdir -p outputs
+root@f0efe683179c:/app/UPET# python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --
+do_predict --max_seq_length 128 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet
+_seed42_k5_ep1 --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptu
+ning --use_pe
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 7, in <module>
+    import datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/__init__.py", line 34, in <module>
+    from .arrow_dataset import Dataset, concatenate_datasets
+  File "/usr/local/lib/python3.10/site-packages/datasets/arrow_dataset.py", line 46, in <module>
+    from .arrow_reader import ArrowReader
+  File "/usr/local/lib/python3.10/site-packages/datasets/arrow_reader.py", line 33, in <module>
+    from .table import InMemoryTable, MemoryMappedTable, Table, concat_tables
+  File "/usr/local/lib/python3.10/site-packages/datasets/table.py", line 331, in <module>
+    class InMemoryTable(TableBlock):
+  File "/usr/local/lib/python3.10/site-packages/datasets/table.py", line 358, in InMemoryTable
+    def from_pandas(cls, *args, **kwargs):
+  File "/usr/local/lib/python3.10/site-packages/datasets/table.py", line 21, in wrapper
+    out = wraps(arrow_table_method)(method)
+  File "/usr/local/lib/python3.10/functools.py", line 61, in update_wrapper
+    wrapper.__wrapped__ = wrapped
+AttributeError: readonly attribute
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 3 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# sleep 30
+find outputs -maxdepth 4 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# find outputs -maxdepth 4 -type f -printf '%p\n' | sort
+root@f0efe683179c:/app/UPET# python3 - << 'PY'
+> import json, os, re, glob
+> base = 'outputs/rte_roberta_upet_seed42_k5_ep1'
+> acc = None
+> candidates = []
+> for pattern in [
+>     os.path.join(base, 'eval_results.json'),
+>     os.path.join(base, 'all_results.json'),
+>     os.path.join(base, 'trainer_state.json'),
+>     os.path.join(base, '**', '*.json')
+> ]:
+>     candidates.extend(glob.glob(pattern, recursive=True))
+> for p in candidates:
+>     try:
+>         with open(p,'r',encoding='utf-8') as f:
+>             data = json.load(f)
+>         for k in ['eval_accuracy','accuracy','acc','eval_acc']:
+>             if isinstance(data, dict) and k in data:
+>                 acc = data[k]
+>                 break
+>         if acc is not None:
+>             break
+>     except Exception:
+>         pass
+> if acc is None:
+>     for p in glob.glob(os.path.join(base,'**','*'), recursive=True):
+>         if os.path.isfile(p) and p.endswith('.txt'):
+>             try:
+>                 t = open(p,'r',encoding='utf-8',errors='ignore').read()
+>                 m = re.search(r'(eval_)?accuracy\s*[:=]\s*([0-9\.]+)', t)
+>                 if m:
+>                     acc = float(m.group(2))
+>                     break
+>             except Exception:
+>                 pass
+> if acc is not None:
+>     with open('eval_accuracy.json','w',encoding='utf-8') as f:
+>         json.dump({'eval_accuracy': float(acc)}, f)
+> print('ACCURACY:', acc)
+> PY
+ACCURACY: None
+root@f0efe683179c:/app/UPET# if [ -f eval_accuracy.json ]; then cat eval_accuracy.json; else echo '{"eval_accuracy": null}'; fi
+{"eval_accuracy": null}
+root@f0efe683179c:/app/UPET# pip3 install --no-input --upgrade datasets==2.19.1
+Collecting datasets==2.19.1
+  Downloading datasets-2.19.1-py3-none-any.whl (542 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 542.0/542.0 kB 6.8 MB/s eta 0:00:00
+Requirement already satisfied: fsspec[http]<=2024.3.1,>=2023.1.0 in /usr/local/lib/python3.10/site-packages (from datasets==2.19.1) (2023.6.0)
+Collecting pyarrow>=12.0.0
+  Using cached pyarrow-21.0.0-cp310-cp310-manylinux_2_28_x86_64.whl (42.7 MB)
+Requirement already satisfied: pandas in /usr/local/lib/python3.10/site-packages (from datasets==2.19.1) (2.0.3)
+Requirement already satisfied: requests>=2.19.0 in /usr/local/lib/python3.10/site-packages (from datasets==2.19.1) (2.32.5)
+Collecting dill<0.3.9,>=0.3.0
+  Downloading dill-0.3.8-py3-none-any.whl (116 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 116.3/116.3 kB 10.3 MB/s eta 0:00:00
+Requirement already satisfied: xxhash in /usr/local/lib/python3.10/site-packages (from datasets==2.19.1) (3.6.0)
+Requirement already satisfied: filelock in /usr/local/lib/python3.10/site-packages (from datasets==2.19.1) (3.20.0)
+Requirement already satisfied: multiprocess in /usr/local/lib/python3.10/site-packages (from datasets==2.19.1) (0.70.16)
+Collecting pyarrow-hotfix
+  Downloading pyarrow_hotfix-0.7-py3-none-any.whl (7.9 kB)
+Requirement already satisfied: packaging in /usr/local/lib/python3.10/site-packages (from datasets==2.19.1) (25.0)
+Requirement already satisfied: tqdm>=4.62.1 in /usr/local/lib/python3.10/site-packages (from datasets==2.19.1) (4.66.4)
+Requirement already satisfied: pyyaml>=5.1 in /usr/local/lib/python3.10/site-packages (from datasets==2.19.1) (6.0.3)
+Requirement already satisfied: aiohttp in /usr/local/lib/python3.10/site-packages (from datasets==2.19.1) (3.13.0)
+Requirement already satisfied: huggingface-hub>=0.21.2 in /usr/local/lib/python3.10/site-packages (from datasets==2.19.1) (0.35.3)
+Requirement already satisfied: numpy>=1.17 in /usr/local/lib/python3.10/site-packages (from datasets==2.19.1) (1.23.5)
+Requirement already satisfied: multidict<7.0,>=4.5 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==2.19.1) (6.7.0)
+Requirement already satisfied: yarl<2.0,>=1.17.0 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==2.19.1) (1.22.0)
+Requirement already satisfied: aiosignal>=1.4.0 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==2.19.1) (1.4.0)
+Requirement already satisfied: propcache>=0.2.0 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==2.19.1) (0.4.1)
+Requirement already satisfied: frozenlist>=1.1.1 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==2.19.1) (1.8.0)
+Requirement already satisfied: async-timeout<6.0,>=4.0 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==2.19.1) (5.0.1)
+Requirement already satisfied: aiohappyeyeballs>=2.5.0 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==2.19.1) (2.6.1)
+Requirement already satisfied: attrs>=17.3.0 in /usr/local/lib/python3.10/site-packages (from aiohttp->datasets==2.19.1) (25.4.0)
+Requirement already satisfied: typing-extensions>=3.7.4.3 in /usr/local/lib/python3.10/site-packages (from huggingface-hub>=0.21.2->datasets==2.19.1) (4.15.0)
+Requirement already satisfied: hf-xet<2.0.0,>=1.1.3 in /usr/local/lib/python3.10/site-packages (from huggingface-hub>=0.21.2->datasets==2.19.1) (1.1.10)
+Requirement already satisfied: idna<4,>=2.5 in /usr/local/lib/python3.10/site-packages (from requests>=2.19.0->datasets==2.19.1) (3.11)
+Requirement already satisfied: charset_normalizer<4,>=2 in /usr/local/lib/python3.10/site-packages (from requests>=2.19.0->datasets==2.19.1) (3.4.4)
+Requirement already satisfied: urllib3<3,>=1.21.1 in /usr/local/lib/python3.10/site-packages (from requests>=2.19.0->datasets==2.19.1) (2.0.7)
+Requirement already satisfied: certifi>=2017.4.17 in /usr/local/lib/python3.10/site-packages (from requests>=2.19.0->datasets==2.19.1) (2025.10.5)
+Requirement already satisfied: pytz>=2020.1 in /usr/local/lib/python3.10/site-packages (from pandas->datasets==2.19.1) (2025.2)
+Requirement already satisfied: tzdata>=2022.1 in /usr/local/lib/python3.10/site-packages (from pandas->datasets==2.19.1) (2025.2)
+Requirement already satisfied: python-dateutil>=2.8.2 in /usr/local/lib/python3.10/site-packages (from pandas->datasets==2.19.1) (2.9.0.post0)
+Requirement already satisfied: six>=1.5 in /usr/local/lib/python3.10/site-packages (from python-dateutil>=2.8.2->pandas->datasets==2.19.1) (1.17.0)
+Installing collected packages: pyarrow-hotfix, pyarrow, dill, datasets
+  Attempting uninstall: pyarrow
+    Found existing installation: pyarrow 6.0.1
+    Uninstalling pyarrow-6.0.1:
+      Successfully uninstalled pyarrow-6.0.1
+  Attempting uninstall: dill
+    Found existing installation: dill 0.4.0
+    Uninstalling dill-0.4.0:
+      Successfully uninstalled dill-0.4.0
+  Attempting uninstall: datasets
+    Found existing installation: datasets 1.15.1
+    Uninstalling datasets-1.15.1:
+      Successfully uninstalled datasets-1.15.1
+Successfully installed datasets-2.19.1 dill-0.3.8 pyarrow-21.0.0 pyarrow-hotfix-0.7
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a v
+irtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+root@f0efe683179c:/app/UPET# python3 - << 'PY'
+> import importlib
+> for m in ['pyarrow','datasets','transformers','torch']:
+>     try:
+>         mod = importlib.import_module(m)
+>         print(m, getattr(mod,'__version__','unknown'))
+>     except Exception as e:
+>         print(m, 'ERROR', e)
+> PY
+pyarrow 21.0.0
+datasets 2.19.1
+mkdir -p outputs
+python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --do_predict --max_seq_length 1
+28 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet_seed42_k5_ep1 --overwrite_ou
+tput_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptuning --use_pe
+transformers 4.40.2
+torch 2.9.0+cpu
+root@f0efe683179c:/app/UPET# mkdir -p outputs
+root@f0efe683179c:/app/UPET# python3 run.py --model_name_or_path roberta-base --task_name superglue --dataset_name rte --overwrite_cache --do_train --do_eval --
+do_predict --max_seq_length 128 --per_device_train_batch_size 4 --learning_rate 1e-2 --num_train_epochs 1 --pre_seq_len 20 --output_dir outputs/rte_roberta_upet
+_seed42_k5_ep1 --overwrite_output_dir --hidden_dropout_prob 0.1 --seed 42 --save_strategy no --evaluation_strategy epoch --num_examples_per_label 5 --prompt_ptu
+ning --use_pe
+Traceback (most recent call last):
+  File "/app/UPET/run.py", line 71, in <module>
+    args = get_args()
+  File "/app/UPET/arguments.py", line 326, in get_args
+    args = parser.parse_args_into_dataclasses()
+  File "/usr/local/lib/python3.10/site-packages/transformers/hf_argparser.py", line 339, in parse_args_into_dataclasses
+    obj = dtype(**inputs)
+  File "<string>", line 125, in __init__
+  File "/usr/local/lib/python3.10/site-packages/transformers/training_args.py", line 1605, in __post_init__
+    and (self.device.type != "cuda")
+  File "/usr/local/lib/python3.10/site-packages/transformers/training_args.py", line 2094, in device
+    return self._setup_devices
+  File "/usr/local/lib/python3.10/site-packages/transformers/utils/generic.py", line 63, in __get__
+    cached = self.fget(obj)
+  File "/usr/local/lib/python3.10/site-packages/transformers/training_args.py", line 2000, in _setup_devices
+    raise ImportError(
+ImportError: Using the `Trainer` with `PyTorch` requires `accelerate>=0.21.0`: Please run `pip install transformers[torch]` or `pip install accelerate -U`
+root@f0efe683179c:/app/UPET#

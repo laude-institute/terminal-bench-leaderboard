@@ -1,0 +1,414 @@
+[?2004hroot@62a03abf0884:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@62a03abf0884:/app# clear
+[?2004l[H[J[3J[?2004hroot@62a03abf0884:/app# ls -la /app
+[?2004ltotal 12
+drwxr-xr-x 1 root root 4096 Oct 14 17:04 [0m[01;34m.[0m
+drwxr-xr-x 1 root root 4096 Oct 14 17:04 [01;34m..[0m
+-rw-rw-r-- 1 root root 4096 Oct  8 15:44 trunc.db
+[?2004hroot@62a03abf0884:/app# file /app/trunc.db
+[?2004lbash: file: command not found
+[?2004hroot@62a03abf0884:/app# sqlite3 --version
+[?2004lbash: sqlite3: command not found
+[?2004hroot@62a03abf0884:/app# sqlite3 /app/trunc.db ".recover" > /app/recovered.sql
+[?2004lbash: sqlite3: command not found
+[?2004hroot@62a03abf0884:/app# sqlite3 /app/recovered.db < /app/recovered.sql
+[?2004lbash: sqlite3: command not found
+[?2004hroot@62a03abf0884:/app# sqlite3 /app/recovered.db ".tables"
+[?2004lbash: sqlite3: command not found
+[?2004hroot@62a03abf0884:/app# cat > /app/extract_json.py << 'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import sqlite3, json, os
+[?2004l[?2004h> 
+[?2004l[?2004h> def quote_ident(name):
+[?2004l[?2004h>     return '"' + name.replace('"','""') + '"'
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_rows(dbpath):
+[?2004l[?2004h>     rows = []
+[?2004l[?2004h>     if not os.path.exists(dbpath):
+[?2004l[?2004h>         return rows
+[?2004l[?2004h>     conn = sqlite3.connect(dbpath)
+[?2004l[?2004h>     cur = conn.cursor()
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+[?2004l[?2004h>         tables = [r[0] for r in cur.fetchall()]
+[?2004l[?2004h>         for t in tables:
+[?2004l[?2004h>             try:
+[?2004l[?2004h>                 cur.execute("PRAGMA table_info(%s)" % quote_ident(t))
+[?2004l[?2004h>                 cols = [c[1].lower() for c in cur.fetchall()]
+[?2004l[?2004h>                 if "word" in cols and "value" in cols:
+[?2004l[?2004h>                     cur.execute("SELECT word, value FROM %s" % quote_ident(t))
+[?2004l[?2004h>                     for w,v in cur.fetchall():
+[?2004l[?2004h>                         if w is not None and v is not None:
+[?2004l[?2004h>                             val = v
+[?2004l[?2004h>                             try:
+[?2004l[?2004h>                                 if isinstance(v, (bytes, bytearray)):
+[?2004l[?2004h>                                     val = int(v.decode('utf-8','ignore'))
+[?2004l[?2004h>                                 elif isinstance(v, str):
+[?2004l[?2004h>                                     val = int(v)
+[?2004l[?2004h>                                 elif isinstance(v, float) and v.is_integer():
+[?2004l[?2004h>                                     val = int(v)
+[?2004l[?2004h>                             except Exception:
+[?2004l[?2004h>                                 pass
+[?2004l[?2004h>                             rows.append({"word": str(w), "value": val})
+[?2004l[?2004h>             except Exception:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         pass
+[?2004l[?2004h>     conn.close()
+[?2004l[?2004h>     return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     dbs = ["/app/recovered.db", "/app/trunc.db"]
+[?2004l[?2004h>     rows = []
+[?2004l[?2004h>     for db in dbs:
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             rows = get_rows(db)
+[?2004l[?2004h>             if rows:
+[?2004l[?2004h>                 break
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>     seen = set()
+[?2004l[?2004h>     uniq = []
+[?2004l[?2004h>     for r in rows:
+[?2004l[?2004h>         key = (r["word"], r["value"])
+[?2004l[?2004h>         if key not in seen:
+[?2004l[?2004h>             seen.add(key)
+[?2004l[?2004h>             uniq.append(r)
+[?2004l[?2004h>     with open("/app/recover.json","w") as f:
+[?2004l[?2004h>         json.dump(uniq, f)
+[?2004l[?2004h>     print("Wrote %d rows to /app/recover.json" % len(uniq))
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == "__main__":
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@62a03abf0884:/app# chmod +x /app/extract_json.py
+[?2004l[?2004hroot@62a03abf0884:/app# python3 --version
+[?2004lPython 3.12.3
+[?2004hroot@62a03abf0884:/app# python3 /app/extract_json.py
+[?2004lWrote 0 rows to /app/recover.json
+[?2004hroot@62a03abf0884:/app# ls -l /app/recover.json
+[?2004l-rw-r--r-- 1 root root 2 Oct 14 17:06 /app/recover.json
+[?2004hroot@62a03abf0884:/app# head -n 50 /app/recover.json
+[?2004l[][?2004hroot@62a03abf0884:/app# apt-get update
+[?2004l0% [Working]            Get:1 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]
+0% [1 InRelease 2588 B/256 kB 1%] [Waiting for headers]                                                       Get:2 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+0% [1 InRelease 14.2 kB/256 kB 6%] [2 InRelease 6932 B/126 kB 5%]                                                                 0% [1 InRelease 144 kB/256 kB 56%]0% [1 InRelease 215 kB/256 kB 84%]                                  0% [Waiting for headers]0% [Waiting for headers] [Waiting for headers]                                              Get:3 http://security.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [34.6 kB]
+0% [Waiting for headers] [3 Packages 5555 B/34.6 kB 16%]                                                        0% [Waiting for headers]                        Get:4 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+0% [4 InRelease 15.6 kB/126 kB 12%]0% [3 Packages store 0 B] [4 InRelease 16.4 kB/126 kB 13%]                                                          0% [4 InRelease 27.2 kB/126 kB 22%] [Waiting for headers]                                                         0% [Waiting for headers]0% [Waiting for headers] [Waiting for headers]                                              Get:5 http://security.ubuntu.com/ubuntu noble-security/main amd64 Packages [1531 kB]
+0% [Waiting for headers] [5 Packages 2655 B/1531 kB 0%]                                                       Get:6 http://archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+0% [6 InRelease 2588 B/126 kB 2%] [5 Packages 43.2 kB/1531 kB 3%]                                                                 0% [5 Packages 105 kB/1531 kB 7%]15% [Waiting for headers] [5 Packages 200 kB/1531 kB 13%]                                                         Get:7 http://archive.ubuntu.com/ubuntu noble/restricted amd64 Packages [117 kB]
+15% [7 Packages 1209 B/117 kB 1%] [5 Packages 252 kB/1531 kB 16%]                                                                 15% [Waiting for headers] [5 Packages 355 kB/1531 kB 23%]                                                         Get:8 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages [19.3 MB]
+15% [8 Packages 3745 B/19.3 MB 0%] [5 Packages 355 kB/1531 kB 23%]15% [7 Packages store 0 B] [8 Packages 3745 B/19.3 MB 0%] [5 Packages 355 kB/1531 kB 23%]                                                                                         16% [8 Packages 24.0 kB/19.3 MB 0%] [5 Packages 386 kB/1531 kB 25%]                                                                   22% [8 Packages 1441 kB/19.3 MB 7%]                                   Get:9 http://security.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1139 kB]
+22% [8 Packages 1441 kB/19.3 MB 7%] [9 Packages 11.1 kB/1139 kB 1%]22% [5 Packages store 0 B] [8 Packages 1441 kB/19.3 MB 7%] [9 Packages 11.1 kB/1139 kB 1%]                                                                                          23% [8 Packages 1441 kB/19.3 MB 7%] [9 Packages 134 kB/1139 kB 12%]                                                                   26% [8 Packages 1635 kB/19.3 MB 8%] [Waiting for headers]                                                         Get:10 http://security.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [2512 kB]
+26% [8 Packages 1635 kB/19.3 MB 8%] [10 Packages 43.6 kB/2512 kB 2%]26% [9 Packages store 0 B] [8 Packages 1635 kB/19.3 MB 8%] [10 Packages 43.6 kB/2512 kB 2%]                                                                                           27% [8 Packages 1635 kB/19.3 MB 8%] [10 Packages 70.7 kB/2512 kB 3%]                                                                    36% [8 Packages 3174 kB/19.3 MB 16%]36% [10 Packages store 0 B] [8 Packages 3174 kB/19.3 MB 16%]                                                            41% [8 Packages 5049 kB/19.3 MB 26%]46% [8 Packages 7341 kB/19.3 MB 38%]61% [8 Packages 13.5 MB/19.3 MB 70%]72% [8 Packages 18.3 MB/19.3 MB 95%]                                    74% [Waiting for headers]                         Get:11 http://archive.ubuntu.com/ubuntu noble/main amd64 Packages [1808 kB]
+75% [11 Packages 45.6 kB/1808 kB 3%]75% [8 Packages store 0 B] [11 Packages 45.6 kB/1808 kB 3%]                                                           79% [8 Packages store 0 B] [Waiting for headers]                                                Get:12 http://archive.ubuntu.com/ubuntu noble/multiverse amd64 Packages [331 kB]
+79% [8 Packages store 0 B] [12 Packages 36.9 kB/331 kB 11%]                                                           79% [8 Packages store 0 B] [Waiting for headers]                                                Get:13 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1928 kB]
+80% [8 Packages store 0 B] [13 Packages 64.9 kB/1928 kB 3%]                                                           84% [8 Packages store 0 B] [Waiting for headers]                                                Get:14 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1897 kB]
+84% [8 Packages store 0 B] [14 Packages 16.0 kB/1897 kB 1%]                                                           88% [8 Packages store 0 B]                          Get:15 http://archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [38.9 kB]
+89% [8 Packages store 0 B] [15 Packages 38.9 kB/38.9 kB 100%]                                                             89% [8 Packages store 0 B] [Waiting for headers]                                                Get:16 http://archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [2644 kB]
+89% [8 Packages store 0 B] [16 Packages 4555 B/2644 kB 0%]                                                          95% [8 Packages store 0 B]                          95% [Waiting for headers]95% [11 Packages store 0 B] [Waiting for headers]                                                 Get:17 http://archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [33.9 kB]
+95% [11 Packages store 0 B] [17 Packages 1211 B/33.9 kB 4%]                                                           96% [17 Packages 14.2 kB/33.9 kB 42%]96% [12 Packages store 0 B] [17 Packages 14.2 kB/33.9 kB 42%]                                                             97% [17 Packages 14.2 kB/33.9 kB 42%]97% [13 Packages store 0 B] [17 Packages 14.2 kB/33.9 kB 42%]                                                             97% [17 Packages 22.9 kB/33.9 kB 68%]97% [14 Packages store 0 B] [17 Packages 22.9 kB/33.9 kB 68%]                                                             97% [14 Packages store 0 B]                           98% [Waiting for headers]98% [15 Packages store 0 B] [Waiting for headers]                                                 98% [Waiting for headers]98% [16 Packages store 0 B] [Waiting for headers]                                                 Get:18 http://archive.ubuntu.com/ubuntu noble-backports/main amd64 Packages [49.4 kB]
+98% [16 Packages store 0 B] [18 Packages 2659 B/49.4 kB 5%]                                                           99% [18 Packages 31.6 kB/49.4 kB 64%]99% [17 Packages store 0 B] [18 Packages 31.6 kB/49.4 kB 64%]                                                             99% [18 Packages 31.6 kB/49.4 kB 64%]                                     99% [Working]99% [18 Packages store 0 B]                           100% [Working]              Fetched 34.0 MB in 5s (6710 kB/s)
+Reading package lists... 0%Reading package lists... 0%Reading package lists... 0%Reading package lists... 5%Reading package lists... 5%Reading package lists... 58%Reading package lists... 58%Reading package lists... 58%Reading package lists... 58%Reading package lists... 59%Reading package lists... 59%Reading package lists... 65%Reading package lists... 65%Reading package lists... 72%Reading package lists... 72%Reading package lists... 72%Reading package lists... 81%Reading package lists... 81%Reading package lists... 81%Reading package lists... 81%Reading package lists... 82%Reading package lists... 82%Reading package lists... 82%Reading package lists... 82%Reading package lists... 87%Reading package lists... 87%Reading package lists... 91%Reading package lists... 91%Reading package lists... 99%Reading package lists... 99%Reading package lists... 99%Reading package lists... 99%Reading package lists... Done
+[?2004hroot@62a03abf0884:/app# apt-get install -y sqlite3
+[?2004lReading package lists... 0%Reading package lists... 0%Reading package lists... 0%Reading package lists... 5%Reading package lists... 5%Reading package lists... 58%Reading package lists... 58%Reading package lists... 58%Reading package lists... 58%Reading package lists... 59%Reading package lists... 59%Reading package lists... 65%Reading package lists... 65%Reading package lists... 72%Reading package lists... 72%Reading package lists... 79%Reading package lists... 81%Reading package lists... 81%Reading package lists... 81%Reading package lists... 81%Reading package lists... 82%Reading package lists... 82%Reading package lists... 82%Reading package lists... 82%Reading package lists... 87%Reading package lists... 87%Reading package lists... 91%Reading package lists... 91%Reading package lists... 99%Reading package lists... 99%Reading package lists... 99%Reading package lists... 99%Reading package lists... Done
+Building dependency tree... 0%Building dependency tree... 0%Building dependency tree... 50%Building dependency tree... 50%Building dependency tree... Done
+Reading state information... 0% Reading state information... 4%Reading state information... Done
+The following additional packages will be installed:
+  libsqlite3-0
+Suggested packages:
+  sqlite3-doc
+The following NEW packages will be installed:
+  sqlite3
+The following packages will be upgraded:
+  libsqlite3-0
+1 upgraded, 1 newly installed, 0 to remove and 32 not upgraded.
+Need to get 845 kB of archives.
+After this operation, 584 kB of additional disk space will be used.
+0% [Working]            Get:1 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libsqlite3-0 amd64 3.45.1-1ubuntu2.5 [701 kB]
+1% [1 libsqlite3-0 14.2 kB/701 kB 2%]36% [1 libsqlite3-0 382 kB/701 kB 54%]                                      76% [Working]             Get:2 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 sqlite3 amd64 3.45.1-1ubuntu2.5 [144 kB]
+77% [2 sqlite3 6948 B/144 kB 5%]                                100% [Working]              Fetched 845 kB in 1s (914 kB/s)
+debconf: delaying package configuration, since apt-utils is not installed
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 6337 files and directories currently installed.)
+Preparing to unpack .../libsqlite3-0_3.45.1-1ubuntu2.5_amd64.deb ...
+Unpacking libsqlite3-0:amd64 (3.45.1-1ubuntu2.5) over (3.45.1-1ubuntu2.3) ...
+Selecting previously unselected package sqlite3.
+Preparing to unpack .../sqlite3_3.45.1-1ubuntu2.5_amd64.deb ...
+Unpacking sqlite3 (3.45.1-1ubuntu2.5) ...
+Setting up libsqlite3-0:amd64 (3.45.1-1ubuntu2.5) ...
+Setting up sqlite3 (3.45.1-1ubuntu2.5) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.4) ...
+[?2004hroot@62a03abf0884:/app# sqlite3 --version
+[?2004l3.45.1 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257ccalt1 (64-bit)
+[?2004hroot@62a03abf0884:/app# sqlite3 /app/trunc.db ".recover" > /app/recovered.sql 2> /app/recover.err
+[?2004l[?2004hroot@62a03abf0884:/app# wc -l /app/recovered.sql
+[?2004l2 /app/recovered.sql
+[?2004hroot@62a03abf0884:/app# head -n 50 /app/recover.err
+[?2004lsql error: file is not a database (26)
+[?2004hroot@62a03abf0884:/app# sqlite3 /app/recovered.db < /app/recovered.sql
+[?2004l[?2004hroot@62a03abf0884:/app# sqlite3 /app/recovered.db ".tables"
+[?2004l[?2004hroot@62a03abf0884:/app# sqlite3 /app/trunc.db ".dump" > /app/dump.sql 2> /app/dump.err
+[?2004l[?2004hroot@62a03abf0884:/app# sqlite3 /app/recovered_dump.db < /app/dump.sql
+[?2004l[?2004hroot@62a03abf0884:/app# sqlite3 /app/recovered_dump.db ".tables"
+[?2004l[?2004hroot@62a03abf0884:/app# cat > /app/extract_json.py << 'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import sqlite3, json, os
+[?2004l[?2004h> 
+[?2004l[?2004h> def quote_ident(name):
+[?2004l[?2004h>     return '"' + name.replace('"','""') + '"'
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_rows(dbpath):
+[?2004l[?2004h>     rows = []
+[?2004l[?2004h>     if not os.path.exists(dbpath):
+[?2004l[?2004h>         return rows
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         conn = sqlite3.connect(dbpath)
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return rows
+[?2004l[?2004h>     cur = conn.cursor()
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+[?2004l[?2004h>         tables = [r[0] for r in cur.fetchall()]
+[?2004l[?2004h>         for t in tables:
+[?2004l[?2004h>             try:
+[?2004l[?2004h>                 cur.execute("PRAGMA table_info(%s)" % quote_ident(t))
+[?2004l[?2004h>                 cols_info = cur.fetchall()
+[?2004l[?2004h>                 cols = [c[1] for c in cols_info]
+[?2004l[?2004h>                 cols_lower = [c[1].lower() for c in cols_info]
+[?2004l[?2004h>                 if "word" in cols_lower and "value" in cols_lower:
+[?2004l[?2004h>                     cur.execute("SELECT word, value FROM %s" % quote_ident(t))
+[?2004l[?2004h>                     for w,v in cur.fetchall():
+[?2004l[?2004h>                         if w is not None and v is not None:
+[?2004l[?2004h>                             val = v
+[?2004l[?2004h>                             try:
+[?2004l[?2004h>                                 if isinstance(v, (bytes, bytearray)):
+[?2004l[?2004h>                                     val = int(v.decode('utf-8','ignore'))
+[?2004l[?2004h>                                 elif isinstance(v, str):
+[?2004l[?2004h>                                     val = int(v)
+[?2004l[?2004h>                                 elif isinstance(v, float) and v.is_integer():
+[?2004l[?2004h>                                     val = int(v)
+[?2004l[?2004h>                             except Exception:
+[?2004l[?2004h>                                 pass
+[?2004l[?2004h>                             rows.append({"word": str(w), "value": val})
+[?2004l[?2004h>             except Exception:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         pass
+[?2004l[?2004h>     conn.close()
+[?2004l[?2004h>     return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     dbs = ["/app/recovered.db", "/app/recovered_dump.db", "/app/trunc.db"]
+[?2004l[?2004h>     rows = []
+[?2004l[?2004h>     for db in dbs:
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             rows = get_rows(db)
+[?2004l[?2004h>             if rows:
+[?2004l[?2004h>                 break
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>     seen = set()
+[?2004l[?2004h>     uniq = []
+[?2004l[?2004h>     for r in rows:
+[?2004l[?2004h>         key = (r["word"], r["value"])
+[?2004l[?2004h>         if key not in seen:
+[?2004l[?2004h>             seen.add(key)
+[?2004l[?2004h>             uniq.append(r)
+[?2004l[?2004h>     with open("/app/recover.json","w") as f:
+[?2004l[?2004h>         json.dump(uniq, f)
+[?2004l[?2004h>     print("Wrote %d rows to /app/recover.json" % len(uniq))
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == "__main__":
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@62a03abf0884:/app# chmod +x /app/extract_json.py
+[?2004l[?2004hroot@62a03abf0884:/app# python3 /app/extract_json.py
+[?2004lWrote 0 rows to /app/recover.json
+[?2004hroot@62a03abf0884:/app# ls -l /app/recover.json
+[?2004l-rw-r--r-- 1 root root 2 Oct 14 17:08 /app/recover.json
+[?2004hroot@62a03abf0884:/app# head -n 50 /app/recover.json
+[?2004l[][?2004hroot@62a03abf0884:/app# apt-get install -y binutils file
+[?2004lReading package lists... 0%Reading package lists... 0%Reading package lists... 0%Reading package lists... 5%Reading package lists... 5%Reading package lists... 58%Reading package lists... 58%Reading package lists... 58%Reading package lists... 58%Reading package lists... 59%Reading package lists... 59%Reading package lists... 65%Reading package lists... 65%Reading package lists... 72%Reading package lists... 72%Reading package lists... 73%Reading package lists... 81%Reading package lists... 81%Reading package lists... 81%Reading package lists... 81%Reading package lists... 82%Reading package lists... 82%Reading package lists... 82%Reading package lists... 82%Reading package lists... 87%Reading package lists... 87%Reading package lists... 91%Reading package lists... 91%Reading package lists... 99%Reading package lists... 99%Reading package lists... 99%Reading package lists... 99%Reading package lists... Done
+Building dependency tree... 0%Building dependency tree... 0%Building dependency tree... 50%Building dependency tree... 50%Building dependency tree... Done
+Reading state information... 0% Reading state information... 4%Reading state information... Done
+The following additional packages will be installed:
+  binutils-common binutils-x86-64-linux-gnu libbinutils libctf-nobfd0 libctf0 libgprofng0 libjansson4 libmagic-mgc libmagic1t64 libsframe1
+Suggested packages:
+  binutils-doc gprofng-gui
+The following NEW packages will be installed:
+  binutils binutils-common binutils-x86-64-linux-gnu file libbinutils libctf-nobfd0 libctf0 libgprofng0 libjansson4 libmagic-mgc libmagic1t64 libsframe1
+0 upgraded, 12 newly installed, 0 to remove and 32 not upgraded.
+Need to get 4802 kB of archives.
+After this operation, 28.5 MB of additional disk space will be used.
+0% [Working]            Get:1 http://archive.ubuntu.com/ubuntu noble/main amd64 libmagic-mgc amd64 1:5.45-3build1 [307 kB]
+0% [1 libmagic-mgc 2604 B/307 kB 1%]                                    7% [Working]            Get:2 http://archive.ubuntu.com/ubuntu noble/main amd64 libmagic1t64 amd64 1:5.45-3build1 [87.2 kB]
+7% [2 libmagic1t64 4096 B/87.2 kB 5%]                                     10% [Waiting for headers]                         Get:3 http://archive.ubuntu.com/ubuntu noble/main amd64 file amd64 1:5.45-3build1 [22.0 kB]
+10% [3 file 6992 B/22.0 kB 32%]                               12% [Waiting for headers]                         Get:4 http://archive.ubuntu.com/ubuntu noble/main amd64 libjansson4 amd64 2.14-2build2 [32.8 kB]
+12% [4 libjansson4 6380 B/32.8 kB 19%]                                      14% [Waiting for headers]                         Get:5 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 binutils-common amd64 2.42-4ubuntu2.5 [240 kB]
+14% [5 binutils-common 4096 B/240 kB 2%]                                        20% [Waiting for headers]                         Get:6 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libsframe1 amd64 2.42-4ubuntu2.5 [15.5 kB]
+20% [6 libsframe1 8192 B/15.5 kB 53%]                                     22% [Working]             Get:7 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libbinutils amd64 2.42-4ubuntu2.5 [577 kB]
+22% [7 libbinutils 13.9 kB/577 kB 2%]                                     33% [Waiting for headers]                         Get:8 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libctf-nobfd0 amd64 2.42-4ubuntu2.5 [97.7 kB]
+33% [8 libctf-nobfd0 873 B/97.7 kB 1%]                                      36% [Working]             Get:9 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libctf0 amd64 2.42-4ubuntu2.5 [94.5 kB]
+36% [9 libctf0 5257 B/94.5 kB 6%]                                 40% [Waiting for headers]                         Get:10 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libgprofng0 amd64 2.42-4ubuntu2.5 [849 kB]
+40% [10 libgprofng0 8192 B/849 kB 1%]                                     55% [Waiting for headers]                         Get:11 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 binutils-x86-64-linux-gnu amd64 2.42-4ubuntu2.5 [2462 kB]
+56% [11 binutils-x86-64-linux-gnu 32.8 kB/2462 kB 1%]                                                     98% [Waiting for headers]                         Get:12 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 binutils amd64 2.42-4ubuntu2.5 [18.1 kB]
+98% [12 binutils 18.1 kB/18.1 kB 100%]                                      100% [Working]              Fetched 4802 kB in 1s (5951 kB/s)
+debconf: delaying package configuration, since apt-utils is not installed
+Selecting previously unselected package libmagic-mgc.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 6343 files and directories currently installed.)
+Preparing to unpack .../00-libmagic-mgc_1%3a5.45-3build1_amd64.deb ...
+Unpacking libmagic-mgc (1:5.45-3build1) ...
+Selecting previously unselected package libmagic1t64:amd64.
+Preparing to unpack .../01-libmagic1t64_1%3a5.45-3build1_amd64.deb ...
+Unpacking libmagic1t64:amd64 (1:5.45-3build1) ...
+Selecting previously unselected package file.
+Preparing to unpack .../02-file_1%3a5.45-3build1_amd64.deb ...
+Unpacking file (1:5.45-3build1) ...
+Selecting previously unselected package libjansson4:amd64.
+Preparing to unpack .../03-libjansson4_2.14-2build2_amd64.deb ...
+Unpacking libjansson4:amd64 (2.14-2build2) ...
+Selecting previously unselected package binutils-common:amd64.
+Preparing to unpack .../04-binutils-common_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking binutils-common:amd64 (2.42-4ubuntu2.5) ...
+Selecting previously unselected package libsframe1:amd64.
+Preparing to unpack .../05-libsframe1_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking libsframe1:amd64 (2.42-4ubuntu2.5) ...
+Selecting previously unselected package libbinutils:amd64.
+Preparing to unpack .../06-libbinutils_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking libbinutils:amd64 (2.42-4ubuntu2.5) ...
+Selecting previously unselected package libctf-nobfd0:amd64.
+Preparing to unpack .../07-libctf-nobfd0_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking libctf-nobfd0:amd64 (2.42-4ubuntu2.5) ...
+Selecting previously unselected package libctf0:amd64.
+Preparing to unpack .../08-libctf0_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking libctf0:amd64 (2.42-4ubuntu2.5) ...
+Selecting previously unselected package libgprofng0:amd64.
+Preparing to unpack .../09-libgprofng0_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking libgprofng0:amd64 (2.42-4ubuntu2.5) ...
+Selecting previously unselected package binutils-x86-64-linux-gnu.
+Preparing to unpack .../10-binutils-x86-64-linux-gnu_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking binutils-x86-64-linux-gnu (2.42-4ubuntu2.5) ...
+Selecting previously unselected package binutils.
+Preparing to unpack .../11-binutils_2.42-4ubuntu2.5_amd64.deb ...
+Unpacking binutils (2.42-4ubuntu2.5) ...
+Setting up libmagic-mgc (1:5.45-3build1) ...
+Setting up libmagic1t64:amd64 (1:5.45-3build1) ...
+Setting up binutils-common:amd64 (2.42-4ubuntu2.5) ...
+Setting up libctf-nobfd0:amd64 (2.42-4ubuntu2.5) ...
+Setting up file (1:5.45-3build1) ...
+Setting up libsframe1:amd64 (2.42-4ubuntu2.5) ...
+Setting up libjansson4:amd64 (2.14-2build2) ...
+Setting up libbinutils:amd64 (2.42-4ubuntu2.5) ...
+Setting up libctf0:amd64 (2.42-4ubuntu2.5) ...
+Setting up libgprofng0:amd64 (2.42-4ubuntu2.5) ...
+Setting up binutils-x86-64-linux-gnu (2.42-4ubuntu2.5) ...
+Setting up binutils (2.42-4ubuntu2.5) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.4) ...
+[?2004hroot@62a03abf0884:/app# file /app/trunc.db
+[?2004l/app/trunc.db: data
+[?2004hroot@62a03abf0884:/app# strings -a -t d -n 4 /app/trunc.db | head -n 200
+[?2004l   3919 testword09?
+   3943 testword08@X
+   3967 testword07c
+   3984 testword06K
+   4001 testword052
+   4018 testword04*
+   4035 testword03
+   4052 testword02
+   4069 testword01
+   4084 !	testword00
+[?2004hroot@62a03abf0884:/app# strings -a -t d -n 4 /app/trunc.db | grep -n "testword" | head -n 50
+[?2004l1:   3919 testword09?
+2:   3943 testword08@X
+3:   3967 testword07c
+4:   3984 testword06K
+5:   4001 testword052
+6:   4018 testword04*
+7:   4035 testword03
+8:   4052 testword02
+9:   4069 testword01
+10:   4084 !	testword00
+[?2004hroot@62a03abf0884:/app# cat > /app/carve_trunc.py << 'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import re, json
+[?2004l[?2004h> from pathlib import Path
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_varint(buf, offset):
+[?2004l[?2004h>     v = 0
+[?2004l[?2004h>     length = 0
+[?2004l[?2004h>     for i in range(9):
+[?2004l[?2004h>         if offset + i >= len(buf):
+[?2004l[?2004h>             return None, 0
+[?2004l[?2004h>         b = buf[offset + i]
+[?2004l[?2004h>         v = (v << 7) | (b & 0x7F)
+[?2004l[?2004h>         length += 1
+[?2004l[?2004h>         if b < 0x80:
+[?2004l[?2004h>             return v, length
+[?2004l[?2004h>     return None, 0
+[?2004l[?2004h> 
+[?2004l[?2004h> def nearest_ascii_int(data, start, end):
+[?2004l[?2004h>     num_re = re.compile(rb"[-+]?[0-9]{1,10}")
+[?2004l[?2004h>     forward = data[end:end+128]
+[?2004l[?2004h>     back = data[max(0, start-64):start]
+[?2004l[?2004h>     best = None
+[?2004l[?2004h>     # search forward
+[?2004l[?2004h>     for m in num_re.finditer(forward):
+[?2004l[?2004h>         pos = end + m.start()
+[?2004l[?2004h>         val = int(m.group())
+[?2004l[?2004h>         dist = pos - end
+[?2004l[?2004h>         if best is None or dist < best[0]:
+[?2004l[?2004h>             best = (dist, val)
+[?2004l[?2004h>     # search backward
+[?2004l[?2004h>     for m in num_re.finditer(back):
+[?2004l[?2004h>         pos = start - len(back) + m.start()
+[?2004l[?2004h>         val = int(m.group())
+[?2004l[?2004h>         dist = start - pos
+[?2004l[?2004h>         if best is None or dist < best[0]:
+[?2004l[?2004h>             best = (dist, val)
+[?2004l[?2004h>     return None if best is None else best[1]
+[?2004l[?2004h> 
+[?2004l[?2004h> def carve_pairs(path):
+[?2004l[?2004h>     data = Path(path).read_bytes()
+[?2004l[?2004h>     word_re = re.compile(rb"testword[0-9A-Za-z_]+")
+[?2004l[?2004h>     results = []
+[?2004l[?2004h>     seen = set()
+[?2004l[?2004h>     for m in word_re.finditer(data):
+[?2004l[?2004h>         start, end = m.start(), m.end()
+[?2004l[?2004h>         word = m.group().decode('utf-8', 'ignore')
+[?2004l[?2004h>         val = None
+[?2004l[?2004h>         # try nearby ascii int
+[?2004l[?2004h>         val = nearest_ascii_int(data, start, end)
+[?2004l[?2004h>         # fallback: try varint immediately after word
+[?2004l[?2004h>         if val is None:
+[?2004l[?2004h>             v, l = read_varint(data, end)
+[?2004l[?2004h>             if v is not None and 0 <= v <= 2_000_000_000:
+[?2004l[?2004h>                 val = v
+[?2004l[?2004h>         if val is not None:
+[?2004l[?2004h>             key = (word, val)
+[?2004l[?2004h>             if key not in seen:
+[?2004l[?2004h>                 seen.add(key)
+[?2004l[?2004h>                 results.append({"word": word, "value": val})
+[?2004l[?2004h>     return results
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     out = "/app/recover.json"
+[?2004l[?2004h>     pairs = carve_pairs("/app/trunc.db")
+[?2004l[?2004h>     Path(out).write_text(json.dumps(pairs))
+[?2004l[?2004h>     print(f"Wrote {len(pairs)} rows to {out}")
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == "__main__":
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@62a03abf0884:/app# chmod +x /app/carve_trunc.py
+[?2004l[?2004hroot@62a03abf0884:/app# python3 /app/carve_trunc.py
+[?2004lWrote 10 rows to /app/recover.json
+[?2004hroot@62a03abf0884:/app# ls -l /app/recover.json
+[?2004l-rw-r--r-- 1 root root 364 Oct 14 17:09 /app/recover.json
+[?2004hroot@62a03abf0884:/app# head -n 100 /app/recover.json
+[?2004l[{"word": "testword09", "value": 8}, {"word": "testword08", "value": 9}, {"word": "testword07c", "value": 6}, {"word": "testword06K", "value": 7}, {"word": "testword052", "value": 6}, {"word": "testword04", "value": 52}, {"word": "testword03", "value": 4}, {"word": "testword02", "value": 3}, {"word": "testword01", "value": 2}, {"word": "testword00", "value": 1}][?2004hroot@62a03abf0884:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@62a03abf0884:/app# 

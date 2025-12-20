@@ -1,0 +1,26 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'pwd\n'
+'python3 -V\n'
+'python3 -c "import sys; print(sys.executable)"\n'
+'python3 -c "import fasttext, sys; print(\'fasttext module path:\', fasttext.__file__)" 2>/tmp/ft_import_err.txt\n'
+"rc=$?; if [ $rc -ne 0 ]; then echo 'IMPORT_ERROR'; cat /tmp/ft_import_err.txt; fi\n"
+"python3 - << 'PY'\nimport sys, pkgutil\nprint('PYTHONPATH:', sys.path)\nprint('Has fasttext loader:', pkgutil.find_loader('fasttext'))\nPY\n"
+'python3 -c "import site, sys, pprint; pprint.pp(site.getsitepackages() if hasattr(site,\'getsitepackages\') else []); pprint.pp(site.getusersitepackages() if hasattr(site,\'getusersitepackages\') else \'\')"\n'
+"find /app -maxdepth 3 -iname 'model.bin' -o -iname 'fasttext*' -type f -printf '%p\\n' 2>/dev/null\n"
+"find / -maxdepth 3 -type d -iname 'fasttext*' -printf '%p\\n' 2>/dev/null | head -n 50\n"
+'ls -la /usr/local/lib/python3.13/site-packages/fasttext\n'
+"sed -n '1,200p' /usr/local/lib/python3.13/site-packages/fasttext/__init__.py\n"
+"python3 - << 'PY'\nimport fasttext, sys\nprint('fasttext attrs:', [k for k in dir(fasttext) if not k.startswith('_')])\nprint('fasttext file:', fasttext.__file__)\ntry:\n    m = fasttext.load_model('model.bin')\n    print('Model loaded. dim=', m.get_dimension())\n    print('Predict:', m.predict('hello world'))\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+"python3 - << 'PY'\nimport os, glob\npkgdir = '/usr/local/lib/python3.13/site-packages/fasttext'\nprint('so files:', glob.glob(os.path.join(pkgdir, '*.so')))\nprint('all files:', sorted(os.listdir(pkgdir)))\nPY\n"
+"sed -n '1,320p' /usr/local/lib/python3.13/site-packages/fasttext/FastText.py\n"
+'grep -RIn "copy\\=False" /usr/local/lib/python3.13/site-packages/fasttext || true\n'
+'python3 - << \'PY\'\nimport os, re, shutil\nbase = \'/usr/local/lib/python3.13/site-packages/fasttext\'\npat = re.compile(r"np\\.array\\((?P<args>[^)]*?)\\s*,\\s*copy\\s*=\\s*False\\s*\\)")\nmodified_files = []\nfor root, _, files in os.walk(base):\n    for f in files:\n        if f.endswith(\'.py\'):\n            p = os.path.join(root, f)\n            with open(p, \'r\', encoding=\'utf-8\') as fh:\n                src = fh.read()\n            new = pat.sub(r"np.asarray(\\g<args>)", src)\n            if new != src:\n                bak = p + \'.bak_pre_numpy2_fix\'\n                if not os.path.exists(bak):\n                    shutil.copy2(p, bak)\n                with open(p, \'w\', encoding=\'utf-8\') as fh:\n                    fh.write(new)\n                modified_files.append(p)\nprint(\'Modified files:\', modified_files)\nPY\n'
+'grep -RIn "np\\.array\\(.*copy\\s*=\\s*False" /usr/local/lib/python3.13/site-packages/fasttext || true\n'
+"python3 - << 'PY'\nimport fasttext\nm = fasttext.load_model('model.bin')\nprint('Loaded model; dim=', m.get_dimension())\nlabels, probs = m.predict('hello world')\nprint('Prediction labels:', labels)\nprint('Prediction probs:', probs)\nPY\n"
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

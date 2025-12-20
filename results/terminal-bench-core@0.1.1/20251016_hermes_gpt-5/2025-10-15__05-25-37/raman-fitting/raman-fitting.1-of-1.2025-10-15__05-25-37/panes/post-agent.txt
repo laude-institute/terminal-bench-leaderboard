@@ -1,0 +1,336 @@
+root@9ef6547a9f82:/app# ls -la
+total 96
+drwxr-xr-x 1 root root  4096 Oct  8 15:44 .
+drwxr-xr-x 1 root root  4096 Oct 15 07:41 ..
+-rw-rw-r-- 1 root root 88805 Oct  8 15:44 graphene.dat
+root@9ef6547a9f82:/app# python3 -V
+Python 3.13.1
+root@9ef6547a9f82:/app# python3 - << 'PY'
+n peaks
+
+peaks=find_local_maxima(x,y)
+
+xmin=min(x); xmax=max(x)
+
+def in_range(xmin,xmax,a,b):
+    return xmin<=a and xmax>=b
+
+use_expected=in_range(xmin,xmax,1500,1700) and in_range(xmin,xmax,2500,2900)
+
+def pick_peak_in_window(x,y,peaks,lo,hi):
+    idxs=[i for i in peaks if x[i]>=lo and x[i]<=hi]
+    if not idxs:
+        candidates=[i for i in range(len(y)) if x[i]>=lo and x[i]<=hi]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda i: y[i])
+    return max(idxs, key=lambda i: y[i])
+
+if use_expected:
+    iG=pick_peak_in_window(x,y,peaks,1500,1700)
+    i2D=pick_peak_in_window(x,y,peaks,2500,2900)
+    if iG is None or i2D is None:
+        use_expected=False
+
+if not use_expected:
+    if not peaks:
+        imax=max(range(len(y)), key=lambda i: y[i])
+        candidates=[i for i in range(len(y)) if abs(x[i]-x[imax])>400]
+        if candidates:
+            imax2=max(candidates, key=lambda i: y[i])
+            i1=min(imax,imax2); i2=max(imax,imax2)
+        else:
+            y_sorted=sorted([(y[i],i) for i in range(len(y))], reverse=True)
+            i1=y_sorted[0][1]; i2=y_sorted[1][1]
+    else:
+        peaks_sorted=sorted(peaks, key=lambda i: y[i], reverse=True)
+        i1=peaks_sorted[0]
+        i2=None
+        for i in peaks_sorted[1:]:
+            if abs(x[i]-x[i1])>400:
+                i2=i; break
+        if i2 is None:
+            i2=peaks_sorted[1] if len(peaks_sorted)>1 else peaks_sorted[0]
+    if x[i1] <= x[i2]:
+        iG=i1; i2D=i2
+    else:
+        iG=i2; i2D=i1
+
+def estimate_params(i):
+    x0=x[i]
+    amp=max(y[i]-offset_est, y[i])
+    half=offset_est + amp/2.0
+    n=len(y)
+    left=i
+    for j in range(i-1,-1,-1):
+        if y[j] <= half:
+            left=j; break
+    right=i
+    for j in range(i+1,n):
+        if y[j] <= half:
+            right=j; break
+    def interp_x_at_half(j1,j2):
+        if j1<0 or j2>=n:
+            return None
+        y1=y[j1]; y2=y[j2]
+        x1=x[j1]; x2=x[j2]
+        if y2==y1:
+            return None
+        t=(half - y1)/(y2 - y1)
+        return x1 + t> import os, json, math
+>
+> def load_data_from_file(fname):
+>     x=[]; y=[]
+>     try:
+>         with open(fname,'r',errors='ignore') as f:
+>             for line in f:
+>                 line=line.strip()
+>                 if not line or line.startswith('#'):
+>                     continue
+>                 line=line.replace(';',' ').replace(',',' ')
+>                 parts=[p for p in line.split() if p]
+>                 if len(parts)<2:
+>                     continue
+>                 a=parts[0]; b=parts[1]
+>                 try:
+>                     xf=float(a); yf=float(b)
+>                 except:
+>                     continue
+>                 x.append(xf); y.append(yf)
+>     except Exception:
+>         return None
+>     if len(x)>=50:
+>         return x,y
+>     return None
+>
+> # Collect candidate files
+> cand=[]
+> for fname in os.listdir('.'):
+>     if not os.path.isfile(fname):
+>         continue
+>     lower=fname.lower()
+>     if any(lower.endswith(ext) for ext in ['.txt','.csv','.dat','.tsv']):
+>         cand.append(fname)
+>     elif any(k in lower for k in ['raman','spectrum','graphene']):
+>         cand.append(fname)
+> # Try candidates first, then all files
+> best=None; data=None; chosen=None
+> for fname in cand + [f for f in os.listdir('.') if os.path.isfile(f)]:
+>     res=load_data_from_file(fname)
+>     if res:
+>         x,y=res
+>         if not best or len(x)>best[0]:
+>             best=(len(x),fname)
+>             data=(x,y)
+>             chosen=fname
+>
+> if not data:
+>     raise SystemExit('No suitable data file found in current directory.')
+>
+> x,y=data
+> # Sort by x
+> idx=sorted(range(len(x)), key=lambda i: x[i])
+> x=[x[i] for i in idx]
+> y=[y[i] for i in idx]
+>
+> # Baseline offset estimate: mean of lowest 20%
+> ys_sorted=sorted(y)
+> k=max(int(0.2*len(ys_sorted)),1)
+> offset_est=sum(ys_sorted[:k])/k
+>
+> def lorentz(x, x0, gamma, amplitude, offset):
+>     return offset + amplitude / (1.0 + ((x - x0)/gamma)**2)
+>
+> # Find local maxima
+> def find_local_maxima(x,y):
+>     peaks=[]
+>     n=len(y)
+>     for i in range(1,n-1):
+>         if y[i] > y[i-1] and y[i] >= y[i+1]:
+>             peaks.append(i)
+>     return peaks
+>
+> peaks=find_local_maxima(x,y)
+>
+> xmin=min(x); xmax=max(x)
+>
+> def in_range(xmin,xmax,a,b):
+>     return xmin<=a and xmax>=b
+>
+> use_expected=in_range(xmin,xmax,1500,1700) and in_range(xmin,xmax,2500,2900)
+>
+> def pick_peak_in_window(x,y,peaks,lo,hi):
+>     idxs=[i for i in peaks if x[i]>=lo and x[i]<=hi]
+>     if not idxs:
+>         candidates=[i for i in range(len(y)) if x[i]>=lo and x[i]<=hi]
+>         if not candidates:
+>             return None
+>         return max(candidates, key=lambda i: y[i])
+>     return max(idxs, key=lambda i: y[i])
+>
+> if use_expected:
+>     iG=pick_peak_in_window(x,y,peaks,1500,1700)
+>     i2D=pick_peak_in_window(x,y,peaks,2500,2900)
+>     if iG is None or i2D is None:
+>         use_expected=False
+>
+> if not use_expected:
+>     if not peaks:
+>         imax=max(range(len(y)), key=lambda i: y[i])
+>         candidates=[i for i in range(len(y)) if abs(x[i]-x[imax])>400]
+>         if candidates:
+>             imax2=max(candidates, key=lambda i: y[i])
+>             i1=min(imax,imax2); i2=max(imax,imax2)
+>         else:
+>             y_sorted=sorted([(y[i],i) for i in range(len(y))], reverse=True)
+>             i1=y_sorted[0][1]; i2=y_sorted[1][1]
+>     else:
+>         peaks_sorted=sorted(peaks, key=lambda i: y[i], reverse=True)
+>         i1=peaks_sorted[0]
+>         i2=None
+>         for i in peaks_sorted[1:]:
+>             if abs(x[i]-x[i1])>400:
+>                 i2=i; break
+>         if i2 is None:
+>             i2=peaks_sorted[1] if len(peaks_sorted)>1 else peaks_sorted[0]
+>     if x[i1] <= x[i2]:
+>         iG=i1; i2D=i2
+>     else:
+>         iG=i2; i2D=i1
+>
+> def estimate_params(i):
+>     x0=x[i]
+>     amp=max(y[i]-offset_est, y[i])
+>     half=offset_est + amp/2.0
+>     n=len(y)
+>     left=i
+>     for j in range(i-1,-1,-1):
+>         if y[j] <= half:
+>             left=j; break
+>     right=i
+>     for j in range(i+1,n):
+>         if y[j] <= half:
+>             right=j; break
+>     def interp_x_at_half(j1,j2):
+>         if j1<0 or j2>=n:
+>             return None
+>         y1=y[j1]; y2=y[j2]
+>         x1=x[j1]; x2=x[j2]
+>         if y2==y1:
+>             return None
+>         t=(half - y1)/(y2 - y1)
+>         return x1 + t*(x2-x1)
+>     xl=None; xr=None
+>     if left<i and left>=0:
+>         xl=interp_x_at_half(left, left+1)
+>     if right>i and right<n:
+>         xr=interp_x_at_half(right-1, right)
+>     if xl is not None and xr is not None and xr>xl:
+>         gamma=(xr - xl)/2.0
+>     else:
+>         gamma=15.0 if x0<2000 else 30.0
+>     span=6*gamma
+>     if span<40:
+>         span=40.0
+>     return x0, gamma, amp, offset_est, span
+>
+> x0G,gG,aG,oG,spanG=estimate_params(iG)
+> x0D,gD,aD,oD,spanD=estimate_params(i2D)
+>
+> def fit_peak(x, y, x0, gamma, amplitude, offset, span):
+>     lo=x0 - span/2.0
+>     hi=x0 + span/2.0
+>     idx=[i for i in range(len(x)) if x[i]>=lo and x[i]<=hi]
+>     if len(idx)<5:
+>         idx=list(range(len(x)))
+>     xv=[x[i] for i in idx]; yv=[y[i] for i in idx]
+>     def sse(p):
+>         x0,g,a,o=p
+>         if g<=0 or a<=0:
+>             return float('inf')
+>         err=0.0
+>         for xi,yi in zip(xv,yv):
+>             fi=o + a / (1.0 + ((xi - x0)/g)**2)
+>             d=yi-fi
+>             err += d*d
+>         return err
+>     params=[x0, gamma, amplitude, offset]
+>     widths=[span*0.25, gamma*0.5, max(amplitude*0.5, 1e-6), max(amplitude*0.3, 1e-6)]
+>     for it in range(5):
+>         for k in range(4):
+>             pbest=list(params); ebest=sse(pbest)
+>             w=widths[k]
+>             if k==1:
+>                 w=max(2.0, w)
+>             grid=15
+>             for t in range(grid):
+>                 val=params[k] + w * (t/(grid-1) - 0.5) * 2.0
+>                 trial=list(params)
+>                 trial[k]=val
+>                 e=sse(trial)
+>                 if e<ebest:
+>                     ebest=e; pbest=trial
+>             params=pbest
+>         widths=[w*0.5 for w in widths]
+>     x0f,gf,af,of=params
+>     return x0f,gf,af,of
+>
+> x0G,gG,aG,oG=fit_peak(x,y,x0G,gG,aG,oG,spanG)
+> x0D,gD,aD,oD=fit_peak(x,y,x0D,gD,aD,oD,spanD)
+>
+> # Try refine with scipy if available
+> try:
+>     import numpy as np
+>     from scipy.optimize import curve_fit
+>     def lorentz_np(xx, x0, gamma, amplitude, offset):
+>         return offset + amplitude / (1.0 + ((xx - x0)/gamma)**2)
+>     def refine_with_scipy(x0,g,a,o, span):
+>         lo=x0 - span/2.0
+>         hi=x0 + span/2.0
+>         idx=[i for i in range(len(x)) if x[i]>=lo and x[i]<=hi]
+>         xv=np.array([x[i] for i in idx], dtype=float)
+>         yv=np.array([y[i] for i in idx], dtype=float)
+>         p0=[x0,g,a,o]
+>         popt,_=curve_fit(lorentz_np, xv, yv, p0=p0, maxfev=5000)
+>         return tuple(map(float, popt))
+>     x0G,gG,aG,oG=refine_with_scipy(x0G,gG,aG,oG,spanG)
+>     x0D,gD,aD,oD=refine_with_scipy(x0D,gD,aD,oD,spanD)
+> except Exception:
+>     pass
+>
+> results={
+>     "G": {
+>         "x0": float(x0G),
+>         "gamma": float(gG),
+>         "amplitude": float(aG),
+>         "offset": float(oG)
+>     },
+>     "2D": {
+>         "x0": float(x0D),
+>         "gamma": float(gD),
+>         "amplitude": float(aD),
+>         "offset": float(oD)
+>     }
+> }
+>
+> with open('results.json','w') as f:
+>     json.dump(results, f, indent=2)
+>
+> print('results.json written from file:', chosen)
+> PY
+results.json written from file: graphene.dat
+root@9ef6547a9f82:/app# cat results.json
+{
+  "G": {
+    "x0": 1807.642857142857,
+    "gamma": 0.2530448492013875,
+    "amplitude": 401757.58928571426,
+    "offset": 504084.17902224
+  },
+  "2D": {
+    "x0": 2990.6785714285716,
+    "gamma": 0.6679260271849736,
+    "amplitude": 815975.7589285715,
+    "offset": 525022.6790222401
+  }
+}root@9ef6547a9f82:/app#

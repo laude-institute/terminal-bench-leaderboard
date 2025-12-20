@@ -1,0 +1,87 @@
+[?2004hroot@3c297238605d:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@3c297238605d:/app# clear
+[?2004l[H[J[3J[?2004hroot@3c297238605d:/app# cat > server.py << 'PY'
+[?2004l[?2004h> from http.server import BaseHTTPRequestHandler, HTTPServer
+[?2004l[?2004h> import json
+[?2004l[?2004h> from urllib.parse import urlparse, parse_qs
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def fib(n: int) -> int:
+[?2004l[?2004h>     a, b = 0, 1
+[?2004l[?2004h>     for _ in range(n):
+[?2004l[?2004h>         a, b = b, a + b
+[?2004l[?2004h>     return a
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> class FibHandler(BaseHTTPRequestHandler):
+[?2004l[?2004h>     def do_GET(self):
+[?2004l[?2004h>         parsed = urlparse(self.path)
+[?2004l[?2004h>         if parsed.path != '/fib':
+[?2004l[?2004h>             self.send_response(404)
+[?2004l[?2004h>             body = json.dumps({'error': 'Not Found'})
+[?2004l[?2004h>             self.send_header('Content-Type', 'application/json')
+[?2004l[?2004h>             self.send_header('Content-Length', str(len(body.encode())))
+[?2004l[?2004h>             self.end_headers()
+[?2004l[?2004h>             self.wfile.write(body.encode())
+[?2004l[?2004h>             return
+[?2004l[?2004h> 
+[?2004l[?2004h>         qs = parse_qs(parsed.query)
+[?2004l[?2004h>         if 'n' not in qs:
+[?2004l[?2004h>             self.send_response(400)
+[?2004l[?2004h>             body = json.dumps({'error': 'Missing query parameter n'})
+[?2004l[?2004h>             self.send_header('Content-Type', 'application/json')
+[?2004l[?2004h>             self.send_header('Content-Length', str(len(body.encode())))
+[?2004l[?2004h>             self.end_headers()
+[?2004l[?2004h>             self.wfile.write(body.encode())
+[?2004l[?2004h>             return
+[?2004l[?2004h> 
+[?2004l[?2004h>         raw_n = qs['n'][0]
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             n = int(raw_n)
+[?2004l[?2004h>             if n < 0:
+[?2004l[?2004h>                 raise ValueError('n must be non-negative')
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             self.send_response(400)
+[?2004l[?2004h>             body = json.dumps({'error': 'Invalid n; must be a non-negative integer'})
+[?2004l[?2004h>             self.send_header('Content-Type', 'application/json')
+[?2004l[?2004h>             self.send_header('Content-Length', str(len(body.encode())))
+[?2004l[?2004h>             self.end_headers()
+[?2004l[?2004h>             self.wfile.write(body.encode())
+[?2004l[?2004h>             return
+[?2004l[?2004h> 
+[?2004l[?2004h>         result = fib(n)
+[?2004l[?2004h>         body = json.dumps({'result': result})
+[?2004l[?2004h>         self.send_response(200)
+[?2004l[?2004h>         self.send_header('Content-Type', 'application/json')
+[?2004l[?2004h>         self.send_header('Content-Length', str(len(body.encode())))
+[?2004l[?2004h>         self.end_headers()
+[?2004l[?2004h>         self.wfile.write(body.encode())
+[?2004l[?2004h> 
+[?2004l[?2004h>     def log_message(self, format, *args):
+[?2004l[?2004h>         # Suppress default logging to stderr
+[?2004l[?2004h>         return
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     server = HTTPServer(('0.0.0.0', 3000), FibHandler)
+[?2004l[?2004h>     server.serve_forever()
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@3c297238605d:/app# chmod +x server.py
+[?2004l[?2004hroot@3c297238605d:/app# python3 server.py > server.log 2>&1 &
+[?2004l[1] 117
+[?2004hroot@3c297238605d:/app# sleep 0.5
+[?2004lcurl -s http://localhost:3000/fib?n=10
+[?2004hroot@3c297238605d:/app# curl -s http://localhost:3000/fib?n=10
+[?2004lbash: curl: command not found
+[?2004hroot@3c297238605d:/app# curl -s -i http://localhost:3000/fib
+[?2004lbash: curl: command not found
+[?2004hroot@3c297238605d:/app# curl -s -i http://localhost:3000/fib?n=abc
+[?2004lbash: curl: command not found
+[?2004hroot@3c297238605d:/app# [?2004l
+exit

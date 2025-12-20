@@ -1,0 +1,51 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'apt-get update\n'
+'apt-get install -y git openssh-server nginx openssl\n'
+'mkdir -p /var/run/sshd\n'
+'useradd -m -s /bin/bash user\n'
+'echo "user:user" | chpasswd\n'
+'mkdir -p /git\n'
+'chown user:user /git\n'
+'su -s /bin/bash -c "git init --bare /git/server" user\n'
+'mkdir -p /var/www/webserver\n'
+'chown -R user:user /var/www/webserver\n'
+'printf \'#!/bin/bash\\nset -e\\nwhile read oldrev newrev refname; do\\n  branch=${refname#refs/heads/}\\n  if [ "$branch" = "webserver" ]; then\\n    GIT_WORK_TREE=/var/www/webserver git checkout -f "$branch"\\n  fi\\ndone\\n\' > /git/server/hooks/post-receive\n'
+'chmod +x /git/server/hooks/post-receive\n'
+'openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/webserver.key -out /etc/ssl/certs/webserver.crt -subj "/CN=server"\n'
+"printf 'server {\\n    listen 8080 ssl;\\n    ssl_certificate /etc/ssl/certs/webserver.crt;\\n    ssl_certificate_key /etc/ssl/private/webserver.key;\\n    server_name server;\\n    root /var/www/webserver;\\n    index index.html;\\n}\\n' > /etc/nginx/sites-available/webserver.conf\n"
+'ln -s /etc/nginx/sites-available/webserver.conf /etc/nginx/sites-enabled/webserver.conf\n'
+'nginx -t\n'
+'service nginx restart\n'
+'service ssh start\n'
+'echo "127.0.0.1 server" >> /etc/hosts\n'
+'hostname server\n'
+'mkdir -p /root/.ssh\n'
+'ssh-keygen -t rsa -b 2048 -N "" -f /root/.ssh/id_rsa\n'
+'mkdir -p /home/user/.ssh\n'
+'cat /root/.ssh/id_rsa.pub > /home/user/.ssh/authorized_keys\n'
+'chown -R user:user /home/user/.ssh\n'
+'chmod 700 /home/user/.ssh\n'
+'chmod 600 /home/user/.ssh/authorized_keys\n'
+'ssh-keyscan -H server >> /root/.ssh/known_hosts\n'
+'git config --global user.name "Test User"\n'
+'git config --global user.email "test@example.com"\n'
+'mkdir -p /tmp/client\n'
+'cd /tmp/client\n'
+'git clone user@server:/git/server\n'
+'cd server\n'
+"printf 'hello world\\n' > hello.html\n"
+'git add hello.html\n'
+'git commit -m "add hello"\n'
+'git push origin webserver\n'
+'curl -k https://server:8080/hello.html\n'
+'apt-get install -y curl\n'
+'cd /tmp/client/server\n'
+'git checkout -b webserver\n'
+'git push -u origin webserver\n'
+'curl -k https://server:8080/hello.html\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

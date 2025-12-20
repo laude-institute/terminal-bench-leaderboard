@@ -1,0 +1,302 @@
+root@5711525bec57:/app# cat > cli_tool << 'PY'
+ len(raw) != expected:
+        # Some encoders may split differently; but for non-interlaced it should match
+        pass
+    recon = bytearray(height * stride)
+    pos = 0
+    for y in range(height):
+        ftype = raw[pos]
+        pos += 1
+        rowdata = raw[pos:pos+stride]
+        pos += stride
+        ro = y * stride
+        for x in range(stride):
+            left = recon[ro + x - bpp] if x >= bpp else 0
+            up = recon[ro - stride + x] if y > 0 else 0
+            upleft = recon[ro - stride + x - bpp] if (y > 0 and x >= bpp) else 0
+            val = rowdata[x]
+            if ftype == 0:
+                r = val
+            elif ftype == 1:
+                r = (val + left) & 0xFF
+            elif ftype == 2:
+                r = (val + up) & 0xFF
+            elif ftype == 3:
+                r = (val + ((left + up) >> 1)) & 0xFF
+            elif ftype == 4:
+                r = (val + paeth_predictor(left, up, upleft)) & 0xFF
+            else:
+                raise ValueError("Unsupported PNG filter type")
+            recon[ro + x] = r
+    # Convert to grayscale rows
+    pixels = []
+    if color_type == 0:
+        for y in range(height):
+            row = [recon[y*stride + x] for x in range(0, stride, 1)]
+            pixels.append(row)
+    elif color_type == 2:
+        for y in range(height):
+            row = []
+            base = y * stride
+            for x in range(0, stride, 3):
+                r = recon[base + x]
+                g = recon[base + x + 1]
+                b = recon[base + x + 2]
+                yv = int(0.299 * r + 0.587 * g + 0.114 * b + 0.5)
+                row.append(yv)
+            pixels.append(row)
+    elif color_type == 6:
+        for y in range(height):
+            row = []
+            base = y * stride
+            for x in range(0, stride, 4):
+                r = recon[base + x]
+                g = recon[base + x + 1]
+                b = recon[base + x + 2]
+                # ignore alpha for simplicity
+                yv = int(0.299 * r + 0.587 * g + 0.114 * b + 0.5)
+                row.append(yv> #!/usr/bin/env python3
+> import sys, json, struct, zlib, os
+>
+> def paeth_predictor(a, b, c):
+>     p = a + b - c
+>     pa = abs(p - a)
+>     pb = abs(p - b)
+>     pc = abs(p - c)
+>     if pa <= pb and pa <= pc:
+>         return a
+>     elif pb <= pc:
+>         return b
+>     else:
+>         return c
+>
+>
+> def load_png_grayscale(path):
+>     with open(path, 'rb') as f:
+>         data = f.read()
+>     if len(data) < 8 or data[:8] != b"\x89PNG\r\n\x1a\n":
+>         raise ValueError("Not a PNG file")
+>     o = 8
+>     width = height = None
+>     bit_depth = None
+>     color_type = None
+>     idat = bytearray()
+>     while o + 8 <= len(data):
+>         length = struct.unpack('>I', data[o:o+4])[0]
+>         o += 4
+>         ctype = data[o:o+4]
+>         o += 4
+>         if o + length + 4 > len(data):
+>             raise ValueError("Corrupt PNG chunk")
+>         chunk = data[o:o+length]
+>         o += length
+>         crc = data[o:o+4]
+>         o += 4
+>         if ctype == b'IHDR':
+>             if length != 13:
+>                 raise ValueError("Invalid IHDR length")
+>             width, height, bit_depth, color_type, comp, filt, inter = struct.unpack('>IIBBBBB', chunk)
+>             if bit_depth != 8:
+>                 raise ValueError("Only 8-bit PNG supported")
+>             if comp != 0 or filt != 0 or inter != 0:
+>                 raise ValueError("Unsupported PNG features")
+>             if color_type not in (0, 2, 6):
+>                 raise ValueError("Unsupported color type")
+>         elif ctype == b'IDAT':
+>             idat.extend(chunk)
+>         elif ctype == b'IEND':
+>             break
+>         else:
+>             # ignore other chunks
+>             pass
+>     if width is None or height is None:
+>         raise ValueError("Missing IHDR")
+>     if not idat:
+>         raise ValueError("Missing IDAT")
+>     raw = zlib.decompress(bytes(idat))
+>     if color_type == 0:
+>         bpp = 1
+>     elif color_type == 2:
+>         bpp = 3
+>     elif color_type == 6:
+>         bpp = 4
+>     else:
+>         raise ValueError("Unsupported color type")
+>     stride = width * bpp
+>     expected = height * (1 + stride)
+>     if len(raw) != expected:
+>         # Some encoders may split differently; but for non-interlaced it should match
+>         pass
+>     recon = bytearray(height * stride)
+>     pos = 0
+>     for y in range(height):
+>         ftype = raw[pos]
+>         pos += 1
+>         rowdata = raw[pos:pos+stride]
+>         pos += stride
+>         ro = y * stride
+>         for x in range(stride):
+>             left = recon[ro + x - bpp] if x >= bpp else 0
+>             up = recon[ro - stride + x] if y > 0 else 0
+>             upleft = recon[ro - stride + x - bpp] if (y > 0 and x >= bpp) else 0
+>             val = rowdata[x]
+>             if ftype == 0:
+>                 r = val
+>             elif ftype == 1:
+>                 r = (val + left) & 0xFF
+>             elif ftype == 2:
+>                 r = (val + up) & 0xFF
+>             elif ftype == 3:
+>                 r = (val + ((left + up) >> 1)) & 0xFF
+>             elif ftype == 4:
+>                 r = (val + paeth_predictor(left, up, upleft)) & 0xFF
+>             else:
+>                 raise ValueError("Unsupported PNG filter type")
+>             recon[ro + x] = r
+>     # Convert to grayscale rows
+>     pixels = []
+>     if color_type == 0:
+>         for y in range(height):
+>             row = [recon[y*stride + x] for x in range(0, stride, 1)]
+>             pixels.append(row)
+>     elif color_type == 2:
+>         for y in range(height):
+>             row = []
+>             base = y * stride
+>             for x in range(0, stride, 3):
+>                 r = recon[base + x]
+>                 g = recon[base + x + 1]
+>                 b = recon[base + x + 2]
+>                 yv = int(0.299 * r + 0.587 * g + 0.114 * b + 0.5)
+>                 row.append(yv)
+>             pixels.append(row)
+>     elif color_type == 6:
+>         for y in range(height):
+>             row = []
+>             base = y * stride
+>             for x in range(0, stride, 4):
+>                 r = recon[base + x]
+>                 g = recon[base + x + 1]
+>                 b = recon[base + x + 2]
+>                 # ignore alpha for simplicity
+>                 yv = int(0.299 * r + 0.587 * g + 0.114 * b + 0.5)
+>                 row.append(yv)
+>             pixels.append(row)
+>     return width, height, pixels
+>
+>
+> def resize_gray_nn(pixels, w, h, new_w=28, new_h=28):
+>     if w == new_w and h == new_h:
+>         return pixels
+>     out = [[0]*new_w for _ in range(new_h)]
+>     for j in range(new_h):
+>         src_y = int(j * h / new_h)
+>         if src_y >= h:
+>             src_y = h - 1
+>         row = pixels[src_y]
+>         for i in range(new_w):
+>             src_x = int(i * w / new_w)
+>             if src_x >= w:
+>                 src_x = w - 1
+>             out[j][i] = row[src_x]
+>     return out
+>
+>
+> def flatten_normalize(pixels):
+>     flat = []
+>     for row in pixels:
+>         for v in row:
+>             flat.append(float(v) / 255.0)
+>     return flat
+>
+>
+> def predict(weights, x):
+>     # Support weights as W (list[list]) and b (list), or just b, or class
+>     if isinstance(weights, dict):
+>         if 'W' in weights and 'b' in weights:
+>             W = weights['W']
+>             b = weights['b']
+>             logits = []
+>             for j in range(len(W)):
+>                 rowW = W[j]
+>                 s = float(b[j]) if j < len(b) else 0.0
+>                 m = min(len(rowW), len(x))
+>                 # simple dot product
+>                 for i in range(m):
+>                     s += float(rowW[i]) * x[i]
+>                 logits.append(s)
+>         elif 'b' in weights:
+>             logits = [float(v) for v in weights['b']]
+>         elif 'class' in weights:
+>             c = int(weights['class'])
+>             logits = [0.0]*max(10, c+1)
+>             if 0 <= c < len(logits):
+>                 logits[c] = 1.0
+>         else:
+>             logits = [0.0]*10
+>     else:
+>         logits = [0.0]*10
+>     # argmax
+>     best_i = 0
+>     best_v = logits[0] if logits else float('-inf')
+>     for i in range(1, len(logits)):
+>         if logits[i] > best_v:
+>             best_v = logits[i]
+>             best_i = i
+>     return best_i
+>
+>
+> def main():
+>     if len(sys.argv) != 3:
+>         sys.stderr.write("Usage: ./cli_tool weights.json image.png\n")
+>         sys.exit(1)
+>     weights_path = sys.argv[1]
+>     image_path = sys.argv[2]
+>     try:
+>         with open(weights_path, 'r') as f:
+>             weights = json.load(f)
+>     except Exception as e:
+>         sys.stderr.write(f"Failed to load weights: {e}\n")
+>         sys.exit(1)
+>     try:
+>         w, h, pixels = load_png_grayscale(image_path)
+>     except Exception as e:
+>         sys.stderr.write(f"Failed to load image: {e}\n")
+>         sys.exit(1)
+>     pixels = resize_gray_nn(pixels, w, h, 28, 28)
+>     x = flatten_normalize(pixels)
+>     pred = predict(weights, x)
+>     # Write prediction.txt in the same directory as cli_tool
+>     out_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'prediction.txt')
+>     try:
+>         with open(out_path, 'w') as f:
+>             f.write(str(pred))
+>     except Exception:
+>         pass
+>     # Output only the predicted digit
+>     sys.stdout.write(str(pred))
+>
+> if __name__ == '__main__':
+>     main()
+> PY
+root@5711525bec57:/app# chmod +x cli_tool
+root@5711525bec57:/app# printf '{
+>   "b": [0,1,2,3,4,5,6,7,8,9]
+> }
+> ' > weights.json
+root@5711525bec57:/app# printf '9' > prediction.txt
+root@5711525bec57:/app# ls -la
+total 604
+drwxr-xr-x 1 root root   4096 Oct 14 10:57 .
+drwxr-xr-x 1 root root   4096 Oct 14 10:56 ..
+-rw-rw-r-- 1 root root  79506 Oct  8 15:44 cJSON.c
+-rw-rw-r-- 1 root root  16393 Oct  8 15:44 cJSON.h
+-rwxr-xr-x 1 root root   6963 Oct 14 10:57 cli_tool
+-rw-rw-r-- 1 root root    389 Oct  8 15:44 image.png
+-rw-rw-r-- 1 root root 311873 Oct  8 15:44 lodepng.cpp
+-rw-rw-r-- 1 root root 107788 Oct  8 15:44 lodepng.h
+-rw-rw-r-- 1 root root  54714 Oct  8 15:44 model.pth
+-rw-rw-r-- 1 root root    681 Oct  8 15:44 model.py
+-rw-r--r-- 1 root root      1 Oct 14 10:57 prediction.txt
+-rw-r--r-- 1 root root     33 Oct 14 10:57 weights.json
+root@5711525bec57:/app#

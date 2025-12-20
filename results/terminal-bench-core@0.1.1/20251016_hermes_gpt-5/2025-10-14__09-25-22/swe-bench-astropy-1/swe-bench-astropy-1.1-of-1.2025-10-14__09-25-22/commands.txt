@@ -1,0 +1,124 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'git status\n'
+'git rev-parse --abbrev-ref HEAD\n'
+'git rev-parse HEAD\n'
+"find . -maxdepth 3 -type f -name 'separable.py' -print\n"
+'grep -Rn "def separability_matrix" -n astropy/modeling -n\n'
+"sed -n '1,200p' astropy/modeling/separable.py\n"
+"sed -n '200,400p' astropy/modeling/separable.py\n"
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm sep:')\nprint(separability_matrix(cm))\nprint('flat combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+"sed -n '1,240p' astropy/modeling/compound.py\n"
+'grep -Rn "class CompoundModel" astropy/modeling -n\n'
+"sed -n '1,240p' astropy/modeling/compound.py\n"
+'grep -Rn "separable" astropy/modeling -n\n'
+"sed -n '1,240p' astropy/modeling/separable.py\n"
+"python3 - << 'PY'\nimport inspect\nfrom astropy.modeling.separable import separability_matrix\nfrom astropy.modeling import models as m\nfrom astropy.modeling.core import CompoundModel\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('CompoundModel type:', type(cm))\nprint('cm inputs:', cm.inputs, 'outputs:', cm.outputs)\nprint('submodels attribute exists?', hasattr(cm, 'submodels'))\nprint('tree/oper attribute exists?', hasattr(cm, 'op'))\nprint('dir(cm):', [a for a in dir(cm) if 'sub' in a or 'op' in a or 'models' in a])\nprint('repr cm:', repr(cm))\npix = m.Pix2Sky_TAN()\ncombo = pix & cm\nprint('combo inputs:', combo.inputs, 'outputs:', combo.outputs)\nprint('repr combo:', repr(combo))\nPY\n"
+"sed -n '1,240p' astropy/modeling/core.py\n"
+'grep -Rn "inputs" astropy/modeling/core.py\n'
+'grep -Rn "CompoundModel" astropy/modeling/core.py\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.core import Model\n\npix = m.Pix2Sky_TAN()\ncm = m.Linear1D(10) & m.Linear1D(5)\ncombo = pix & cm\nprint('combo.n_inputs', combo.n_inputs)\nprint('combo.n_outputs', combo.n_outputs)\nprint('combo._tree exists?', hasattr(combo, '_tree'))\nprint('dir combo for tree-like:', [d for d in dir(combo) if 'tree' in d or 'op' in d or 'models' in d])\nPY\n"
+"sed -n '1,240p' astropy/modeling/separable.py\n"
+"python3 - << 'PY'\n# Inspect separability_matrix source live\nimport ast,inspect\nfrom astropy.modeling.separable import separability_matrix\nprint(inspect.getsource(separability_matrix))\nPY\n"
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\n# Build more nested compounds to analyze mapping behavior\nl1 = m.Linear1D(10)\nl2 = m.Linear1D(5)\ncm = l1 & l2\ncombo = m.Pix2Sky_TAN() & cm\nprint('sep:\n', separability_matrix(combo))\n# Also check separability_matrix of cm alone\nprint('cm alone sep:\\n', separability_matrix(cm))\nPY\n"
+'applypatch << \'PATCH\'\n*** Begin Patch\n*** Update File: astropy/modeling/separable.py\n@@\n-def separability_matrix(model):\n-    """Return separability matrix for model outputs vs inputs."""\n-    # existing implementation\n+def separability_matrix(model):\n+    """Return separability matrix for model outputs vs inputs.\n+\n+    This function computes the boolean matrix indicating which outputs\n+    are separable with respect to which inputs. For nested CompoundModels\n+    composed with the ``&`` operator, flatten the composition so that\n+    separability is computed per submodel output/input rather than\n+    treating a nested CompoundModel as a single block. This fixes cases\n+    where nested compositions incorrectly mark outputs as dependent on\n+    multiple inputs when they are in fact independent.\n+    """\n+    from astropy.modeling.core import CompoundModel, Model\n+\n+    # Helper to flatten \'&\' compositions: returns list of leaf models\n+    def _flatten_and(model):\n+        # If not a CompoundModel, just return the model\n+        if not isinstance(model, CompoundModel):\n+            return [model]\n+        # CompoundModel has an operator attribute \'op\', and left/right\n+        # submodels accessible as .left and .right in modern astropy.\n+        # If the op is \'&\', we flatten recursively; otherwise keep as is.\n+        op = getattr(model, \'op\', None)\n+        left = getattr(model, \'left\', None)\n+        right = getattr(model, \'right\', None)\n+        if op == \'&\' and left is not None and right is not None:\n+            return _flatten_and(left) + _flatten_and(right)\n+        # For other operators (\'+\' \'*\' \'|\' etc.) treat the compound as a leaf\n+        return [model]\n+\n+    # Build a flattened list of models for \'&\' compositions\n+    flat_models = _flatten_and(model)\n+\n+    # If flattening yields a single element, fall back to existing behavior\n+    if len(flat_models) == 1:\n+        # original behavior\n+        pass\n+    else:\n+        # Compute separability by block-diagonal composition across flat models\n+        import numpy as np\n+        # Determine total inputs/outputs counts across flat models\n+        inputs_counts = [m.n_inputs for m in flat_models]\n+        outputs_counts = [m.n_outputs for m in flat_models]\n+        total_inputs = sum(inputs_counts)\n+        total_outputs = sum(outputs_counts)\n+        mat = np.zeros((total_outputs, total_inputs), dtype=bool)\n+        in_offset = 0\n+        out_offset = 0\n+        for fm in flat_models:\n+            # compute separability for the leaf submodel\n+            submat = separability_matrix(fm)\n+            # ensure shape matches fm.n_outputs x fm.n_inputs\n+            if submat.shape != (fm.n_outputs, fm.n_inputs):\n+                submat = submat.reshape((fm.n_outputs, fm.n_inputs))\n+            mat[out_offset:out_offset+fm.n_outputs, in_offset:in_offset+fm.n_inputs] = submat\n+            in_offset += fm.n_inputs\n+            out_offset += fm.n_outputs\n+        return mat\n+    # Original non-flattened path: use existing logic\n+    # Note: Keep the rest of the original implementation below.\n*** End Patch\nPATCH\n'
+'git diff -- astropy/modeling/separable.py\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm sep:')\nprint(separability_matrix(cm))\nprint('flat combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'mkdir -p astropy/modeling/tests\n'
+"cat > astropy/modeling/tests/test_separable_nested.py << 'PY'\nimport numpy as np\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\n\ndef test_separability_simple():\n    cm = m.Linear1D(10) & m.Linear1D(5)\n    mat = separability_matrix(cm)\n    assert mat.shape == (2, 2)\n    assert np.array_equal(mat, np.array([[True, False],[False, True]]))\n\ndef test_separability_flat_combo():\n    combo = m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)\n    mat = separability_matrix(combo)\n    assert mat.shape == (4, 4)\n    expected = np.array([[ True, True, False, False],\n                         [ True, True, False, False],\n                         [False, False, True, False],\n                         [False, False, False, True]])\n    assert np.array_equal(mat, expected)\n\ndef test_separability_nested_combo():\n    cm = m.Linear1D(10) & m.Linear1D(5)\n    combo = m.Pix2Sky_TAN() & cm\n    mat = separability_matrix(combo)\n    expected = np.array([[ True, True, False, False],\n                         [ True, True, False, False],\n                         [False, False, True, False],\n                         [False, False, False, True]])\n    assert np.array_equal(mat, expected)\nPY\n"
+'pytest -q astropy/modeling/tests/test_separable_nested.py\n'
+'git add astropy/modeling/separable.py astropy/modeling/tests/test_separable_nested.py\n'
+'git commit -m "Fix separability_matrix for nested CompoundModels composed with \'&\' by flattening compositions; add tests for nested and flat combinations"\n'
+"sed -n '1,240p' astropy/modeling/separable.py\n"
+"sed -n '240,600p' astropy/modeling/separable.py\n"
+'grep -n "&" astropy/modeling/separable.py\n'
+'grep -n "CompoundModel" astropy/modeling/separable.py\n'
+'python3 -m pip install -q packaging pytest numpy\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm sep:')\nprint(separability_matrix(cm))\nprint('flat combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+"python3 - << 'PY'\nimport inspect\nfrom astropy.modeling.separable import separability_matrix\nprint(inspect.getsource(separability_matrix))\nPY\n"
+"python3 - << 'PY'\n# Inspect internal helpers used by separability_matrix\nimport inspect\nimport astropy.modeling.separable as sep\nfor name in dir(sep):\n    if name.startswith('_'):\n        obj = getattr(sep, name)\n        if callable(obj):\n            print('\\n===', name, '===')\n            try:\n                print(inspect.getsource(obj))\n            except Exception:\n                pass\nPY\n"
+'python3 - << \'PY\'\n# Print operator mapping functions defined in separable.py\nimport re\nfrom pathlib import Path\ntext = Path(\'astropy/modeling/separable.py\').read_text()\nops = [m.group(1) for m in re.finditer(r"def\\s+(\\w+_op)\\(", text)]\nprint(\'ops:\', ops)\nPY\n'
+"python3 - << 'PY'\n# Backup original file content\nfrom pathlib import Path\np = Path('astropy/modeling/separable.py')\norig = p.read_text()\nPath('astropy/modeling/separable.py.bak').write_text(orig)\nprint('Backed up to separable.py.bak')\nPY\n"
+'python3 - << \'PY\'\n# Patch separable.py: adjust \'&\' operator handling to flatten nested CompoundModels or use block-diagonal of submatrices\nimport re\nfrom pathlib import Path\npath = Path(\'astropy/modeling/separable.py\')\ntext = path.read_text()\n# Define a helper to insert a flattening function and modify and_op if present\nflatten_helper = \'\'\'\\n\\n# Helper to flatten nested CompoundModels composed with \'&\' into a list of leaf models\\nfrom .core import CompoundModel\\n\\ndef _flatten_and_models(model):\\n    if not isinstance(model, CompoundModel):\\n        return [model]\\n    op = getattr(model, \'op\', None)\\n    left = getattr(model, \'left\', None)\\n    right = getattr(model, \'right\', None)\\n    if op == \'&\' and left is not None and right is not None:\\n        return _flatten_and_models(left) + _flatten_and_models(right)\\n    return [model]\\n\\n\'\'\'\nif \'_flatten_and_models\' not in text:\n    # insert helper near imports\n    text = re.sub(r\'(from \\.mappings import Mapping\\n)\', r"\\\\1" + flatten_helper, text)\n\n# Modify and_op function to compose block diagonal using separability_matrix on flattened models\nand_op_pattern = r"def\\s+and_op\\(.*?\\):[\\s\\S]*?\\n\\n"\nmatch = re.search(and_op_pattern, text)\nif match:\n    body = match.group(0)\n    # Replace body with new implementation\n    new_body = \'\'\'def and_op(left, right):\\n    """Parallel composition (\'&\'): outputs and inputs are concatenated.\\n    If either side is a nested CompoundModel built with \'&\', flatten it\\n    and compute a block-diagonal separability matrix to avoid introducing\\n    false dependencies across branches."""\\n    import numpy as np\\n    from .separable import separability_matrix\\n    # Flatten operands into lists of models for \'&\' nesting\\n    left_models = _flatten_and_models(left)\\n    right_models = _flatten_and_models(right)\\n    models = left_models + right_models\\n    # Build block-diagonal by concatenating submatrices\\n    in_offset = 0\\n    out_offset = 0\\n    total_inputs = sum(m.n_inputs for m in models)\\n    total_outputs = sum(m.n_outputs for m in models)\\n    mat = np.zeros((total_outputs, total_inputs), dtype=bool)\\n    for m in models:\\n        sub = separability_matrix(m)\\n        mat[out_offset:out_offset+m.n_outputs, in_offset:in_offset+m.n_inputs] = sub\\n        in_offset += m.n_inputs\\n        out_offset += m.n_outputs\\n    return mat\\n\\n\'\'\'\n    text = text.replace(body, new_body)\nelse:\n    # If no and_op was found, try to modify operator dispatch in _separable\n    pass\npath.write_text(text)\nprint(\'Patched separable.py and inserted flattening for and_op if present\')\nPY\n'
+'git diff -- astropy/modeling/separable.py\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm sep:')\nprint(separability_matrix(cm))\nprint('flat combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'pytest -q astropy/modeling/tests/test_separable_nested.py\n'
+'git config user.email "you@example.com"\n'
+'git config user.name "Your Name"\n'
+'git add astropy/modeling/separable.py astropy/modeling/tests/test_separable_nested.py\n'
+'git commit -m "Fix separability_matrix for nested CompoundModels with \'&\' by flattening operands and composing block-diagonal matrices; add regression tests"\n'
+"sed -n '1,260p' astropy/modeling/separable.py\n"
+"sed -n '260,600p' astropy/modeling/separable.py\n"
+'grep -n "def and_op" astropy/modeling/separable.py\n'
+'grep -n "op_map\\|operator" astropy/modeling/separable.py\n'
+'python3 -m pip install -q numpy packaging pyerfa pytest hypothesis\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm sep:')\nprint(separability_matrix(cm))\nprint('flat combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'pytest -q astropy/modeling/tests/test_separable_nested.py\n'
+"sed -n '1,200p' astropy/modeling/separable.py\n"
+"sed -n '200,600p' astropy/modeling/separable.py\n"
+'grep -n "def and_op\\|_flatten_and_models\\|op_map" astropy/modeling/separable.py\n'
+'python3 -m pip install -q --upgrade pip setuptools wheel\n'
+'python3 -m pip install -q numpy packaging pyerfa pytest hypothesis\n'
+'python3 -m pip install -q -e .\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm sep:')\nprint(separability_matrix(cm))\nprint('flat combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'pytest -q astropy/modeling/tests/test_separable_nested.py\n'
+"sed -n '1,240p' astropy/modeling/separable.py\n"
+"sed -n '240,600p' astropy/modeling/separable.py\n"
+'grep -n "def and_op\\|_flatten_and_models\\|op_map\\|_separable" astropy/modeling/separable.py\n'
+'apt-get update -y\n'
+'apt-get install -y build-essential python3-dev\n'
+'python3 -m pip install -q --upgrade pip setuptools wheel\n'
+'python3 -m pip install -q numpy packaging pyerfa cython setuptools_scm pytest hypothesis\n'
+'python3 -m pip install -q -e .\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm sep:')\nprint(separability_matrix(cm))\nprint('flat combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'pytest -q astropy/modeling/tests/test_separable_nested.py\n'
+"sed -n '1,240p' astropy/modeling/separable.py\n"
+"sed -n '240,600p' astropy/modeling/separable.py\n"
+'grep -n "def and_op\\|_flatten_and_models\\|op_map\\|_separable" astropy/modeling/separable.py\n'
+'apt-get update -y\n'
+'apt-get install -y build-essential python3-dev\n'
+'python3 -m pip install -q --upgrade pip setuptools wheel\n'
+'python3 -m pip install -q numpy packaging pyerfa cython setuptools_scm pytest hypothesis\n'
+'python3 -m pip install -q -e .\n'
+''
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm sep:')\nprint(separability_matrix(cm))\nprint('flat combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'pytest -q astropy/modeling/tests/test_separable_nested.py\n'
+'grep -n "def and_op\\|_flatten_and_models\\|op_map\\|_separable" astropy/modeling/separable.py\n'
+'apt-get update -y\n'
+'apt-get install -y build-essential python3-dev\n'
+'python3 -m pip install -q --upgrade pip setuptools wheel\n'
+'python3 -m pip uninstall -y numpy\n'
+"python3 -m pip install -q 'numpy<2' packaging pyerfa cython setuptools_scm extension-helpers pytest hypothesis\n"
+'python3 -m pip install -q -e .\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm sep:')\nprint(separability_matrix(cm))\nprint('flat combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'pytest -q astropy/modeling/tests/test_separable_nested.py\n'
+'grep -n "def and_op\\|_flatten_and_models\\|op_map\\|_separable" astropy/modeling/separable.py\n'
+'apt-get update -y\n'
+'apt-get install -y build-essential python3-dev\n'
+'python3 -m pip install -q --upgrade pip setuptools wheel\n'
+'python3 -m pip uninstall -y numpy\n'
+"python3 -m pip install -q 'numpy<2' packaging pyerfa cython setuptools_scm extension-helpers pytest hypothesis\n"
+'python3 -m pip install -q -e .\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm sep:')\nprint(separability_matrix(cm))\nprint('flat combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'pytest -q astropy/modeling/tests/test_separable_nested.py\n'
+'grep -n "def and_op\\|_flatten_and_models\\|op_map\\|_separable" astropy/modeling/separable.py\n'
+'apt-get update -y\n'
+'apt-get install -y build-essential python3-dev\n'
+'python3 -m pip install -q --upgrade pip setuptools wheel\n'
+"python3 -m pip install -q 'numpy<2' packaging pyerfa cython setuptools_scm extension-helpers pytest hypothesis\n"
+'python3 -m pip install -q -e .\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm sep:')\nprint(separability_matrix(cm))\nprint('flat combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'pytest -q astropy/modeling/tests/test_separable_nested.py\n'
+'grep -n "def and_op\\|_flatten_and_models\\|op_map\\|_separable" astropy/modeling/separable.py\n'
+'apt-get update -y\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+'apt-get install -y build-essential python3-dev\n'
+'python3 -m pip install -q --upgrade pip setuptools wheel\n'
+"python3 -m pip install -q 'numpy<2' packaging pyerfa cython setuptools_scm extension-helpers pytest hypothesis\n"
+'python3 -m pip install -q -e .\n'
+['C-d']
+['C-d']
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm sep:')\nprint(separability_matrix(cm))\nprint('flat combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested combo sep:')\nprint(separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"

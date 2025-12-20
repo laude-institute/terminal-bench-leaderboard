@@ -1,0 +1,264 @@
+root@37ade8fad1f7:/app# ls -la
+total 96
+drwxr-xr-x 1 root root  4096 Nov  9 09:38 .
+drwxr-xr-x 1 root root  4096 Dec 10 04:23 ..
+-rw-rw-r-- 1 root root 88805 Nov  9 09:38 graphene.dat
+root@37ade8fad1f7:/app# head -n 30 graphene.dat
+47183,554644    19261,547207
+46588,360019    19266,089699
+46008,191298    19077,996963
+45442,488736    19173,287322
+44890,718036    19501,518253
+44352,368927    19506,586203
+43826,959593    19752,431144
+43314,029137    19812,863021
+42813,138290    19678,348151
+42323,866373    19764,871128
+41845,813826    19360,099292
+41378,600916    19413,554878
+40921,863181    19626,191780
+40475,250679    19704,066336
+40038,430487    19495,727898
+39611,084116    19672,573559
+39192,908278    19538,763458
+38783,609488    19344,943112
+38382,908122    19510,307527
+37990,536178    19552,152695
+37606,236678    19568,884582
+37229,764497    19605,714542
+36860,880256    19652,302102
+36499,358232    19518,303269
+36144,980263    19684,212843
+35797,536721    19599,237174
+35456,826102    19666,264313
+35122,653398    19895,771042
+34794,833482    19781,231391
+34473,186962    19931,483503
+root@37ade8fad1f7:/app# python3 -m pip install --no-cache-dir numpy scipy
+Collecting numpy
+  Downloading numpy-2.3.5-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
+Collecting scipy
+  Downloading scipy-1.16.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (62 kB)
+Downloading numpy-2.3.5-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.6/16.6 MB 11.7 MB/s eta 0:00:00
+Downloading scipy-1.16.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (35.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.7/35.7 MB 11.7 MB/s eta 0:00:00
+Installing collected packages: numpy, scipy
+Successfully installed numpy-2.3.5 scipy-1.16.3
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your syst
+em unusable.It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you ar
+e doing and want to suppress this warning.
+
+[notice] A new release of pip is available: 24.3.1 -> 25.3
+[notice] To update, run: pip install --upgrade pip
+root@37ade8fad1f7:/app# cat > fit_raman.py << 'PY'
+> import re
+> import json
+> import numpy as np
+> from scipy.optimize import curve_fit
+>
+> def preprocess(infile, outfile):
+>     data = []
+>     with open(infile, 'r', errors='ignore') as f:
+>         for line in f:
+>             # Replace comma decimal with dot, extract numbers
+>             nums = re.findall(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", line.replace(',', '.'))
+>             if len(nums) >= 2:
+>                 try:
+>                     x = float(nums[0]); y = float(nums[1])
+>                     data.append((x, y))
+>                 except Exception:
+>                     continue
+>     if not data:
+>         raise ValueError("No numeric data found in input file")
+>     data.sort(key=lambda t: t[0])
+>     with open(outfile, 'w') as out:
+>         for x, y in data:
+>             out.write(f"{x} {y}\n")
+>
+> def lorentz(x, x0, gamma, amplitude, offset):
+>     return offset + amplitude * (0.5*gamma)**2 / (((x - x0)**2) + (0.5*gamma)**2)
+>
+> def fit_peak(x, y, x0_guess, window, name):
+>     mask = (x > x0_guess - window) & (x < x0_guess + window)
+>     xw = x[mask]
+>     yw = y[mask]
+>     if xw.size < 5:
+>         raise ValueError(f"Not enough data points within window for {name} peak")
+>     offset_guess = float(np.median(yw))
+>     amplitude_guess = float(max(yw.max() - offset_guess, 1e-6))
+>     gamma_guess = 30.0
+>     p0 = [x0_guess, gamma_guess, amplitude_guess, offset_guess]
+>     lower = [x0_guess - window, 1e-6, 0.0, -np.inf]
+>     upper = [x0_guess + window, 1000.0, np.inf, np.inf]
+>     try:
+>         popt, _ = curve_fit(lorentz, xw, yw, p0=p0, bounds=(lower, upper), maxfev=10000)
+>     except Exception:
+>         popt, _ = curve_fit(lorentz, xw, yw, p0=p0, maxfev=10000)
+>     return {
+>         "x0": float(popt[0]),
+>         "gamma": float(popt[1]),
+>         "amplitude": float(popt[2]),
+>         "offset": float(popt[3])
+>     }
+>
+> def main():
+>     infile = "graphene.dat"
+>     outfile = "graphene_clean.dat"
+>     preprocess(infile, outfile)
+>     x, y = np.loadtxt(outfile, unpack=True)
+>     results = {}
+>     results["G"] = fit_peak(x, y, 1580.0, 80.0, "G")
+>     results["2D"] = fit_peak(x, y, 2700.0, 150.0, "2D")
+>     with open("results.json", "w") as f:
+>         json.dump(results, f, indent=2)
+>     print(json.dumps(results, indent=2))
+>
+> if __name__ == "__main__":
+>     main()
+> PY
+root@37ade8fad1f7:/app# python3 fit_raman.py
+{
+  "G": {
+    "x0": 1500.0000979028164,
+    "gamma": 0.00012424404006261547,
+    "amplitude": 0.00018529456250604426,
+    "offset": 6105.329280746307
+  },
+  "2D": {
+    "x0": 2687.6766481683035,
+    "gamma": 3.576232747614528,
+    "amplitude": 142.12514874715652,
+    "offset": 379.6126916147306
+  }
+}
+root@37ade8fad1f7:/app# ls -la results.json
+-rw-r--r-- 1 root root 302 Dec 10 04:24 results.json
+root@37ade8fad1f7:/app# cat results.json
+{
+  "G": {
+    "x0": 1500.0000979028164,
+    "gamma": 0.00012424404006261547,
+    "amplitude": 0.00018529456250604426,
+    "offset": 6105.329280746307
+  },
+  "2D": {
+    "x0": 2687.6766481683035,
+    "gamma": 3.576232747614528,
+    "amplitude": 142.12514874715652,
+    "offset": 379.6126916147306
+  }
+}root@37ade8fad1f7:/app# cat > fit_raman.py << 'PY'
+> import re
+> import json
+> import numpy as np
+> from scipy.optimize import curve_fit
+>
+> def preprocess(infile, outfile):
+>     data = []
+>     with open(infile, 'r', errors='ignore') as f:
+>         for line in f:
+>             nums = re.findall(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", line.replace(',', '.'))
+>             if len(nums) >= 2:
+>                 try:
+>                     x = float(nums[0]); y = float(nums[1])
+>                     data.append((x, y))
+>                 except Exception:
+>                     continue
+>     if not data:
+>         raise ValueError("No numeric data found in input file")
+>     data.sort(key=lambda t: t[0])
+>     with open(outfile, 'w') as out:
+>         for x, y in data:
+>             out.write(f"{x} {y}\n")
+>
+> def lorentz(x, x0, gamma, amplitude, offset):
+>     return offset + amplitude * (0.5*gamma)**2 / (((x - x0)**2) + (0.5*gamma)**2)
+>
+> def fit_peak(x, y, x0_guess, window, name):
+>     mask = (x > x0_guess - window) & (x < x0_guess + window)
+>     xw = x[mask]
+>     yw = y[mask]
+>     if xw.size < 5:
+>         raise ValueError(f"Not enough data points within window for {name} peak")
+>     # Use local maximum within window to refine x0 initial guess
+>     idx_max = int(np.argmax(yw))
+>     x0_init = float(xw[idx_max])
+>     offset_guess = float(np.median(yw))
+>     amplitude_guess = float(max(yw.max() - offset_guess, 1e-6))
+>     gamma_guess = 20.0
+>     p0 = [x0_init, gamma_guess, amplitude_guess, offset_guess]
+>     lower = [x0_guess - window, 1e-6, 0.0, -np.inf]
+>     upper = [x0_guess + window, 1000.0, np.inf, np.inf]
+>     try:
+>         popt, _ = curve_fit(lorentz, xw, yw, p0=p0, bounds=(lower, upper), maxfev=20000)
+>     except Exception:
+>         popt, _ = curve_fit(lorentz, xw, yw, p0=p0, maxfev=20000)
+>     return {
+>         "x0": float(popt[0]),
+>         "gamma": float(popt[1]),
+>         "amplitude": float(popt[2]),
+>         "offset": float(popt[3])
+>     }
+>
+> def main():
+>     infile = "graphene.dat"
+>     outfile = "graphene_clean.dat"
+>     preprocess(infile, outfile)
+>     x, y = np.loadtxt(outfile, unpack=True)
+>     results = {}
+>     results["G"] = fit_peak(x, y, 1580.0, 120.0, "G")
+>     results["2D"] = fit_peak(x, y, 2700.0, 150.0, "2D")
+>     with open("results.json", "w") as f:
+>         json.dump(results, f, indent=2)
+>     print(json.dumps(results, indent=2))
+>
+> if __name__ == "__main__":
+>     main()
+> PY
+root@37ade8fad1f7:/app# python3 fit_raman.py
+{
+  "G": {
+    "x0": 1646.0979964347118,
+    "gamma": 85.3096796202742,
+    "amplitude": 1242.8767692738177,
+    "offset": 4896.097952037428
+  },
+  "2D": {
+    "x0": 2598.9074275557805,
+    "gamma": 120.65426389135799,
+    "amplitude": 93.27103040687365,
+    "offset": 341.9781942909659
+  }
+}
+root@37ade8fad1f7:/app# cat results.json
+{
+  "G": {
+    "x0": 1646.0979964347118,
+    "gamma": 85.3096796202742,
+    "amplitude": 1242.8767692738177,
+    "offset": 4896.097952037428
+  },
+  "2D": {
+    "x0": 2598.9074275557805,
+    "gamma": 120.65426389135799,
+    "amplitude": 93.27103040687365,
+    "offset": 341.9781942909659
+  }
+}root@37ade8fad1f7:/app# ls -la results.json
+-rw-r--r-- 1 root root 292 Dec 10 04:25 results.json
+root@37ade8fad1f7:/app# cat results.json
+{
+  "G": {
+    "x0": 1646.0979964347118,
+    "gamma": 85.3096796202742,
+    "amplitude": 1242.8767692738177,
+    "offset": 4896.097952037428
+  },
+  "2D": {
+    "x0": 2598.9074275557805,
+    "gamma": 120.65426389135799,
+    "amplitude": 93.27103040687365,
+    "offset": 341.9781942909659
+  }
+}root@37ade8fad1f7:/app#

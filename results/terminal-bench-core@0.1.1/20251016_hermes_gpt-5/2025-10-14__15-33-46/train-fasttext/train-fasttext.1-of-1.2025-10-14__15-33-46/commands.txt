@@ -1,0 +1,50 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'ls -la data\n'
+'head -n 3 data/train.txt\n'
+'head -n 3 data/valid.txt\n'
+'head -n 3 data/test.txt\n'
+'fasttext -h\n'
+'apt-get update -y\n'
+'apt-get install -y fasttext\n'
+'fasttext -h\n'
+'pip3 install -U pip setuptools wheel\n'
+'pip3 install fasttext==0.9.2\n'
+'fasttext -h\n'
+'fasttext supervised -input data/train.txt -output model -dim 64 -wordNgrams 2 -minCount 5 -bucket 50000 -lr 0.5 -epoch 15 -thread 4\n'
+''
+'ls -lh model.bin\n'
+'if [ -f data/valid.txt ]; then fasttext test model.bin data/valid.txt; elif [ -f data/test.txt ]; then fasttext test model.bin data/test.txt; else echo "No validation or test file found"; fi\n'
+"stat -c '%n %s bytes' model.bin\n"
+'pip3 install pyarrow\n'
+'mkdir -p scripts\n'
+'cat > scripts/convert_parquet_to_fasttext.py << \'PY\'\n#!/usr/bin/env python3\nimport sys\nimport pyarrow.parquet as pq\n\ndef find_cols(names):\n    lower = [n.lower() for n in names]\n    text_candidates = [\'text\', \'review\', \'content\', \'sentence\', \'document\', \'review_text\']\n    label_candidates = [\'label\', \'stars\', \'rating\', \'polarity\', \'sentiment\', \'target\', \'class\']\n    text = None\n    label = None\n    for cand in text_candidates:\n        if cand in lower:\n            text = names[lower.index(cand)]\n            break\n    for cand in label_candidates:\n        if cand in lower:\n            label = names[lower.index(cand)]\n            break\n    return text, label\n\ndef normalize_label(lbl):\n    if lbl is None:\n        return None\n    s = str(lbl).strip()\n    try:\n        f = float(s)\n        if f.is_integer():\n            return str(int(f))\n        else:\n            return str(f)\n    except Exception:\n        return s\n\ndef normalize_text(t):\n    if t is None:\n        return None\n    s = str(t)\n    s = s.replace(\'\\n\', \' \').replace(\'\\r\', \' \').replace(\'\\t\', \' \')\n    return s\n\ndef convert(in_path, out_path):\n    pf = pq.ParquetFile(in_path)\n    names = pf.schema.names\n    text_col, label_col = find_cols(names)\n    if text_col is None or label_col is None:\n        raise RuntimeError(f"Could not detect text/label columns in {in_path}. Columns: {names}")\n    total = 0\n    with open(out_path, \'w\', encoding=\'utf-8\') as f:\n        for batch in pf.iter_batches(batch_size=100000, columns=[label_col, text_col]):\n            cols = batch.columns\n            lbls = cols[0].to_pylist()\n            txts = cols[1].to_pylist()\n            for lbl, txt in zip(lbls, txts):\n                lbl_norm = normalize_label(lbl)\n                txt_norm = normalize_text(txt)\n                if lbl_norm is None or txt_norm is None:\n                    continue\n                f.write(f"__label__{lbl_norm} {txt_norm}\\n")\n                total += 1\n    print(f"Wrote {total} lines to {out_path} using label=\'{label_col}\', text=\'{text_col}\'")\n\nif __name__ == \'__main__\':\n    if len(sys.argv) != 3:\n        print(\'Usage: convert_parquet_to_fasttext.py input.parquet output.txt\', file=sys.stderr)\n        sys.exit(1)\n    convert(sys.argv[1], sys.argv[2])\nPY\n'
+'python3 scripts/convert_parquet_to_fasttext.py data/train-00000-of-00001.parquet data/train.txt\n'
+'python3 scripts/convert_parquet_to_fasttext.py data/test-00000-of-00001.parquet data/test.txt\n'
+'head -n 3 data/train.txt\n'
+'wc -l data/train.txt data/test.txt\n'
+'fasttext supervised -input data/train.txt -output model -dim 64 -wordNgrams 2 -minCount 5 -bucket 50000 -lr 0.5 -epoch 15 -thread 4\n'
+'ls -lh model.bin\n'
+'fasttext test model.bin data/test.txt\n'
+"stat -c '%n %s bytes' model.bin\n"
+''
+''
+''
+'ls -lh model.bin\n'
+'fasttext test model.bin data/test.txt\n'
+"stat -c '%n %s bytes' model.bin\n"
+'fasttext supervised -input data/train.txt -output model -dim 128 -wordNgrams 2 -minCount 5 -bucket 50000 -lr 0.5 -epoch 25 -thread 4\n'
+'ls -lh model.bin\n'
+'fasttext test model.bin data/test.txt\n'
+"stat -c '%n %s bytes' model.bin\n"
+'\n'
+'\n'
+'\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+'\n'
+['C-d']
+['C-d']
+'\n'

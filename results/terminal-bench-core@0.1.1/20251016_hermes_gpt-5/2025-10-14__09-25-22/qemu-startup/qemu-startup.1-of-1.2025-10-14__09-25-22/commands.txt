@@ -1,0 +1,19 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la /app\n'
+'ISO="/app/alpine.iso"; if [ ! -f "$ISO" ]; then ISO=$(ls -1 /app/*.iso 2>/dev/null | head -n1); fi; if [ -z "$ISO" ]; then echo "ERROR: No ISO found in /app"; else echo "Using ISO: $ISO"; fi\n'
+'if ! command -v qemu-system-x86_64 >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update; fi\n'
+'if ! command -v qemu-system-x86_64 >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get install -y qemu-system-x86; fi\n'
+'if [ -n "$ISO" ] && command -v qemu-system-x86_64 >/dev/null 2>&1; then qemu-system-x86_64 -daemonize -m 1024 -cdrom "$ISO" -boot d -nographic -serial telnet:127.0.0.1:6665,server,nowait; else echo "Prerequisites missing (ISO or QEMU)"; fi\n'
+'for i in $(seq 1 60); do (echo >/dev/tcp/127.0.0.1/6665) >/dev/null 2>&1 && { echo "Telnet port is listening"; break; } || true; sleep 1; done\n'
+'rm -f /app/serial_boot.log; touch /app/serial_boot.log\n'
+'for i in $(seq 1 120); do out=$(timeout 2s bash -c \'cat < /dev/tcp/127.0.0.1/6665\' 2>/dev/null | tr -d \'\\r\'); [ -n "$out" ] && printf "%s" "$out" >> /app/serial_boot.log; echo "$out" | grep -E "login:" >/dev/null && { echo "Login prompt detected"; break; }; sleep 2; done\n'
+'ISO="/app/alpine.iso"; qemu-system-x86_64 -daemonize -m 1024 -cdrom "$ISO" -boot d -display none -monitor none -serial telnet:127.0.0.1:6665,server,nowait\n'
+'for i in $(seq 1 60); do (echo >/dev/tcp/127.0.0.1/6665) >/dev/null 2>&1 && { echo "Telnet port is listening"; break; } || true; sleep 1; done\n'
+'rm -f /app/serial_boot.log; touch /app/serial_boot.log\n'
+'for i in $(seq 1 180); do out=$(timeout 2s bash -c \'exec 3<>/dev/tcp/127.0.0.1/6665; printf "\\r\\n" >&3; cat <&3\' 2>/dev/null | tr -d \'\\r\'); [ -n "$out" ] && printf "%s" "$out" >> /app/serial_boot.log; echo "$out" | grep -E "login:" >/dev/null && { echo "Login prompt detected"; break; }; sleep 2; done\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

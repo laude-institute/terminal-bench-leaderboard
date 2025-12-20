@@ -1,0 +1,1019 @@
+[?2004hroot@4f564e7a9352:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@4f564e7a9352:/app# clear
+[?2004l[H[J[3J[?2004hroot@4f564e7a9352:/app# ls -la
+[?2004ltotal 8
+drwxr-xr-x 2 root root 4096 Mar 28  2025 .
+drwxr-xr-x 1 root root 4096 Oct 14 11:10 ..
+[?2004hroot@4f564e7a9352:/app# printf "flask\nrequests\n" > requirements.txt
+[?2004l[?2004hroot@4f564e7a9352:/app# pip3 install -r requirements.txt
+[?2004lCollecting flask (from -r requirements.txt (line 1))
+  Downloading flask-3.1.2-py3-none-any.whl.metadata (3.2 kB)
+Collecting requests (from -r requirements.txt (line 2))
+  Downloading requests-2.32.5-py3-none-any.whl.metadata (4.9 kB)
+Collecting blinker>=1.9.0 (from flask->-r requirements.txt (line 1))
+  Downloading blinker-1.9.0-py3-none-any.whl.metadata (1.6 kB)
+Collecting click>=8.1.3 (from flask->-r requirements.txt (line 1))
+  Downloading click-8.3.0-py3-none-any.whl.metadata (2.6 kB)
+Collecting itsdangerous>=2.2.0 (from flask->-r requirements.txt (line 1))
+  Downloading itsdangerous-2.2.0-py3-none-any.whl.metadata (1.9 kB)
+Collecting jinja2>=3.1.2 (from flask->-r requirements.txt (line 1))
+  Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+Collecting markupsafe>=2.1.1 (from flask->-r requirements.txt (line 1))
+  Downloading markupsafe-3.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+Collecting werkzeug>=3.1.0 (from flask->-r requirements.txt (line 1))
+  Downloading werkzeug-3.1.3-py3-none-any.whl.metadata (3.7 kB)
+cat > server.py << 'PY'
+import os
+from flask import Flask, jsonify, request
+import requests
+
+NETWORK_URLS = {
+    "devnet": "https://api.devnet.solana.com",
+    "testnet": "https://api.testnet.solana.com",
+    "mainnet-beta": "https://api.mainnet-beta.solana.com",
+}
+
+app = Flask(__name__)
+
+def get_network_url():
+    network = request.args.get("network", "devnet")
+    url = NETWORK_URLS.get(network, NETWORK_URLS["devnet"])
+    return url, network
+
+def rpc_request(url, method, params=None, timeout=20):
+    if params is None:
+        params = []
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": method,
+        "params": params
+    }
+    resp = requests.post(url, json=payload, timeout=timeout)
+    resp.raise_for_status()
+    return resp.json()
+
+def json_error(message, status=500):
+    response = jsonify({"error": str(message)})
+    response.status_code = status
+    return response
+
+@app.route('/status')
+def status():
+    try:
+        url, network = get_network_url()
+        # health via GET /health
+        try:
+            h = requests.get(f"{url}/health", timeout=10)
+            status_val = "online" if h.ok and h.text.strip().lower() == "ok" else "offline"
+        except Exception:
+            # Fallback to RPC getHealth (may not be available everywhere)
+            try:
+                h_json = rpc_request(url, "getHealth")
+                status_val = "online" if h_json.get("result") == "ok" else "offline"
+            except Exception:
+                status_val = "offline"
+        slot_json = rpc_request(url, "getSlot")
+        current_slot = slot_json.get("result")
+        nodes_json = rpc_request(url, "getClusterNodes")
+        nodes = nodes_json.get("result") or []
+        version_json = rpc_request(url, "getVersion")
+        version_result = version_json.get("result") or {}
+        version = None
+        if isinstance(version_result, dict):
+            version = version_result.get("solana-core") or version_result.get("version") or version_result.get("commit")
+        return jsonify({
+            "status": status_val,
+            "network": network,
+            "current_slot": current_slot,
+            "node_count": len(nodes),
+            "version": version
+        })
+    except Exception as e:
+        return json_error(e)
+
+@app.route('/block/<int:slot_number>')
+def block(slot_number):
+    try:
+        url, _ = get_network_url()
+        block_json = rpc_request(url, "getBlock", [slot_number, {"maxSupportedTransactionVersion": 0}])
+        block = block_json.get("result")
+        if not block:
+            return json_error("Block not found", status=404)
+        return jsonify({
+            "blockhash": block.get("blockhash"),
+            "parent_slot": block.get("parentSlot"),
+            "previous_blockhash": block.get("previousBlockhash"),
+            "block_height": block.get("blockHeight"),
+            "block_time": block.get("blockTime")
+        })
+    except Exception as e:
+        return json_error(e)
+
+@app.route('/transaction/<signature>')
+def transaction(signature):
+    try:
+        url, _ = get_network_url()
+        tx_json = rpc_request(url, "getTransaction", [signature, {"encoding": "jsonParsed", "commitment": "finalized", "maxSupportedTransactionVersion": 0}])
+        tx = tx_json.get("result")
+        if not tx:
+            return json_error("Transaction not found", status=404)
+        meta = tx.get("meta") or {}
+        success = meta.get("err") is None
+        fee = meta.get("fee")
+        block_time = tx.get("blockTime")
+        slot = tx.get("slot")
+        # account keys list
+        account_keys = []
+        try:
+            keys = tx.get("transaction", {}).get("message", {}).get("accountKeys", [])
+            for k in keys:
+                if isinstance(k, dict) and "pubkey" in k:
+                    account_keys.append(k["pubkey"])
+                else:
+                    account_keys.append(k)
+        except Exception:
+            account_keys = []
+        pre = meta.get("preTokenBalances", []) or []
+        post = meta.get("postTokenBalances", []) or []
+        defCollecting charset_normalizer<4,>=2 (from requests->-r requirements.txt (line 2))
+  Downloading charset_normalizer-3.4.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (37 kB)
+Collecting idna<4,>=2.5 (from requests->-r requirements.txt (line 2))
+  Downloading idna-3.11-py3-none-any.whl.metadata (8.4 kB)
+Collecting urllib3<3,>=1.21.1 (from requests->-r requirements.txt (line 2))
+  Downloading urllib3-2.5.0-py3-none-any.whl.metadata (6.5 kB)
+Collecting certifi>=2017.4.17 (from requests->-r requirements.txt (line 2))
+  Downloading certifi-2025.10.5-py3-none-any.whl.metadata (2.5 kB)
+Downloading flask-3.1.2-py3-none-any.whl (103 kB)
+Downloading requests-2.32.5-py3-none-any.whl (64 kB)
+Downloading blinker-1.9.0-py3-none-any.whl (8.5 kB)
+Downloading certifi-2025.10.5-py3-none-any.whl (163 kB)
+Downloading charset_normalizer-3.4.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (153 kB)
+Downloading click-8.3.0-py3-none-any.whl (107 kB)
+Downloading idna-3.11-py3-none-any.whl (71 kB)
+Downloading itsdangerous-2.2.0-py3-none-any.whl (16 kB)
+Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+Downloading markupsafe-3.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+Downloading urllib3-2.5.0-py3-none-any.whl (129 kB)
+Downloading werkzeug-3.1.3-py3-none-any.whl (224 kB)
+Installing collected packages: urllib3, markupsafe, itsdangerous, idna, click, charset_normalizer, certifi, blinker, werkzeug, requests, jinja2, flask
+Successfully installed blinker-1.9.0 certifi-2025.10.5 charset_normalizer-3.4.4 click-8.3.0 flask-3.1.2 idna-3.11 itsdangerous-2.2.0 jinja2-3.1.6 markupsafe-3.0.3 requests-2.32.5 urllib3-2.5.0 werkzeug-3.1.3
+[33mWARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable.It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.[0m[33m
+[0m
+[1m[[0m[34;49mnotice[0m[1;39;49m][0m[39;49m A new release of pip is available: [0m[31;49m24.3.1[0m[39;49m -> [0m[32;49m25.2[0m
+[1m[[0m[34;49mnotice[0m[1;39;49m][0m[39;49m To update, run: [0m[32;49mpip install --upgrade pip[0m
+[?2004hroot@4f564e7a9352:/app# cat > server.py << 'PY'
+[?2004l[?2004h> import os
+[?2004l[?2004h> from flask import Flask, jsonify, request
+[?2004l[?2004h> import requests
+[?2004l[?2004h> 
+[?2004l[?2004h> NETWORK_URLS = {
+[?2004l[?2004h>     "devnet": "https://api.devnet.solana.com",
+[?2004l[?2004h>     "testnet": "https://api.testnet.solana.com",
+[?2004l[?2004h>     "mainnet-beta": "https://api.mainnet-beta.solana.com",
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> app = Flask(__name__)
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_network_url():
+[?2004l[?2004h>     network = request.args.get("network", "devnet")
+[?2004l[?2004h>     url = NETWORK_URLS.get(network, NETWORK_URLS["devnet"])
+[?2004l[?2004h>     return url, network
+[?2004l[?2004h> 
+[?2004l[?2004h> def rpc_request(url, method, params=None, timeout=20):
+[?2004l[?2004h>     if params is None:
+[?2004l[?2004h>         params = []
+[?2004l[?2004h>     payload = {
+[?2004l[?2004h>         "jsonrpc": "2.0",
+[?2004l[?2004h>         "id": 1,
+[?2004l[?2004h>         "method": method,
+[?2004l[?2004h>         "params": params
+[?2004l[?2004h>     }
+[?2004l[?2004h>     resp = requests.post(url, json=payload, timeout=timeout)
+[?2004l[?2004h>     resp.raise_for_status()
+[?2004l[?2004h>     return resp.json()
+[?2004l[?2004h> 
+[?2004l[?2004h> def json_error(message, status=500):
+[?2004l[?2004h>     response = jsonify({"error": str(message)})
+[?2004l[?2004h>     response.status_code = status
+[?2004l[?2004h>     return response
+[?2004l[?2004h> 
+[?2004l[?2004h> @app.route('/status')
+[?2004l[?2004h> def status():
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         url, network = get_network_url()
+[?2004l[?2004h>         # health via GET /health
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             h = requests.get(f"{url}/health", timeout=10)
+[?2004l[?2004h>             status_val = "online" if h.ok and h.text.strip().lower() == "ok" else "offline"
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             # Fallback to RPC getHealth (may not be available everywhere)
+[?2004l[?2004h>             try:
+[?2004l[?2004h>                 h_json = rpc_request(url, "getHealth")
+[?2004l[?2004h>                 status_val = "online" if h_json.get("result") == "ok" else "offline"
+[?2004l[?2004h>             except Exception:
+[?2004l[?2004h>                 status_val = "offline"
+[?2004l[?2004h>         slot_json = rpc_request(url, "getSlot")
+[?2004l[?2004h>         current_slot = slot_json.get("result")
+[?2004l[?2004h>         nodes_json = rpc_request(url, "getClusterNodes")
+[?2004l[?2004h>         nodes = nodes_json.get("result") or []
+[?2004l[?2004h>         version_json = rpc_request(url, "getVersion")
+[?2004l[?2004h>         version_result = version_json.get("result") or {}
+[?2004l[?2004h>         version = None
+[?2004l[?2004h>         if isinstance(version_result, dict):
+[?2004l[?2004h>             version = version_result.get("solana-core") or version_result.get("version") or version_result.get("commit")
+[?2004l[?2004h>         return jsonify({
+[?2004l[?2004h>             "status": status_val,
+[?2004l[?2004h>             "network": network,
+[?2004l[?2004h>             "current_slot": current_slot,
+[?2004l[?2004h>             "node_count": len(nodes),
+[?2004l[?2004h>             "version": version
+[?2004l[?2004h>         })
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         return json_error(e)
+[?2004l[?2004h> 
+[?2004l[?2004h> @app.route('/block/<int:slot_number>')
+[?2004l[?2004h> def block(slot_number):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         url, _ = get_network_url()
+[?2004l[?2004h>         block_json = rpc_request(url, "getBlock", [slot_number, {"maxSupportedTransactionVersion": 0}])
+[?2004l[?2004h>         block = block_json.get("result")
+[?2004l[?2004h>         if not block:
+[?2004l[?2004h>             return json_error("Block not found", status=404)
+[?2004l[?2004h>         return jsonify({
+[?2004l[?2004h>             "blockhash": block.get("blockhash"),
+[?2004l[?2004h>             "parent_slot": block.get("parentSlot"),
+[?2004l[?2004h>             "previous_blockhash": block.get("previousBlockhash"),
+[?2004l[?2004h>             "block_height": block.get("blockHeight"),
+[?2004l[?2004h>             "block_time": block.get("blockTime")
+[?2004l[?2004h>         })
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         return json_error(e)
+[?2004l[?2004h> 
+[?2004l[?2004h> @app.route('/transaction/<signature>')
+[?2004l[?2004h> def transaction(signature):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         url, _ = get_network_url()
+[?2004l[?2004h>         tx_json = rpc_request(url, "getTransaction", [signature, {"encoding": "jsonParsed", "commitment": "finalized", "maxSupportedTransactionVersion": 0}])
+[?2004l[?2004h>         tx = tx_json.get("result")
+[?2004l[?2004h>         if not tx:
+[?2004l[?2004h>             return json_error("Transaction not found", status=404)
+[?2004l[?2004h>         meta = tx.get("meta") or {}
+[?2004l[?2004h>         success = meta.get("err") is None
+[?2004l[?2004h>         fee = meta.get("fee")
+[?2004l[?2004h>         block_time = tx.get("blockTime")
+[?2004l[?2004h>         slot = tx.get("slot")
+[?2004l[?2004h>         # account keys list
+[?2004l[?2004h>         account_keys = []
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             keys = tx.get("transaction", {}).get("message", {}).get("accountKeys", [])
+[?2004l[?2004h>             for k in keys:
+[?2004l[?2004h>                 if isinstance(k, dict) and "pubkey" in k:
+[?2004l[?2004h>                     account_keys.append(k["pubkey"])
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     account_keys.append(k)
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             account_keys = []
+[?2004l[?2004h>         pre = meta.get("preTokenBalances", []) or []
+[?2004l[?2004h>         post = meta.get("postTokenBalances", []) or []
+[?2004l[?2004h>         def balance_map(balances):
+[?2004l[?2004h>             m = {}
+[?2004l[?2004h>             for b in balances:
+[?2004l[?2004h>                 idx = b.get("accountIndex")
+[?2004l[?2004h>                 mint = b.get("mint")
+[?2004l[?2004h>                 ui = b.get("uiTokenAmount") or {}
+[?2004l[?2004h>                 ui_amt = ui.get("uiAmount")
+[?2004l[?2004h>                 if ui_amt is None:
+[?2004l[?2004h>                     amount_str = ui.get("amount") or b.get("amount")
+[?2004l[?2004h>                     decimals = ui.get("decimals") or 0
+[?2004l[?2004h>                     try:
+[?2004l[?2004h>                         amount_int = int(amount_str) if amount_str is not None else 0
+[?2004l[?2004h>                         ui_amt = amount_int / (10 ** int(decimals))
+[?2004l[?2004h>                     except Exception:
+[?2004l[?2004h>                         ui_amt = 0
+[?2004l[?2004h>                 m[(idx, mint)] = ui_amt or 0
+[?2004l[?2004h>             return m
+[?2004l[?2004h>         pre_map = balance_map(pre)
+[?2004l[?2004h>         post_map = balance_map(post)
+[?2004l[?2004h>         transfers = []
+[?2004l[?2004h>         for key in set(list(pre_map.keys()) + list(post_map.keys())):
+[?2004l[?2004h>             diff = (post_map.get(key, 0)) - (pre_map.get(key, 0))
+[?2004l[?2004h>             if abs(diff) > 0:
+[?2004l[?2004h>                 idx, mint = key
+[?2004l[?2004h>                 acct = account_keys[idx] if isinstance(idx, int) and 0 <= idx < len(account_keys) else None
+[?2004l[?2004h>                 transfers.append({
+[?2004l[?2004h>                     "account": acct,
+[?2004l[?2004h>                     "mint": mint,
+[?2004l[?2004h>                     "amount": diff
+[?2004l[?2004h>                 })
+[?2004l[?2004h>         return jsonify({
+[?2004l[?2004h>             "signature": signature,
+[?2004l[?2004h>             "slot": slot,
+[?2004l[?2004h>             "block_time": block_time,
+[?2004l[?2004h>             "success": success,
+[?2004l[?2004h>             "fee": fee,
+[?2004l[?2004h>             "token_transfers": transfers
+[?2004l[?2004h>         })
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         return json_error(e)
+[?2004l[?2004h> 
+[?2004l[?2004h> @app.route('/account/<address>')
+[?2004l[?2004h> def account(address):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         url, _ = get_network_url()
+[?2004l[?2004h>         acc_json = rpc_request(url, "getAccountInfo", [address, {"encoding": "jsonParsed"}])
+[?2004l[?2004h>         result = acc_json.get("result") or {}
+[?2004l[?2004h>         value = result.get("value")
+[?2004l[?2004h>         if not value:
+[?2004l[?2004h>             return json_error("Account not found", status=404)
+[?2004l[?2004h>         return jsonify({
+[?2004l[?2004h>             "address": address,
+[?2004l[?2004h>             "executable": value.get("executable"),
+[?2004l[?2004h>             "lamports": value.get("lamports"),
+[?2004l[?2004h>             "owner": value.get("owner"),
+[?2004l[?2004h>             "rent_epoch": value.get("rentEpoch")
+[?2004l[?2004h>         })
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         return json_error(e)
+[?2004l[?2004h> 
+[?2004l[?2004h> @app.route('/program/<program_id>/accounts')
+[?2004l[?2004h> def program_accounts(program_id):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         url, _ = get_network_url()
+[?2004l[?2004h>         limit = request.args.get("limit", default=10, type=int)
+[?2004l[?2004h>         offset = request.args.get("offset", default=0, type=int)
+[?2004l[?2004h>         prog_json = rpc_request(url, "getProgramAccounts", [program_id])
+[?2004l[?2004h>         accounts = prog_json.get("result") or []
+[?2004l[?2004h>         total = len(accounts)
+[?2004l[?2004h>         sliced = accounts[offset:offset+limit]
+[?2004l[?2004h>         mapped = []
+[?2004l[?2004h>         for a in sliced:
+[?2004l[?2004h>             pubkey = a.get("pubkey")
+[?2004l[?2004h>             acc = a.get("account") or {}
+[?2004l[?2004h>             mapped.append({
+[?2004l[?2004h>                 "pubkey": pubkey,
+[?2004l[?2004h>                 "account": {
+[?2004l[?2004h>                     "executable": acc.get("executable"),
+[?2004l[?2004h>                     "lamports": acc.get("lamports"),
+[?2004l[?2004h>                     "owner": acc.get("owner"),
+[?2004l[?2004h>                     "rent_epoch": acc.get("rentEpoch")
+[?2004l[?2004h>                 }
+[?2004l[?2004h>             })
+[?2004l[?2004h>         return jsonify({
+[?2004l[?2004h>             "program_id": program_id,
+[?2004l[?2004h>             "total_accounts": total,
+[?2004l[?2004h>             "limit": limit,
+[?2004l[?2004h>             "offset": offset,
+[?2004l[?2004h>             "accounts": mapped
+[?2004l[?2004h>         })
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         return json_error(e)
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     port = int(os.environ.get("PORT", 5000))
+[?2004l[?2004h>     app.run(host='0.0.0.0', port=port)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@4f564e7a9352:/app# python3 server.py &
+[?2004l[1] 152
+[?2004hroot@4f564e7a9352:/app# sleep 1
+[?2004l * Serving Flask app 'server'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.0.2:5000
+[33mPress CTRL+C to quit[0m
+[?2004hroot@4f564e7a9352:/app# curl -s http://localhost:5000/status
+[?2004lbash: curl: command not found
+[?2004hroot@4f564e7a9352:/app# ls -la
+[?2004ltotal 20
+drwxr-xr-x 1 root root 4096 Oct 14 11:11 .
+drwxr-xr-x 1 root root 4096 Oct 14 11:10 ..
+-rw-r--r-- 1 root root   15 Oct 14 11:11 requirements.txt
+-rw-r--r-- 1 root root 7598 Oct 14 11:11 server.py
+[?2004hroot@4f564e7a9352:/app# cat server.py
+[?2004limport os
+from flask import Flask, jsonify, request
+import requests
+
+NETWORK_URLS = {
+    "devnet": "https://api.devnet.solana.com",
+    "testnet": "https://api.testnet.solana.com",
+    "mainnet-beta": "https://api.mainnet-beta.solana.com",
+}
+
+app = Flask(__name__)
+
+def get_network_url():
+    network = request.args.get("network", "devnet")
+    url = NETWORK_URLS.get(network, NETWORK_URLS["devnet"])
+    return url, network
+
+def rpc_request(url, method, params=None, timeout=20):
+    if params is None:
+        params = []
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": method,
+        "params": params
+    }
+    resp = requests.post(url, json=payload, timeout=timeout)
+    resp.raise_for_status()
+    return resp.json()
+
+def json_error(message, status=500):
+    response = jsonify({"error": str(message)})
+    response.status_code = status
+    return response
+
+@app.route('/status')
+def status():
+    try:
+        url, network = get_network_url()
+        # health via GET /health
+        try:
+            h = requests.get(f"{url}/health", timeout=10)
+            status_val = "online" if h.ok and h.text.strip().lower() == "ok" else "offline"
+        except Exception:
+            # Fallback to RPC getHealth (may not be available everywhere)
+            try:
+                h_json = rpc_request(url, "getHealth")
+                status_val = "online" if h_json.get("result") == "ok" else "offline"
+            except Exception:
+                status_val = "offline"
+        slot_json = rpc_request(url, "getSlot")
+        current_slot = slot_json.get("result")
+        nodes_json = rpc_request(url, "getClusterNodes")
+        nodes = nodes_json.get("result") or []
+        version_json = rpc_request(url, "getVersion")
+        version_result = version_json.get("result") or {}
+        version = None
+        if isinstance(version_result, dict):
+            version = version_result.get("solana-core") or version_result.get("version") or version_result.get("commit")
+        return jsonify({
+            "status": status_val,
+            "network": network,
+            "current_slot": current_slot,
+            "node_count": len(nodes),
+            "version": version
+        })
+    except Exception as e:
+        return json_error(e)
+
+@app.route('/block/<int:slot_number>')
+def block(slot_number):
+    try:
+        url, _ = get_network_url()
+        block_json = rpc_request(url, "getBlock", [slot_number, {"maxSupportedTransactionVersion": 0}])
+        block = block_json.get("result")
+        if not block:
+            return json_error("Block not found", status=404)
+        return jsonify({
+            "blockhash": block.get("blockhash"),
+            "parent_slot": block.get("parentSlot"),
+            "previous_blockhash": block.get("previousBlockhash"),
+            "block_height": block.get("blockHeight"),
+            "block_time": block.get("blockTime")
+        })
+    except Exception as e:
+        return json_error(e)
+
+@app.route('/transaction/<signature>')
+def transaction(signature):
+    try:
+        url, _ = get_network_url()
+        tx_json = rpc_request(url, "getTransaction", [signature, {"encoding": "jsonParsed", "commitment": "finalized", "maxSupportedTransactionVersion": 0}])
+        tx = tx_json.get("result")
+        if not tx:
+            return json_error("Transaction not found", status=404)
+        meta = tx.get("meta") or {}
+        success = meta.get("err") is None
+        fee = meta.get("fee")
+        block_time = tx.get("blockTime")
+        slot = tx.get("slot")
+        # account keys list
+        account_keys = []
+        try:
+            keys = tx.get("transaction", {}).get("message", {}).get("accountKeys", [])
+            for k in keys:
+                if isinstance(k, dict) and "pubkey" in k:
+                    account_keys.append(k["pubkey"])
+                else:
+                    account_keys.append(k)
+        except Exception:
+            account_keys = []
+        pre = meta.get("preTokenBalances", []) or []
+        post = meta.get("postTokenBalances", []) or []
+        def balance_map(balances):
+            m = {}
+            for b in balances:
+                idx = b.get("accountIndex")
+                mint = b.get("mint")
+                ui = b.get("uiTokenAmount") or {}
+                ui_amt = ui.get("uiAmount")
+                if ui_amt is None:
+                    amount_str = ui.get("amount") or b.get("amount")
+                    decimals = ui.get("decimals") or 0
+                    try:
+                        amount_int = int(amount_str) if amount_str is not None else 0
+                        ui_amt = amount_int / (10 ** int(decimals))
+                    except Exception:
+                        ui_amt = 0
+                m[(idx, mint)] = ui_amt or 0
+            return m
+        pre_map = balance_map(pre)
+        post_map = balance_map(post)
+        transfers = []
+        for key in set(list(pre_map.keys()) + list(post_map.keys())):
+            diff = (post_map.get(key, 0)) - (pre_map.get(key, 0))
+            if abs(diff) > 0:
+                idx, mint = key
+                acct = account_keys[idx] if isinstance(idx, int) and 0 <= idx < len(account_keys) else None
+                transfers.append({
+                    "account": acct,
+                    "mint": mint,
+                    "amount": diff
+                })
+        return jsonify({
+            "signature": signature,
+            "slot": slot,
+            "block_time": block_time,
+            "success": success,
+            "fee": fee,
+            "token_transfers": transfers
+        })
+    except Exception as e:
+        return json_error(e)
+
+@app.route('/account/<address>')
+def account(address):
+    try:
+        url, _ = get_network_url()
+        acc_json = rpc_request(url, "getAccountInfo", [address, {"encoding": "jsonParsed"}])
+        result = acc_json.get("result") or {}
+        value = result.get("value")
+        if not value:
+            return json_error("Account not found", status=404)
+        return jsonify({
+            "address": address,
+            "executable": value.get("executable"),
+            "lamports": value.get("lamports"),
+            "owner": value.get("owner"),
+            "rent_epoch": value.get("rentEpoch")
+        })
+    except Exception as e:
+        return json_error(e)
+
+@app.route('/program/<program_id>/accounts')
+def program_accounts(program_id):
+    try:
+        url, _ = get_network_url()
+        limit = request.args.get("limit", default=10, type=int)
+        offset = request.args.get("offset", default=0, type=int)
+        prog_json = rpc_request(url, "getProgramAccounts", [program_id])
+        accounts = prog_json.get("result") or []
+        total = len(accounts)
+        sliced = accounts[offset:offset+limit]
+        mapped = []
+        for a in sliced:
+            pubkey = a.get("pubkey")
+            acc = a.get("account") or {}
+            mapped.append({
+                "pubkey": pubkey,
+                "account": {
+                    "executable": acc.get("executable"),
+                    "lamports": acc.get("lamports"),
+                    "owner": acc.get("owner"),
+                    "rent_epoch": acc.get("rentEpoch")
+                }
+            })
+        return jsonify({
+            "program_id": program_id,
+            "total_accounts": total,
+            "limit": limit,
+            "offset": offset,
+            "accounts": mapped
+        })
+    except Exception as e:
+        return json_error(e)
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
+[?2004hroot@4f564e7a9352:/app# cat > server.py << 'PY'
+[?2004l m = {}
+            for[?2004h> import os
+[?2004l[?2004h> from flask import Flask, jsonify, request
+[?2004l[?2004h> import requests
+[?2004l[?2004h> 
+[?2004l[?2004h> NETWORK_URLS = {
+[?2004l[?2004h>     "devnet": "https://api.devnet.solana.com",
+[?2004l[?2004h>     "testnet": "https://api.testnet.solana.com",
+[?2004l[?2004h>     "mainnet-beta": "https://api.mainnet-beta.solana.com",
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> app = Flask(__name__)
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_network_url():
+[?2004l[?2004h>     network = request.args.get("network", "devnet")
+[?2004l[?2004h>     url = NETWORK_URLS.get(network, NETWORK_URLS["devnet"])
+[?2004l[?2004h>     return url, network
+[?2004l[?2004h> 
+[?2004l[?2004h> def rpc_request(url, method, params=None, timeout=20):
+[?2004l[?2004h>     if params is None:
+[?2004l[?2004h>         params = []
+[?2004l[?2004h>     payload = {
+[?2004l[?2004h>         "jsonrpc": "2.0",
+[?2004l[?2004h>         "id": 1,
+[?2004l[?2004h>         "method": method,
+[?2004l[?2004h>         "params": params
+[?2004l[?2004h>     }
+[?2004l[?2004h>     resp = requests.post(url, json=payload, timeout=timeout)
+[?2004l[?2004h>     resp.raise_for_status()
+[?2004l[?2004h>     return resp.json()
+[?2004l[?2004h> 
+[?2004l[?2004h> def json_error(message, status=500):
+[?2004l[?2004h>     response = jsonify({"error": str(message)})
+[?2004l[?2004h>     response.status_code = status
+[?2004l[?2004h>     return response
+[?2004l[?2004h> 
+[?2004l[?2004h> @app.route('/status')
+[?2004l[?2004h> def status():
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         url, network = get_network_url()
+[?2004l[?2004h>         # health via GET /health
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             h = requests.get(f"{url}/health", timeout=10)
+[?2004l[?2004h>             status_val = "online" if h.ok and h.text.strip().lower() == "ok" else "offline"
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             # Fallback to RPC getHealth
+[?2004l[?2004h>             try:
+[?2004l[?2004h>                 h_json = rpc_request(url, "getHealth")
+[?2004l[?2004h>                 status_val = "online" if h_json.get("result") == "ok" else "offline"
+[?2004l[?2004h>             except Exception:
+[?2004l[?2004h>                 status_val = "offline"
+[?2004l[?2004h>         slot_json = rpc_request(url, "getSlot")
+[?2004l[?2004h>         current_slot = slot_json.get("result")
+[?2004l[?2004h>         nodes_json = rpc_request(url, "getClusterNodes")
+[?2004l[?2004h>         nodes = nodes_json.get("result") or []
+[?2004l[?2004h>         version_json = rpc_request(url, "getVersion")
+[?2004l[?2004h>         version_result = version_json.get("result") or {}
+[?2004l[?2004h>         version = None
+[?2004l[?2004h>         if isinstance(version_result, dict):
+[?2004l[?2004h>             version = version_result.get("solana-core") or version_result.get("version") or version_result.get("commit")
+[?2004l[?2004h>         return jsonify({
+[?2004l[?2004h>             "status": status_val,
+[?2004l[?2004h>             "network": network,
+[?2004l[?2004h>             "current_slot": current_slot,
+[?2004l[?2004h>             "node_count": len(nodes),
+[?2004l[?2004h>             "version": version
+[?2004l[?2004h>         })
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         return json_error(e)
+[?2004l[?2004h> 
+[?2004l[?2004h> @app.route('/block/<int:slot_number>')
+[?2004l[?2004h> def block(slot_number):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         url, _ = get_network_url()
+[?2004l[?2004h>         block_json = rpc_request(url, "getBlock", [slot_number, {"maxSupportedTransactionVersion": 0}])
+[?2004l[?2004h>         block = block_json.get("result")
+[?2004l[?2004h>         if not block:
+[?2004l[?2004h>             return json_error("Block not found", status=404)
+[?2004l[?2004h>         return jsonify({
+[?2004l[?2004h>             "blockhash": block.get("blockhash"),
+[?2004l[?2004h>             "parent_slot": block.get("parentSlot"),
+[?2004l[?2004h>             "previous_blockhash": block.get("previousBlockhash"),
+[?2004l[?2004h>             "block_height": block.get("blockHeight"),
+[?2004l[?2004h>             "block_time": block.get("blockTime")
+[?2004l[?2004h>         })
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         return json_error(e)
+[?2004l[?2004h> 
+[?2004l[?2004h> @app.route('/transaction/<signature>')
+[?2004l[?2004h> def transaction(signature):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         url, _ = get_network_url()
+[?2004l[?2004h>         tx_json = rpc_request(url, "getTransaction", [signature, {"encoding": "jsonParsed", "commitment": "finalized", "maxSupportedTransactionVersion": 0}])
+[?2004l[?2004h>         tx = tx_json.get("result")
+[?2004l[?2004h>         if not tx:
+[?2004l[?2004h>             return json_error("Transaction not found", status=404)
+[?2004l[?2004h>         meta = tx.get("meta") or {}
+[?2004l[?2004h>         success = meta.get("err") is None
+[?2004l[?2004h>         fee = meta.get("fee")
+[?2004l[?2004h>         block_time = tx.get("blockTime")
+[?2004l[?2004h>         slot = tx.get("slot")
+[?2004l[?2004h>         # account keys list
+[?2004l[?2004h>         account_keys = []
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             keys = tx.get("transaction", {}).get("message", {}).get("accountKeys", [])
+[?2004l[?2004h>             for k in keys:
+[?2004l[?2004h>                 if isinstance(k, dict) and "pubkey" in k:
+[?2004l[?2004h>                     account_keys.append(k["pubkey"])
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     account_keys.append(k)
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             account_keys = []
+[?2004l[?2004h>         pre = meta.get("preTokenBalances", []) or []
+[?2004l[?2004h>         post = meta.get("postTokenBalances", []) or []
+[?2004l[?2004h>         def balance_map(balances):
+[?2004l[?2004h>             m = {}
+[?2004l[?2004h>             for b in balances:
+[?2004l[?2004h>                 idx = b.get("accountIndex")
+[?2004l[?2004h>                 mint = b.get("mint")
+[?2004l[?2004h>                 ui = b.get("uiTokenAmount") or {}
+[?2004l[?2004h>                 ui_amt = ui.get("uiAmount")
+[?2004l[?2004h>                 if ui_amt is None:
+[?2004l[?2004h>                     amount_str = ui.get("amount") or b.get("amount")
+[?2004l[?2004h>                     decimals = ui.get("decimals") or 0
+[?2004l[?2004h>                     try:
+[?2004l[?2004h>                         amount_int = int(amount_str) if amount_str is not None else 0
+[?2004l[?2004h>                         ui_amt = amount_int / (10 ** int(decimals))
+[?2004l[?2004h>                     except Exception:
+[?2004l[?2004h>                         ui_amt = 0
+[?2004l[?2004h>                 m[(idx, mint)] = ui_amt or 0
+[?2004l[?2004h>             return m
+[?2004l[?2004h>         pre_map = balance_map(pre)
+[?2004l[?2004h>         post_map = balance_map(post)
+[?2004l[?2004h>         transfers = []
+[?2004l[?2004h>         for key in set(list(pre_map.keys()) + list(post_map.keys())):
+[?2004l[?2004h>             diff = (post_map.get(key, 0)) - (pre_map.get(key, 0))
+[?2004l[?2004h>             if abs(diff) > 0:
+[?2004l[?2004h>                 idx, mint = key
+[?2004l[?2004h>                 acct = account_keys[idx] if isinstance(idx, int) and 0 <= idx < len(account_keys) else None
+[?2004l[?2004h>                 transfers.append({
+[?2004l[?2004h>                     "account": acct,
+[?2004l[?2004h>                     "mint": mint,
+[?2004l[?2004h>                     "amount": diff
+[?2004l[?2004h>                 })
+[?2004l[?2004h>         return jsonify({
+[?2004l[?2004h>             "signature": signature,
+[?2004l[?2004h>             "slot": slot,
+[?2004l[?2004h>             "block_time": block_time,
+[?2004l[?2004h>             "success": success,
+[?2004l[?2004h>             "fee": fee,
+[?2004l[?2004h>             "token_transfers": transfers
+[?2004l[?2004h>         })
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         return json_error(e)
+[?2004l[?2004h> 
+[?2004l[?2004h> @app.route('/account/<address>')
+[?2004l[?2004h> def account(address):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         url, _ = get_network_url()
+[?2004l[?2004h>         acc_json = rpc_request(url, "getAccountInfo", [address, {"encoding": "jsonParsed"}])
+[?2004l[?2004h>         result = acc_json.get("result") or {}
+[?2004l[?2004h>         value = result.get("value")
+[?2004l[?2004h>         if not value:
+[?2004l[?2004h>             return json_error("Account not found", status=404)
+[?2004l[?2004h>         return jsonify({
+[?2004l[?2004h>             "address": address,
+[?2004l[?2004h>             "executable": value.get("executable"),
+[?2004l[?2004h>             "lamports": value.get("lamports"),
+[?2004l[?2004h>             "owner": value.get("owner"),
+[?2004l[?2004h>             "rent_epoch": value.get("rentEpoch")
+[?2004l[?2004h>         })
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         return json_error(e)
+[?2004l[?2004h> 
+[?2004l[?2004h> @app.route('/program/<program_id>/accounts')
+[?2004l[?2004h> def program_accounts(program_id):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         url, _ = get_network_url()
+[?2004l[?2004h>         limit = request.args.get("limit", default=10, type=int)
+[?2004l[?2004h>         offset = request.args.get("offset", default=0, type=int)
+[?2004l[?2004h>         prog_json = rpc_request(url, "getProgramAccounts", [program_id])
+[?2004l[?2004h>         accounts = prog_json.get("result") or []
+[?2004l[?2004h>         total = len(accounts)
+[?2004l[?2004h>         sliced = accounts[offset:offset+limit]
+[?2004l[?2004h>         mapped = []
+[?2004l[?2004h>         for a in sliced:
+[?2004l[?2004h>             pubkey = a.get("pubkey")
+[?2004l[?2004h>             acc = a.get("account") or {}
+[?2004l[?2004h>             mapped.append({
+[?2004l[?2004h>                 "pubkey": pubkey,
+[?2004l[?2004h>                 "account": {
+[?2004l[?2004h>                     "executable": acc.get("executable"),
+[?2004l[?2004h>                     "lamports": acc.get("lamports"),
+[?2004l[?2004h>                     "owner": acc.get("owner"),
+[?2004l[?2004h>                     "rent_epoch": acc.get("rentEpoch")
+[?2004l[?2004h>                 }
+[?2004l[?2004h>             })
+[?2004l[?2004h>         return jsonify({
+[?2004l[?2004h>             "program_id": program_id,
+[?2004l[?2004h>             "total_accounts": total,
+[?2004l[?2004h>             "limit": limit,
+[?2004l[?2004h>             "offset": offset,
+[?2004l[?2004h>             "accounts": mapped
+[?2004l[?2004h>         })
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         return json_error(e)
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     port = int(os.environ.get("PORT", 5000))
+[?2004l[?2004h>     app.run(host='0.0.0.0', port=port)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@4f564e7a9352:/app# python3 server.py &
+[?2004l[2] 197
+[?2004hroot@4f564e7a9352:/app#  * Serving Flask app 'server'
+ * Debug mode: off
+Address already in use
+Port 5000 is in use by another program. Either identify and stop that program, or start the server with a different port.
+sleep 1
+[?2004lcurl -s http://localhost:5000/status
+[2]+  Exit 1                  python3 server.py
+[?2004hroot@4f564e7a9352:/app# curl -s http://localhost:5000/status
+[?2004lbash: curl: command not found
+[?2004hroot@4f564e7a9352:/app# apt-get update
+[?2004l0% [Working]            Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+0% [1 InRelease 7220 B/151 kB 5%]                                 0% [Working]            Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+            Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [48.0 kB]
+0% [3 InRelease 34.7 kB/48.0 kB 72%]                                    0% [Working]0% [Working]            Get:4 http://deb.debian.org/debian bookworm/main amd64 Packages [8791 kB]
+0% [4 Packages 2888 B/8791 kB 0%]0% [4 Packages 732 kB/8791 kB 8%]28% [4 Packages 1502 kB/8791 kB 17%]58% [4 Packages 4936 kB/8791 kB 56%]74% [4 Packages 6830 kB/8791 kB 78%]91% [4 Packages 8791 kB/8791 kB 100%]                                     91% [Working]91% [4 Packages store 0 B] [Waiting for headers]                                                Get:5 http://deb.debian.org/debian bookworm-updates/main amd64 Packages [6924 B]
+91% [4 Packages store 0 B] [5 Packages 0 B/6924 B 0%]                                                     91% [4 Packages store 0 B] [Waiting for headers]                                                Get:6 http://deb.debian.org/debian-security bookworm-security/main amd64 Packages [281 kB]
+91% [4 Packages store 0 B] [6 Packages 0 B/281 kB 0%]                                                     93% [4 Packages store 0 B]93% [4 Packages store 0 B]                          96% [Working]96% [5 Packages store 0 B]                          98% [Working]98% [6 Packages store 0 B]                          100% [Working]              Fetched 9333 kB in 3s (3444 kB/s)
+Reading package lists... 0%Reading package lists... 0%Reading package lists... 0%Reading package lists... 96%Reading package lists... 96%Reading package lists... 96%Reading package lists... 96%Reading package lists... 99%Reading package lists... 99%Reading package lists... Done
+[?2004hroot@4f564e7a9352:/app# apt-get install -y curl iproute2 psmisc
+[?2004lReading package lists... 0%Reading package lists... 0%Reading package lists... 0%Reading package lists... 96%Reading package lists... 96%Reading package lists... 96%Reading package lists... 96%Reading package lists... 99%Reading package lists... 99%Reading package lists... Done
+Building dependency tree... 0%Building dependency tree... 0%Building dependency tree... 50%Building dependency tree... 50%Building dependency tree... Done
+Reading state information... 0% Reading state information... 0%Reading state information... Done
+The following additional packages will be installed:
+  libatm1 libbpf1 libbrotli1 libbsd0 libcap2 libcap2-bin libcurl4 libelf1 libldap-2.5-0 libldap-common libmnl0 libnghttp2-14 libpam-cap libpsl5 librtmp1
+  libsasl2-2 libsasl2-modules libsasl2-modules-db libssh2-1 libxtables12 publicsuffix
+Suggested packages:
+  iproute2-doc libsasl2-modules-gssapi-mit | libsasl2-modules-gssapi-heimdal libsasl2-modules-ldap libsasl2-modules-otp libsasl2-modules-sql
+The following NEW packages will be installed:
+  curl iproute2 libatm1 libbpf1 libbrotli1 libbsd0 libcap2-bin libcurl4 libelf1 libldap-2.5-0 libldap-common libmnl0 libnghttp2-14 libpam-cap libpsl5 librtmp1
+  libsasl2-2 libsasl2-modules libsasl2-modules-db libssh2-1 libxtables12 psmisc publicsuffix
+The following packages will be upgraded:
+  libcap2
+1 upgraded, 23 newly installed, 0 to remove and 39 not upgraded.
+Need to get 3768 kB of archives.
+After this operation, 11.2 MB of additional disk space will be used.
+0% [Working]            Get:1 http://deb.debian.org/debian bookworm/main amd64 libcap2 amd64 1:2.66-4+deb12u2 [27.2 kB]
+0% [1 libcap2 1444 B/27.2 kB 5%]                                1% [Working]            Get:2 http://deb.debian.org/debian bookworm/main amd64 libelf1 amd64 0.188-2.1 [174 kB]
+1% [2 libelf1 0 B/174 kB 0%]                            6% [Working]            Get:3 http://deb.debian.org/debian bookworm/main amd64 libbpf1 amd64 1:1.1.2-0+deb12u1 [145 kB]
+6% [3 libbpf1 0 B/145 kB 0%]                            10% [Waiting for headers]                         Get:4 http://deb.debian.org/debian bookworm/main amd64 libbsd0 amd64 0.11.7-2 [117 kB]
+10% [4 libbsd0 1584 B/117 kB 1%]                                13% [Waiting for headers]                         Get:5 http://deb.debian.org/debian bookworm/main amd64 libmnl0 amd64 1.0.4-3 [12.5 kB]
+13% [5 libmnl0 0 B/12.5 kB 0%]                              14% [Working]             Get:6 http://deb.debian.org/debian bookworm/main amd64 libxtables12 amd64 1.8.9-2 [30.8 kB]
+14% [6 libxtables12 0 B/30.8 kB 0%]                                   16% [Working]             Get:7 http://deb.debian.org/debian bookworm/main amd64 libcap2-bin amd64 1:2.66-4+deb12u2 [34.9 kB]
+16% [7 libcap2-bin 4096 B/34.9 kB 12%]                                      17% [Working]             Get:8 http://deb.debian.org/debian bookworm/main amd64 iproute2 amd64 6.1.0-3 [1046 kB]
+17% [8 iproute2 409 B/1046 kB 0%]25% [8 iproute2 367 kB/1046 kB 35%]36% [8 iproute2 862 kB/1046 kB 82%]                                   40% [Working]             Get:9 http://deb.debian.org/debian bookworm/main amd64 libbrotli1 amd64 1.0.9-2+b6 [275 kB]
+40% [9 libbrotli1 800 B/275 kB 0%]                                  47% [Waiting for headers]                         Get:10 http://deb.debian.org/debian bookworm/main amd64 libsasl2-modules-db amd64 2.1.28+dfsg-10 [20.3 kB]
+47% [10 libsasl2-modules-db 676 B/20.3 kB 3%]                                             48% [Waiting for headers]                         Get:11 http://deb.debian.org/debian bookworm/main amd64 libsasl2-2 amd64 2.1.28+dfsg-10 [59.7 kB]
+48% [11 libsasl2-2 1098 B/59.7 kB 2%]                                     50% [Waiting for headers]                         Get:12 http://deb.debian.org/debian bookworm/main amd64 libldap-2.5-0 amd64 2.5.13+dfsg-5 [183 kB]
+50% [12 libldap-2.5-0 1136 B/183 kB 1%]                                       55% [Waiting for headers]                         Get:13 http://deb.debian.org/debian bookworm/main amd64 libnghttp2-14 amd64 1.52.0-1+deb12u2 [73.0 kB]
+55% [13 libnghttp2-14 2041 B/73.0 kB 3%]                                        58% [Waiting for headers]                         Get:14 http://deb.debian.org/debian bookworm/main amd64 libpsl5 amd64 0.21.2-1 [58.7 kB]
+58% [14 libpsl5 2050 B/58.7 kB 3%]                                  60% [Waiting for headers]                         Get:15 http://deb.debian.org/debian bookworm/main amd64 librtmp1 amd64 2.4+20151223.gitfa8646d.1-2+b2 [60.8 kB]
+60% [15 librtmp1 3335 B/60.8 kB 5%]                                   62% [Working]             Get:16 http://deb.debian.org/debian bookworm/main amd64 libssh2-1 amd64 1.10.0-3+b1 [179 kB]
+62% [16 libssh2-1 820 B/179 kB 0%]                                  66% [Waiting for headers]                         Get:17 http://deb.debian.org/debian bookworm/main amd64 libcurl4 amd64 7.88.1-10+deb12u14 [392 kB]
+66% [17 libcurl4 3145 B/392 kB 1%]                                  75% [Waiting for headers]                         Get:18 http://deb.debian.org/debian bookworm/main amd64 curl amd64 7.88.1-10+deb12u14 [316 kB]
+76% [18 curl 4940 B/316 kB 2%]                              83% [Waiting for headers]                         Get:19 http://deb.debian.org/debian bookworm/main amd64 libatm1 amd64 1:2.5.1-4+b2 [68.3 kB]
+83% [19 libatm1 251 B/68.3 kB 0%]                                 85% [Waiting for headers]                         Get:20 http://deb.debian.org/debian bookworm/main amd64 libldap-common all 2.5.13+dfsg-5 [29.3 kB]
+85% [20 libldap-common 571 B/29.3 kB 2%]                                        87% [Waiting for headers]                         Get:21 http://deb.debian.org/debian bookworm/main amd64 libpam-cap amd64 1:2.66-4+deb12u2 [14.7 kB]
+87% [21 libpam-cap 791 B/14.7 kB 5%]                                    88% [Waiting for headers]                         Get:22 http://deb.debian.org/debian bookworm/main amd64 libsasl2-modules amd64 2.1.28+dfsg-10 [66.6 kB]
+88% [22 libsasl2-modules 1248 B/66.6 kB 2%]                                           Get:23 http://deb.debian.org/debian bookworm/main amd64 psmisc amd64 23.6-1 [259 kB]
+                                           90% [23 psmisc 213 B/259 kB 0%]                               96% [Waiting for headers]                         Get:24 http://deb.debian.org/debian bookworm/main amd64 publicsuffix all 20230209.2326-1 [126 kB]
+97% [24 publicsuffix 3419 B/126 kB 3%]                                      100% [Working]              Fetched 3768 kB in 4s (1032 kB/s)
+debconf: delaying package configuration, since apt-utils is not installed
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 7590 files and directories currently installed.)
+Preparing to unpack .../libcap2_1%3a2.66-4+deb12u2_amd64.deb ...
+Unpacking libcap2:amd64 (1:2.66-4+deb12u2) over (1:2.66-4) ...
+Setting up libcap2:amd64 (1:2.66-4+deb12u2) ...
+Selecting previously unselected package libelf1:amd64.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 7590 files and directories currently installed.)
+Preparing to unpack .../00-libelf1_0.188-2.1_amd64.deb ...
+Unpacking libelf1:amd64 (0.188-2.1) ...
+Selecting previously unselected package libbpf1:amd64.
+Preparing to unpack .../01-libbpf1_1%3a1.1.2-0+deb12u1_amd64.deb ...
+Unpacking libbpf1:amd64 (1:1.1.2-0+deb12u1) ...
+Selecting previously unselected package libbsd0:amd64.
+Preparing to unpack .../02-libbsd0_0.11.7-2_amd64.deb ...
+Unpacking libbsd0:amd64 (0.11.7-2) ...
+Selecting previously unselected package libmnl0:amd64.
+Preparing to unpack .../03-libmnl0_1.0.4-3_amd64.deb ...
+Unpacking libmnl0:amd64 (1.0.4-3) ...
+Selecting previously unselected package libxtables12:amd64.
+Preparing to unpack .../04-libxtables12_1.8.9-2_amd64.deb ...
+Unpacking libxtables12:amd64 (1.8.9-2) ...
+Selecting previously unselected package libcap2-bin.
+Preparing to unpack .../05-libcap2-bin_1%3a2.66-4+deb12u2_amd64.deb ...
+Unpacking libcap2-bin (1:2.66-4+deb12u2) ...
+Selecting previously unselected package iproute2.
+Preparing to unpack .../06-iproute2_6.1.0-3_amd64.deb ...
+Unpacking iproute2 (6.1.0-3) ...
+Selecting previously unselected package libbrotli1:amd64.
+Preparing to unpack .../07-libbrotli1_1.0.9-2+b6_amd64.deb ...
+Unpacking libbrotli1:amd64 (1.0.9-2+b6) ...
+Selecting previously unselected package libsasl2-modules-db:amd64.
+Preparing to unpack .../08-libsasl2-modules-db_2.1.28+dfsg-10_amd64.deb ...
+Unpacking libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
+Selecting previously unselected package libsasl2-2:amd64.
+Preparing to unpack .../09-libsasl2-2_2.1.28+dfsg-10_amd64.deb ...
+Unpacking libsasl2-2:amd64 (2.1.28+dfsg-10) ...
+Selecting previously unselected package libldap-2.5-0:amd64.
+Preparing to unpack .../10-libldap-2.5-0_2.5.13+dfsg-5_amd64.deb ...
+Unpacking libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
+Selecting previously unselected package libnghttp2-14:amd64.
+Preparing to unpack .../11-libnghttp2-14_1.52.0-1+deb12u2_amd64.deb ...
+Unpacking libnghttp2-14:amd64 (1.52.0-1+deb12u2) ...
+Selecting previously unselected package libpsl5:amd64.
+Preparing to unpack .../12-libpsl5_0.21.2-1_amd64.deb ...
+Unpacking libpsl5:amd64 (0.21.2-1) ...
+Selecting previously unselected package librtmp1:amd64.
+Preparing to unpack .../13-librtmp1_2.4+20151223.gitfa8646d.1-2+b2_amd64.deb ...
+Unpacking librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2+b2) ...
+Selecting previously unselected package libssh2-1:amd64.
+Preparing to unpack .../14-libssh2-1_1.10.0-3+b1_amd64.deb ...
+Unpacking libssh2-1:amd64 (1.10.0-3+b1) ...
+Selecting previously unselected package libcurl4:amd64.
+Preparing to unpack .../15-libcurl4_7.88.1-10+deb12u14_amd64.deb ...
+Unpacking libcurl4:amd64 (7.88.1-10+deb12u14) ...
+Selecting previously unselected package curl.
+Preparing to unpack .../16-curl_7.88.1-10+deb12u14_amd64.deb ...
+Unpacking curl (7.88.1-10+deb12u14) ...
+Selecting previously unselected package libatm1:amd64.
+Preparing to unpack .../17-libatm1_1%3a2.5.1-4+b2_amd64.deb ...
+Unpacking libatm1:amd64 (1:2.5.1-4+b2) ...
+Selecting previously unselected package libldap-common.
+Preparing to unpack .../18-libldap-common_2.5.13+dfsg-5_all.deb ...
+Unpacking libldap-common (2.5.13+dfsg-5) ...
+Selecting previously unselected package libpam-cap:amd64.
+Preparing to unpack .../19-libpam-cap_1%3a2.66-4+deb12u2_amd64.deb ...
+Unpacking libpam-cap:amd64 (1:2.66-4+deb12u2) ...
+Selecting previously unselected package libsasl2-modules:amd64.
+Preparing to unpack .../20-libsasl2-modules_2.1.28+dfsg-10_amd64.deb ...
+Unpacking libsasl2-modules:amd64 (2.1.28+dfsg-10) ...
+Selecting previously unselected package psmisc.
+Preparing to unpack .../21-psmisc_23.6-1_amd64.deb ...
+Unpacking psmisc (23.6-1) ...
+Selecting previously unselected package publicsuffix.
+Preparing to unpack .../22-publicsuffix_20230209.2326-1_all.deb ...
+Unpacking publicsuffix (20230209.2326-1) ...
+Setting up libpsl5:amd64 (0.21.2-1) ...
+Setting up psmisc (23.6-1) ...
+Setting up libbrotli1:amd64 (1.0.9-2+b6) ...
+Setting up libsasl2-modules:amd64 (2.1.28+dfsg-10) ...
+Setting up libnghttp2-14:amd64 (1.52.0-1+deb12u2) ...
+Setting up libatm1:amd64 (1:2.5.1-4+b2) ...
+Setting up libldap-common (2.5.13+dfsg-5) ...
+Setting up libsasl2-modules-db:amd64 (2.1.28+dfsg-10) ...
+Setting up libcap2-bin (1:2.66-4+deb12u2) ...
+Setting up librtmp1:amd64 (2.4+20151223.gitfa8646d.1-2+b2) ...
+Setting up libmnl0:amd64 (1.0.4-3) ...
+Setting up libxtables12:amd64 (1.8.9-2) ...
+Setting up libsasl2-2:amd64 (2.1.28+dfsg-10) ...
+Setting up libssh2-1:amd64 (1.10.0-3+b1) ...
+Setting up libbsd0:amd64 (0.11.7-2) ...
+Setting up libelf1:amd64 (0.188-2.1) ...
+Setting up libpam-cap:amd64 (1:2.66-4+deb12u2) ...
+debconf: unable to initialize frontend: Dialog
+debconf: (No usable dialog-like program is installed, so the dialog based frontend cannot be used. at /usr/share/perl5/Debconf/FrontEnd/Dialog.pm line 78.)
+debconf: falling back to frontend: Readline
+debconf: unable to initialize frontend: Readline
+debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+debconf: falling back to frontend: Teletype
+Setting up publicsuffix (20230209.2326-1) ...
+Setting up libbpf1:amd64 (1:1.1.2-0+deb12u1) ...
+Setting up iproute2 (6.1.0-3) ...
+debconf: unable to initialize frontend: Dialog
+debconf: (No usable dialog-like program is installed, so the dialog based frontend cannot be used. at /usr/share/perl5/Debconf/FrontEnd/Dialog.pm line 78.)
+debconf: falling back to frontend: Readline
+debconf: unable to initialize frontend: Readline
+debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.36.0 /usr/local/share/perl/5.36.0 /usr/lib/x86_64-linux-gnu/perl5/5.36 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.36 /usr/share/perl/5.36 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 7.)
+debconf: falling back to frontend: Teletype
+Setting up libldap-2.5-0:amd64 (2.5.13+dfsg-5) ...
+Setting up libcurl4:amd64 (7.88.1-10+deb12u14) ...
+Setting up curl (7.88.1-10+deb12u14) ...
+Processing triggers for libc-bin (2.36-9+deb12u9) ...
+[?2004hroot@4f564e7a9352:/app# fuser -k -n tcp 5000 || true
+[?2004l5000/tcp:              152
+[?2004hroot@4f564e7a9352:/app# python3 server.py &
+[?2004l[2] 669
+[1]   Killed                  python3 server.py
+[?2004hroot@4f564e7a9352:/app#  * Serving Flask app 'server'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.0.2:5000
+[33mPress CTRL+C to quit[0m
+sleep 1
+[?2004lcurl -s http://localhost:5000/status
+[?2004hroot@4f564e7a9352:/app# curl -s http://localhost:5000/status
+[?2004l127.0.0.1 - - [14/Oct/2025 11:14:09] "GET /status HTTP/1.1" 200 -
+{"current_slot":414526788,"network":"devnet","node_count":128,"status":"online","version":"3.0.6"}
+[?2004hroot@4f564e7a9352:/app# 127.0.0.1 - - [14/Oct/2025 11:14:37] "GET /status HTTP/1.1" 200 -
+127.0.0.1 - - [14/Oct/2025 11:14:39] "GET /status HTTP/1.1" 200 -
+127.0.0.1 - - [14/Oct/2025 11:14:41] "GET /status HTTP/1.1" 200 -
+127.0.0.1 - - [14/Oct/2025 11:14:42] "GET /block/414526772 HTTP/1.1" 200 -
+127.0.0.1 - - [14/Oct/2025 11:14:42] "GET /account/11111111111111111111111111111111 HTTP/1.1" 200 -
+127.0.0.1 - - [14/Oct/2025 11:14:43] "GET /program/Vote111111111111111111111111111111111111111/accounts?limit=2 HTTP/1.1" 200 -
+127.0.0.1 - - [14/Oct/2025 11:14:44] "GET /transaction/5SvUiRFnDCPo6YV2sUtzGe8ocTCvsKSxdKGvQdjAphRGqHrZhwEMZ8xb5We6KRnrhktcP3rfGhGvVpv2CNdKdqQE HTTP/1.1" 200 -
+[?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@4f564e7a9352:/app# 

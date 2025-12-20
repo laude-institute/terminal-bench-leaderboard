@@ -1,0 +1,181 @@
+[?2004hroot@e884c0db3f44:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@e884c0db3f44:/app# clear
+[?2004l[H[J[3J[?2004hroot@e884c0db3f44:/app# ls -la
+[?2004ltotal 96
+drwxr-xr-x 1 root root  4096 Oct  8 15:44 .
+drwxr-xr-x 1 root root  4096 Oct 14 17:10 ..
+-rw-rw-r-- 1 root root 88805 Oct  8 15:44 graphene.dat
+[?2004hroot@e884c0db3f44:/app# ls -la graphene.dat 2>/dev/null || echo "graphene.dat not found in current directory"
+[?2004l-rw-rw-r-- 1 root root 88805 Oct  8 15:44 graphene.dat
+[?2004hroot@e884c0db3f44:/app# head -n 20 graphene.dat
+[?2004l47183,554644	19261,547207
+46588,360019	19266,089699
+46008,191298	19077,996963
+45442,488736	19173,287322
+44890,718036	19501,518253
+44352,368927	19506,586203
+43826,959593	19752,431144
+43314,029137	19812,863021
+42813,138290	19678,348151
+42323,866373	19764,871128
+41845,813826	19360,099292
+41378,600916	19413,554878
+40921,863181	19626,191780
+40475,250679	19704,066336
+40038,430487	19495,727898
+39611,084116	19672,573559
+39192,908278	19538,763458
+38783,609488	19344,943112
+38382,908122	19510,307527
+37990,536178	19552,152695
+[?2004hroot@e884c0db3f44:/app# python3 -V
+[?2004lPython 3.13.1
+[?2004hroot@e884c0db3f44:/app# pip3 install --no-input --quiet numpy scipy
+[?2004l[33mWARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable.It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.[0m[33m
+[0m
+[1m[[0m[34;49mnotice[0m[1;39;49m][0m[39;49m A new release of pip is available: [0m[31;49m24.3.1[0m[39;49m -> [0m[32;49m25.2[0m
+[1m[[0m[34;49mnotice[0m[1;39;49m][0m[39;49m To update, run: [0m[32;49mpip install --upgrade pip[0m
+[?2004hroot@e884c0db3f44:/app# cat > process_and_fit.py << 'PYEOF'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import json, re, sys, os
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> from scipy.optimize import curve_fit
+[?2004l[?2004h> 
+[?2004l[?2004h> data_file = 'graphene.dat'
+[?2004l[?2004h> if not os.path.isfile(data_file):
+[?2004l[?2004h>     print('Error: graphene.dat not found', file=sys.stderr)
+[?2004l[?2004h>     sys.exit(1)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read and convert file content
+[?2004l[?2004h> x_vals = []
+[?2004l[?2004h> y_vals = []
+[?2004l[?2004h> num_pattern = re.compile(r'^[+-]?(?:\d+(?:[\.,]\d*)?|[\.,]\d+)(?:[eE][+-]?\d+)?$')
+[?2004l[?2004h> with open(data_file, 'r', errors='ignore') as f:
+[?2004l[?2004h>     for line in f:
+[?2004l[?2004h>         line = line.strip()
+[?2004l[?2004h>         if not line:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         # Replace comma decimal with dot, unify delimiters
+[?2004l[?2004h>         line = line.replace(',', '.')
+[?2004l[?2004h>         for sep in [';', '\t', ',']:
+[?2004l[?2004h>             line = line.replace(sep, ' ')
+[?2004l[?2004h>         # Remove multiple spaces
+[?2004l[?2004h>         parts = [p for p in line.split() if p]
+[?2004l[?2004h>         # Keep only numeric tokens
+[?2004l[?2004h>         nums = [p for p in parts if num_pattern.match(p)]
+[?2004l[?2004h>         if len(nums) < 2:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             x = float(nums[0])
+[?2004l[?2004h>             y = float(nums[1])
+[?2004l[?2004h>         except ValueError:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         x_vals.append(x)
+[?2004l[?2004h>         y_vals.append(y)
+[?2004l[?2004h> 
+[?2004l[?2004h> if len(x_vals) < 10:
+[?2004l[?2004h>     print('Error: insufficient numeric data parsed from graphene.dat', file=sys.stderr)
+[?2004l[?2004h>     sys.exit(1)
+[?2004l[?2004h> 
+[?2004l[?2004h> x = np.array(x_vals, dtype=float)
+[?2004l[?2004h> y = np.array(y_vals, dtype=float)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Sort by x just in case
+[?2004l[?2004h> order = np.argsort(x)
+[?2004l[?2004h> x = x[order]
+[?2004l[?2004h> y = y[order]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Lorentzian model
+[?2004l[?2004h> def lorentz(x, x0, gamma, amplitude, offset):
+[?2004l[?2004h>     g2 = (0.5*gamma)**2
+[?2004l[?2004h>     return offset + amplitude * (g2 / ((x - x0)**2 + g2))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Helper to fit around a window
+[?2004l[?2004h> def fit_peak(x, y, center_guess, window):
+[?2004l[?2004h>     xmin = center_guess - window
+[?2004l[?2004h>     xmax = center_guess + window
+[?2004l[?2004h>     mask = (x >= xmin) & (x <= xmax)
+[?2004l[?2004h>     if mask.sum() < 5:
+[?2004l[?2004h>         # fallback to nearest data
+[?2004l[?2004h>         idx = np.argmin(np.abs(x - center_guess))
+[?2004l[?2004h>         lo = max(0, idx - 50)
+[?2004l[?2004h>         hi = min(len(x), idx + 50)
+[?2004l[?2004h>         xm = x[lo:hi]
+[?2004l[?2004h>         ym = y[lo:hi]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         xm = x[mask]
+[?2004l[?2004h>         ym = y[mask]
+[?2004l[?2004h>     # Initial guesses
+[?2004l[?2004h>     i_max = int(np.argmax(ym))
+[?2004l[?2004h>     x0_guess = float(xm[i_max])
+[?2004l[?2004h>     amp_guess = float(max(ym) - min(ym))
+[?2004l[?2004h>     offset_guess = float(np.median(np.r_[ym[:max(1,len(ym)//10)], ym[-max(1,len(ym)//10):]]))
+[?2004l[?2004h>     gamma_guess = max(5.0, min(200.0, window/4))
+[?2004l[?2004h>     p0 = [x0_guess, gamma_guess, amp_guess, offset_guess]
+[?2004l[?2004h>     # Bounds
+[?2004l[?2004h>     lower = [x0_guess - window, 1e-3, 0.0, min(ym) - abs(amp_guess)]
+[?2004l[?2004h>     upper = [x0_guess + window, window*2.0, amp_guess*10.0 + 1e-9, max(ym) + abs(amp_guess)]
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         popt, pcov = curve_fit(lorentz, xm, ym, p0=p0, bounds=(lower, upper), maxfev=20000)
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         # Try without bounds if it fails
+[?2004l[?2004h>         popt, pcov = curve_fit(lorentz, xm, ym, p0=p0, maxfev=20000)
+[?2004l[?2004h>     return {
+[?2004l[?2004h>         'x0': float(popt[0]),
+[?2004l[?2004h>         'gamma': float(popt[1]),
+[?2004l[?2004h>         'amplitude': float(popt[2]),
+[?2004l[?2004h>         'offset': float(popt[3])
+[?2004l[?2004h>     }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Choose windows conservatively
+[?2004l[?2004h> # Raman G peak around 1580 +/- 100
+[?2004l[?2004h> # Raman 2D peak around 2700 +/- 200
+[?2004l[?2004h> res_G = fit_peak(x, y, 1580.0, 120.0)
+[?2004l[?2004h> res_2D = fit_peak(x, y, 2700.0, 250.0)
+[?2004l[?2004h> 
+[?2004l[?2004h> results = {
+[?2004l[?2004h>     'G': {
+[?2004l[?2004h>         'x0': res_G['x0'],
+[?2004l[?2004h>         'gamma': res_G['gamma'],
+[?2004l[?2004h>         'amplitude': res_G['amplitude'],
+[?2004l[?2004h>         'offset': res_G['offset']
+[?2004l[?2004h>     },
+[?2004l[?2004h>     '2D': {
+[?2004l[?2004h>         'x0': res_2D['x0'],
+[?2004l[?2004h>         'gamma': res_2D['gamma'],
+[?2004l[?2004h>         'amplitude': res_2D['amplitude'],
+[?2004l[?2004h>         'offset': res_2D['offset']
+[?2004l[?2004h>     }
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('results.json', 'w') as f:
+[?2004l[?2004h>     json.dump(results, f, indent=2)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('results.json written')
+[?2004l[?2004h> PYEOF
+[?2004l[?2004hroot@e884c0db3f44:/app# chmod +x process_and_fit.py
+[?2004l[?2004hroot@e884c0db3f44:/app# python3 process_and_fit.py
+[?2004lresults.json written
+[?2004hroot@e884c0db3f44:/app# ls -la results.json
+[?2004l-rw-r--r-- 1 root root 291 Oct 14 17:11 results.json
+[?2004hroot@e884c0db3f44:/app# cat results.json
+[?2004l{
+  "G": {
+    "x0": 1646.0980287938492,
+    "gamma": 85.3094973830525,
+    "amplitude": 1242.8747676988255,
+    "offset": 4896.099786632665
+  },
+  "2D": {
+    "x0": 2376.1317618821736,
+    "gamma": 133.97265999730521,
+    "amplitude": 376.107077349571,
+    "offset": 368.9877038459043
+  }
+}[?2004hroot@e884c0db3f44:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@e884c0db3f44:/app# 

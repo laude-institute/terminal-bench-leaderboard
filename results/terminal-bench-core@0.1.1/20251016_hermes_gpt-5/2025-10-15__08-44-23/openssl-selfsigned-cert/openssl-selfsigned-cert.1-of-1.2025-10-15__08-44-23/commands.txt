@@ -1,0 +1,16 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'mkdir -p /app/ssl\n'
+'openssl genrsa -out /app/ssl/server.key 2048\n'
+'chmod 600 /app/ssl/server.key\n'
+'openssl req -new -x509 -key /app/ssl/server.key -sha256 -days 365 -out /app/ssl/server.crt -subj "/O=DevOps Team/CN=dev-internal.company.local"\n'
+'cat /app/ssl/server.key /app/ssl/server.crt > /app/ssl/server.pem\n'
+'openssl x509 -in /app/ssl/server.crt -noout -subject -dates -fingerprint -sha256 > /app/ssl/verification.txt\n'
+'cat > /app/check_cert.py << \'PYEOF\'\n#!/usr/bin/env python3\nimport ssl\nimport subprocess\nimport os\nimport sys\nimport datetime\n\nCERT_PATH = "/app/ssl/server.crt"\nKEY_PATH = "/app/ssl/server.key"\n\n\ndef main():\n    # Check existence\n    if not os.path.exists(CERT_PATH):\n        print(f"Certificate not found: {CERT_PATH}")\n        sys.exit(1)\n    if not os.path.exists(KEY_PATH):\n        print(f"Private key not found: {KEY_PATH}")\n        sys.exit(1)\n\n    # Try loading cert and key into an SSL context\n    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)\n    try:\n        ctx.load_cert_chain(certfile=CERT_PATH, keyfile=KEY_PATH)\n    except Exception as e:\n        print(f"Failed to load certificate/key: {e}")\n        sys.exit(1)\n\n    # Get subject and end date using openssl\n    try:\n        subj_out = subprocess.check_output([\n            "openssl", "x509", "-in", CERT_PATH, "-noout", "-subject"\n        ], text=True).strip()\n        enddate_out = subprocess.check_output([\n            "openssl", "x509", "-in", CERT_PATH, "-noout", "-enddate"\n        ], text=True).strip()\n    except Exception as e:\n        print(f"Failed to read certificate details: {e}")\n        sys.exit(1)\n\n    # Parse Common Name from subject\n    cn = None\n    subj = subj_out\n    if subj.startswith("subject="):\n        subj = subj[len("subject="):].strip()\n    parts = [p.strip() for p in subj.replace("/", ",").split(",")]\n    for p in parts:\n        if p.startswith("CN=") or p.startswith("CN ="):\n            cn = p.split("=", 1)[1].strip()\n            break\n\n    # Parse expiration date and format as YYYY-MM-DD\n    exp_str = enddate_out\n    if exp_str.startswith("notAfter="):\n        exp_str = exp_str[len("notAfter="):].strip()\n    try:\n        exp_dt = datetime.datetime.strptime(exp_str, "%b %d %H:%M:%S %Y %Z")\n        exp_date = exp_dt.date().isoformat()\n    except Exception:\n        try:\n            exp_dt = datetime.datetime.strptime(exp_str, "%b %d %H:%M:%S %Y")\n            exp_date = exp_dt.date().isoformat()\n        except Exception as e:\n            print(f"Failed to parse expiration date: {e}")\n            sys.exit(1)\n\n    print(f"Common Name: {cn}")\n    print(f"Expiration Date: {exp_date}")\n    print("Certificate verification successful")\n\n\nif __name__ == "__main__":\n    main()\nPYEOF\n'
+'chmod +x /app/check_cert.py\n'
+'python3 /app/check_cert.py\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

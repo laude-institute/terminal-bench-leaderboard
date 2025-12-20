@@ -1,0 +1,64 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'apt-get update\n'
+'DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server git nginx openssl ca-certificates curl\n'
+'mkdir -p /var/run/sshd\n'
+"sed -i 's/^#\\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config\n"
+"sed -i 's/^#\\?PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config\n"
+"sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config\n"
+'service ssh start\n'
+'getent passwd user >/dev/null || useradd -m -s /bin/bash user\n'
+"echo 'user:user' | chpasswd\n"
+'mkdir -p /home/user/.ssh && chmod 700 /home/user/.ssh && chown -R user:user /home/user/.ssh\n'
+'sudo -u user -H bash -lc "ssh-keygen -t rsa -b 2048 -N \'\' -f ~/.ssh/id_rsa"\n'
+'cat /home/user/.ssh/id_rsa.pub >> /home/user/.ssh/authorized_keys && chmod 600 /home/user/.ssh/authorized_keys && chown user:user /home/user/.ssh/authorized_keys\n'
+'printf "Host server\\n    StrictHostKeyChecking no\\n    UserKnownHostsFile=/dev/null\\n" > /home/user/.ssh/config && chmod 600 /home/user/.ssh/config && chown user:user /home/user/.ssh/config\n'
+'grep -qE \'^127\\.0\\.0\\.1\\s+server(\\s|$)\' /etc/hosts || printf "127.0.0.1 server\\n" >> /etc/hosts\n'
+'mkdir -p /git && chown -R user:user /git\n'
+'sudo -u user -H bash -lc "git init --bare /git/server"\n'
+'mkdir -p /var/www/webserver && chown -R user:user /var/www/webserver\n'
+'printf "#!/bin/sh\\nset -e\\nWEBROOT=/var/www/webserver\\nBRANCH=webserver\\nmkdir -p \\"$WEBROOT\\"\\nwhile read oldrev newrev refname; do\\n  if [ \\"$refname\\" = \\"refs/heads/$BRANCH\\" ]; then\\n    GIT_WORK_TREE=\\"$WEBROOT\\" git checkout -f \\"$BRANCH\\"\\n  fi\\ndone\\n" > /git/server/hooks/post-receive\n'
+'chmod +x /git/server/hooks/post-receive && chown user:user /git/server/hooks/post-receive\n'
+'openssl req -x509 -nodes -newkey rsa:2048 -days 365 -keyout /etc/ssl/private/webserver.key -out /etc/ssl/certs/webserver.crt -subj "/CN=server" -addext "subjectAltName=DNS:server"\n'
+'printf "server {\\n    listen 8080 ssl;\\n    server_name server;\\n    ssl_certificate /etc/ssl/certs/webserver.crt;\\n    ssl_certificate_key /etc/ssl/private/webserver.key;\\n    root /var/www/webserver;\\n    index index.html;\\n    location / {\\n        try_files $uri =404;\\n    }\\n}\\n" > /etc/nginx/sites-available/webserver\n'
+'ln -sf /etc/nginx/sites-available/webserver /etc/nginx/sites-enabled/webserver\n'
+'if [ -e /etc/nginx/sites-enabled/default ]; then rm /etc/nginx/sites-enabled/default; fi\n'
+'nginx -t\n'
+'service nginx restart\n'
+'sudo -u user -H bash -lc "git config --global user.email \'user@example.com\' && git config --global user.name \'User\'"\n'
+'sudo -u user -H bash -lc "git clone user@server:/git/server ~/repo"\n'
+'sudo -u user -H bash -lc "printf \'hello world\\n\' > ~/repo/hello.html"\n'
+'sudo -u user -H bash -lc "cd ~/repo && git add hello.html && git commit -m \'add hello\'"\n'
+'sudo -u user -H bash -lc "cd ~/repo && git checkout -b webserver && git push origin webserver"\n'
+'curl -k https://server:8080/hello.html\n'
+'service ssh status || service ssh start\n'
+'su - user -c "ssh-keygen -t rsa -b 2048 -N \'\' -f ~/.ssh/id_rsa"\n'
+'su - user -c "cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"\n'
+'su - user -c "git init --bare /git/server"\n'
+'printf \'#!/bin/sh\nset -e\nWEBROOT=/var/www/webserver\nBRANCH=webserver\nmkdir -p "$WEBROOT"\nwhile read oldrev newrev refname; do\n  if [ "$refname" = "refs/heads/$BRANCH" ]; then\n    GIT_WORK_TREE="$WEBROOT" git checkout -f "$BRANCH"\n  fi\ndone\n\' > /git/server/hooks/post-receive\n'
+'chmod +x /git/server/hooks/post-receive && chown user:user /git/server/hooks/post-receive\n'
+"printf 'server {\n    listen 8080 ssl;\n    server_name server;\n    ssl_certificate /etc/ssl/certs/webserver.crt;\n    ssl_certificate_key /etc/ssl/private/webserver.key;\n    root /var/www/webserver;\n    index index.html;\n    location / {\n        try_files $uri =404;\n    }\n}\n' > /etc/nginx/sites-available/webserver\n"
+'nginx -t\n'
+'service nginx restart\n'
+'su - user -c "git config --global user.email \'user@example.com\' && git config --global user.name \'User\'"\n'
+'su - user -c "git clone user@server:/git/server ~/repo"\n'
+'su - user -c "printf \'hello world\n\' > ~/repo/hello.html"\n'
+'su - user -c "cd ~/repo && git add hello.html && git commit -m \'add index\'"\n'
+'su - user -c "cd ~/repo && git checkout -b webserver && git push origin webserver"\n'
+'curl -k https://server:8080/hello.html\n'
+'touch /home/user/.ssh/authorized_keys\n'
+'chown user:user /home/user/.ssh/authorized_keys\n'
+'chmod 600 /home/user/.ssh/authorized_keys\n'
+'su - user -c "cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys"\n'
+'service ssh reload\n'
+'su - user -c "git clone user@server:/git/server ~/repo"\n'
+'su - user -c "printf \'hello world\\n\' > ~/repo/hello.html"\n'
+'su - user -c "cd ~/repo && git add hello.html && git commit -m \'add index\'"\n'
+'su - user -c "cd ~/repo && git checkout -b webserver && git push origin webserver"\n'
+''
+'curl -k https://server:8080/hello.html\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

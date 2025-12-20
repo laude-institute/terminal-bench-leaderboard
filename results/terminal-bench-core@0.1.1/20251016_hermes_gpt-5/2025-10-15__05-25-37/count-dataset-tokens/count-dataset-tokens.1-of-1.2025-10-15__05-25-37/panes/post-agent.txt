@@ -1,0 +1,2038 @@
+root@1e287e0ce32a:/app# python3 -V
+Python 3.13.1
+root@1e287e0ce32a:/app# pip -V
+pip install -q datasets transformers huggingface_hub tiktoken
+pip 24.3.1 from /usr/local/lib/python3.13/site-packages/pip (python 3.13)
+root@1e287e0ce32a:/app# pip install -q datasets transformers huggingface_hub tiktoken
+python3 - << 'PY'
+from datasets import load_dataset
+from huggingface_hub import hf_hub_download
+import os, json, textwrap
+
+# Try to load dataset to inspect structure
+print('Loading dataset info...')
+ds = load_dataset('open-thoughts/OpenThoughts-114k')
+print(ds)
+# Print features of a split (try 'train' or first available)
+first_split = list(ds.keys())[0]
+print('First split:', first_split)
+print('Features:', ds[first_split].features)
+print('Example 0 keys:', ds[first_split][0].keys())
+print('Example 0 (truncated):')
+ex = ds[first_split][0]
+for k,v in ex.items():
+    if isinstance(v, str):
+        print(f'- {k}:', v[:300].replace('\n',' ') + ('...' if len(v)>300 else ''))
+    else:
+        print(f'- {k}:', type(v), v if not isinstance(v, (list, dict)) else str(v)[:300] + ('...' if len(str(v))>300 else ''))
+
+# Try fetching README for guidance
+try:
+    readme_path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='README.md')
+    with open(readme_path, 'r', encoding='utf-8') as f:
+        readme = f.read()
+    print('\nREADME head:')
+    print('\n'.join(readme.splitlines()[:200]))
+except Exception as e:
+    print('README fetch failed:', e)
+PY
+python3 - << 'PY'
+from datasets import load_dataset
+from transformers import AutoTokenizer
+import math
+
+# Load dataset
+ds = load_dataset('open-thoughts/OpenThoughts-114k')
+
+# Determine science domain selection rules
+# Heuristics:
+# - If there is a split named 'science' use it directly.
+# - Else if a 'domain' field exists, filter rows where domain equals 'science' (case-insensitive) or similar variants.
+# - Identify DeepSeek-specific field if present (e.g., 'deepseek_thought', 'deepseek', 'model'=='deepseek', or nested providers),
+#   otherwise default to the main text/thought field indicated by the dataset (e.g., 'thought', 'response', 'content').
+
+available_splits = list(ds.keys())
+science_ds = None
+if 'science' in ds:
+    science_ds = ds['science']
+else:
+    # pick a base split to filter from, prefer 'train' if present
+    base_split_name = 'train' if 'train' in ds else available_splits[0]
+    base = ds[base_split_name]
+    # find a likely domain field
+    domain_field = None
+    for cand in ['domain','category','subject','topic','Domain','Category']:
+        if cand in base.features:
+            domain_field = cand
+            break
+    if domain_field is None:
+        # try to infer from first example keys
+        for k in base.features.keys():
+            if 'domain' in k.lower() or 'category' in k.lower() or 'subject' in k.lower():
+                domain_field = k
+                break
+    if domain_field is None:
+        raise SystemExit('Could not find a domain field or science split in dataset')
+    # filter to science-like values
+    def is_science(x):
+        val = x.get(domain_field)
+        if val is None:
+            return False
+        if isinstance(val, str):
+            return val.strip().lower() in {'science','sci','scientific','natural science','natural-science'}
+        return False
+    science_ds = base.filter(is_science)
+
+print('Science subset size:', len(science_ds))
+
+# Identify DeepSeek-specific content field if present; else choose generic thought/response/content field
+# We will inspect features to choose a text field.
+features = science_ds.features
+text_field = None
+# Candidate fields ordered by likelihood
+candidates = [
+    'deepseek_thought','deepseek','deepseek_content','deepseek_response','deepseek_cot','deepseek_r1','deepseek_output',
+    'thought','cot','chain_of_thought','solution','response','answer','content','text'
+]
+for cand in candidates:
+    if cand in features and str(features[cand].dtype) == 'string':
+        text_field = cand
+        break
+
+# If not found, try to deduce from first example
+if text_field is None and len(science_ds) > 0:
+    ex = science_ds[0]
+    for cand in candidates:
+        if cand in ex and isinstance(ex[cand], str) and len(ex[cand].strip())>0:
+            text_field = cand
+            break
+
+# If still not found, consider nested structures with provider
+provider_field = None
+if textWARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering yo
+ur system unusable.It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what
+ you are doing and want to suppress this warning.
+
+[notice] A new release of pip is available: 24.3.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+root@1e287e0ce32a:/app# python3 - << 'PY'
+> from datasets import load_dataset
+> from huggingface_hub import hf_hub_download
+> import os, json, textwrap
+>
+> # Try to load dataset to inspect structure
+> print('Loading dataset info...')
+> ds = load_dataset('open-thoughts/OpenThoughts-114k')
+> print(ds)
+> # Print features of a split (try 'train' or first available)
+> first_split = list(ds.keys())[0]
+> print('First split:', first_split)
+> print('Features:', ds[first_split].features)
+> print('Example 0 keys:', ds[first_split][0].keys())
+> print('Example 0 (truncated):')
+> ex = ds[first_split][0]
+> for k,v in ex.items():
+>     if isinstance(v, str):
+>         print(f'- {k}:', v[:300].replace('\n',' ') + ('...' if len(v)>300 else ''))
+>     else:
+>         print(f'- {k}:', type(v), v if not isinstance(v, (list, dict)) else str(v)[:300] + ('...' if len(str(v))>300 else ''))
+>
+> # Try fetching README for guidance
+> try:
+>     readme_path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='README.md')
+>     with open(readme_path, 'r', encoding='utf-8') as f:
+>         readme = f.read()
+>     print('\nREADME head:')
+>     print('\n'.join(readme.splitlines()[:200]))
+> except Exception as e:
+>     print('README fetch failed:', e)
+> PY
+Loading dataset info...
+README.md: 8.96kB [00:00, 22.2MB/s]
+data/train-00000-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 250M/250M [00:22<00:00, 11.2MB/s]
+data/train-00001-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 175M/175M [00:15<00:00, 11.2MB/s]
+data/train-00002-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 173M/173M [00:15<00:00, 11.1MB/s]
+data/train-00003-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 174M/174M [00:15<00:00, 11.1MB/s]
+data/train-00004-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 154M/154M [00:13<00:00, 11.1MB/s]
+data/train-00005-of-00006.parquet: 100%|█████████████████████████████████████████████████████████████████████████████████████| 152M/152M [00:13<00:00, 11.0MB/s]
+Generating train split: 100%|█████████████████████████████████████████████████████████████████████████████████| 113957/113957 [00:10<00:00, 11230.10 examples/s]
+DatasetDict({
+    train: Dataset({
+        features: ['system', 'conversations'],
+        num_rows: 113957
+    })
+})
+First split: train
+Features: {'system': Value('string'), 'conversations': List({'from': Value('string'), 'value': Value('string')})}
+Example 0 keys: dict_keys(['system', 'conversations'])
+Example 0 (truncated):
+- system: Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the final precise and ac
+curate solutions. This requires engaging in a comprehensive cycle of analysis, summarizing, exploration, reassessment, reflection, backtracing, and it...
+- conversations: <class 'list'> [{'from': 'user', 'value': 'Generate an executable Python function generated from the given prompt. The function should take std
+in as input and print the output. Simply call the function after the definition.The Chef likes to stay in touch with his staff. So, the Chef, the head server, a
+nd the sous-...
+
+README head:
+---
+dataset_info:
+- config_name: default
+  features:
+  - name: system
+    dtype: string
+  - name: conversations
+    list:
+    - name: from
+      dtype: string
+    - name: value
+      dtype: string
+  splits:
+  - name: train
+    num_bytes: 2635015668
+    num_examples: 113957
+  download_size: 1078777193
+  dataset_size: 2635015668
+- config_name: metadata
+  features:
+  - name: problem
+    dtype: string
+  - name: deepseek_reasoning
+    dtype: string
+  - name: deepseek_solution
+    dtype: string
+  - name: ground_truth_solution
+    dtype: string
+  - name: domain
+    dtype: string
+  - name: source
+    dtype: string
+  - name: test_cases
+    dtype: string
+  - name: starter_code
+    dtype: string
+  splits:
+  - name: train
+    num_bytes: 5525214077.699433
+    num_examples: 113957
+  download_size: 2469729724
+  dataset_size: 5525214077.699433
+configs:
+- config_name: default
+  data_files:
+  - split: train
+    path: data/train-*
+- config_name: metadata
+  data_files:
+  - split: train
+    path: metadata/train-*
+tags:
+- curator
+- synthetic
+license: apache-2.0
+---
+
+<p align="center">
+    <img src="open_thoughts.png" width="50%">
+</p>
+
+> [!NOTE]
+> We have released a paper for OpenThoughts! See our paper [here](https://arxiv.org/abs/2506.04178).
+
+<a href="https://github.com/bespokelabsai/curator/">
+ <img src="https://huggingface.co/datasets/bespokelabs/Bespoke-Stratos-17k/resolve/main/made_with_curator.png" alt="Made with Curator" width=200px>
+</a>
+
+# Open-Thoughts-114k
+
+## Dataset Description
+
+- **Homepage:** https://www.open-thoughts.ai/
+- **Repository:** https://github.com/open-thoughts/open-thoughts
+- **Point of Contact:** [Open Thoughts Team](contact@open-thoughts.ai)
+
+Open synthetic reasoning dataset with 114k high-quality examples covering math, science, code, and puzzles!
+
+Inspect the content with rich formatting with [Curator Viewer](https://curator.bespokelabs.ai/datasets/1389c194254c4ead96daaf145505c3d1).
+
+### Available Subsets
+
+**default** subset containing ready-to-train data used to finetune the [OpenThinker-7B](https://huggingface.co/open-thoughts/OpenThinker-7B) and [OpenThinker-32
+B](https://huggingface.co/open-thoughts/OpenThinker-32B) models:
+```
+ds = load_dataset("open-thoughts/OpenThoughts-114k", split="train")
+```
+**metadata** subset containing extra columns used in dataset construction:
+- `problem`
+- `ground_truth_solution`
+- `deepseek_reasoning`
+- `deepseek_solution`
+- `domain`
+- `source`
+- `test_cases` (code only)
+- `starter_code`(code only)
+
+```
+ds = load_dataset("open-thoughts/OpenThoughts-114k", "metadata", split="train")
+```
+
+# OpenThinker Models
+
+The numbers reported in the tables below are evaluated with our open-source tool [Evalchemy](https://github.com/mlfoundations/Evalchemy).
+
+|                             | AIME24   | MATH500 | GPQA-Diamond | LCBv2 Easy  | LCBv2 Medium  | LCBv2 Hard  | LCBv2 All  |
+| --------------------------- | -------- | ------- | ------------ | ----------- | ------------- | ----------- | ---------- |
+| [OpenThinker-32B](https://huggingface.co/open-thoughts/OpenThinker-32B)             | 66       | 90.6    | 61.6         | 95.1        | 70.9          | 26.8
+      | 68.9       |
+| [OpenThinker-7B](https://huggingface.co/open-thoughts/OpenThinker-7B)              | 31.3     | 83.0    | 42.4         | 75.3        | 28.6          | 6.5
+     | 39.9       |
+| Bespoke-Stratos-7B          | 22.7     | 79.6    | 38.9         | 71.4        | 25.2          | 0.8         | 35.8       |
+| DeepSeek-R1-Distill-Qwen-7B | 60       | 88.2    | 46.9         | 79.7        | 45.1          | 14.6        | 50.1       |
+| gpt-4o-0513                 | 8.7      | 75.8    | 46.5         | 87.4        | 42.7          | 8.9         | 50.5       |
+| o1-mini                     | 64       | 85.6    | 60           | 92.8        | 74.7          | 39.8        | 72.8       |
+
+We are fully open-source. Our [model weights](https://huggingface.co/open-thoughts), [datasets](https://huggingface.co/open-thoughts), [data generation code](ht
+tps://github.com/open-thoughts/open-thoughts), [evaluation code](https://github.com/mlfoundations/Evalchemy), and [training code](https://github.com/hiyouga/LLa
+MA-Factory) are all publicly available.
+
+|  | Open Weights | Open Data | Open Code |
+|--|--------------|-----------| --------- |
+|OpenThinker-32B|✅|[✅](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k)|[✅](https://github.com/open-thoughts/open-thoughts) |
+|OpenThinker-7B|✅|[✅](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k)|[✅](https://github.com/open-thoughts/open-thoughts) |
+|Bespoke-Stratos-7B|✅|[✅](https://huggingface.co/datasets/bespokelabs/Bespoke-Stratos-17k)|[✅](https://github.com/bespokelabsai/curator/tree/main/examples/be
+spoke-stratos-data-generation)|
+|DeepSeek-R1-Distill models|✅|❌|❌|
+|OpenAI/Gemini|❌|❌|❌|❌|
+
+We are actively working towards improving the dataset, so please stay tuned!
+
+# Data Curation Recipe
+
+Code
+- [BAAI/TACO](https://huggingface.co/datasets/BAAI/TACO)
+- [codeparrot/apps](https://huggingface.co/datasets/codeparrot/apps)
+- [deepmind/code_contests](https://huggingface.co/datasets/deepmind/code_contests)
+- [MatrixStudio/Codeforces-Python-Submissions](https://huggingface.co/datasets/MatrixStudio/Codeforces-Python-Submissions)
+
+Math
+- [AI-MO/NuminaMath-CoT](https://huggingface.co/datasets/AI-MO/NuminaMath-CoT)
+
+Science
+- [camel-ai/chemistry](https://huggingface.co/datasets/camel-ai/chemistry)
+- [camel-ai/biology](https://huggingface.co/datasets/camel-ai/biology)
+- [camel-ai/physics](https://huggingface.co/datasets/camel-ai/physics)
+
+Puzzle
+- [INK-USC/riddle_sense](https://huggingface.co/datasets/INK-USC/riddle_sense)
+
+Using a curated mix of the datasets above, we generate reasoning traces from DeepSeek-R1 and verify correctness to construct the final dataset.
+
+![diagram](diagram.png)
+
+The full code for the data generation pipeline is publicly available [in our github repo](https://github.com/open-thoughts/open-thoughts).
+
+
+# Links
+- 📝 [OpenThoughts Paper](https://arxiv.org/abs/2506.04178)
+- 📊 [OpenThinker-32B Blog Post](https://www.open-thoughts.ai/blog/scale)
+- 📊 [Measuing Reasoning with Evalchemy Blog Post](https://www.open-thoughts.ai/blog/measure)
+- 📊 [Open Thoughts Launch Blog Post](https://www.open-thoughts.ai/blog/launch)
+- 💻 [Open Thoughts GitHub Repository](https://github.com/open-thoughts/open-thoughts)
+- 🧠 [OpenThoughts-114k dataset](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k) - this dataset.
+- 🤖 [OpenThinker-32B model](https://huggingface.co/open-thoughts/OpenThinker-32B)
+- 🤖 [OpenThinker-7B model](https://huggingface.co/open-thoughts/OpenThinker-7B)
+- 📊 [Bespoke-Stratos Blog Post](https://www.bespokelabs.ai/blog/bespoke-stratos-the-unreasonable-effectiveness-of-reasoning-distillation)
+- 🧠 [Bespoke-Stratos-17k dataset](https://huggingface.co/datasets/bespokelabs/Bespoke-Stratos-17k)
+- 🤖 [Bespoke-Stratos-32B model](https://huggingface.co/bespokelabs/Bespoke-Stratos-32B)
+- 🤖 [Bespoke-Stratos-7B model](https://huggingface.co/bespokelabs/Bespoke-Stratos-7B)
+- 💻 [Curator Viewer](https://curator.bespokelabs.ai/datasets/1389c194254c4ead96daaf145505c3d1)
+
+## Visualization
+Inspect the content with rich formatting with [Curator Viewer](https://curator.bespokelabs.ai/datasets/1389c194254c4ead96daaf145505c3d1)
+
+All 114k examples, clustered by semantic similarity, can be explored in [Nomic Atlas](https://atlas.nomic.ai/data/nomic/openthoughts-114k/map).
+
+<a href="https://atlas.nomic.ai/data/nomic/openthoughts-114k/map">
+  <img src="https://cdn-uploads.huggingface.co/production/uploads/630bfb6b86b8b9904c35f4d1/d7TjezV6R3OnIDlEVL1Rl.png" alt="Nomic Atlas Open-Thoughts-114k Map" w
+idth="35%"/>
+</a>
+
+# Citation
+```
+@misc{guha2025openthoughtsdatarecipesreasoning,
+  title={OpenThoughts: Data Recipes for Reasoning Models},
+  author={Etash Guha and Ryan Marten and Sedrick Keh and Negin Raoof and Georgios Smyrnis and Hritik Bansal and Marianna Nezhurina and Jean Mercat and Trung Vu
+and Zayne Sprague and Ashima Suvarna and Benjamin Feuer and Liangyu Chen and Zaid Khan and Eric Frankel and Sachin Grover and Caroline Choi and Niklas Muennigho
+ff and Shiye Su and Wanjia Zhao and John Yang and Shreyas Pimpalgaonkar and Kartik Sharma and Charlie Cheng-Jie Ji and Yichuan Deng and Sarah Pratt and Vivek Ra
+manujan and Jon Saad-Falcon and Jeffrey Li and Achal Dave and Alon Albalak and Kushal Arora and Blake Wulfe and Chinmay Hegde and Greg Durrett and Sewoong Oh an
+d Mohit Bansal and Saadia Gabriel and Aditya Grover and Kai-Wei Chang and Vaishaal Shankar and Aaron Gokaslan and Mike A. Merrill and Tatsunori Hashimoto and Ye
+jin Choi and Jenia Jitsev and Reinhard Heckel and Maheswaran Sathiamoorthy and Alexandros G. Dimakis and Ludwig Schmidt},
+  year={2025},
+  eprint={2506.04178},
+  archivePrefix={arXiv},
+  primaryClass={cs.LG},
+  url={https://arxiv.org/abs/2506.04178},
+}
+```
+root@1e287e0ce32a:/app# python3 - << 'PY'
+> from datasets import load_dataset
+> from transformers import AutoTokenizer
+> import math
+>
+> # Load dataset
+> ds = load_dataset('open-thoughts/OpenThoughts-114k')
+>
+> # Determine science domain selection rules
+> # Heuristics:
+> # - If there is a split named 'science' use it directly.
+> # - Else if a 'domain' field exists, filter rows where domain equals 'science' (case-insensitive) or similar variants.
+> # - Identify DeepSeek-specific field if present (e.g., 'deepseek_thought', 'deepseek', 'model'=='deepseek', or nested providers),
+> #   otherwise default to the main text/thought field indicated by the dataset (e.g., 'thought', 'response', 'content').
+>
+> available_splits = list(ds.keys())
+> science_ds = None
+> if 'science' in ds:
+>     science_ds = ds['science']
+> else:
+>     # pick a base split to filter from, prefer 'train' if present
+>     base_split_name = 'train' if 'train' in ds else available_splits[0]
+>     base = ds[base_split_name]
+>     # find a likely domain field
+>     domain_field = None
+>     for cand in ['domain','category','subject','topic','Domain','Category']:
+>         if cand in base.features:
+>             domain_field = cand
+>             break
+>     if domain_field is None:
+>         # try to infer from first example keys
+>         for k in base.features.keys():
+>             if 'domain' in k.lower() or 'category' in k.lower() or 'subject' in k.lower():
+>                 domain_field = k
+>                 break
+>     if domain_field is None:
+>         raise SystemExit('Could not find a domain field or science split in dataset')
+>     # filter to science-like values
+>     def is_science(x):
+>         val = x.get(domain_field)
+>         if val is None:
+>             return False
+>         if isinstance(val, str):
+>             return val.strip().lower() in {'science','sci','scientific','natural science','natural-science'}
+>         return False
+>     science_ds = base.filter(is_science)
+>
+> print('Science subset size:', len(science_ds))
+>
+> # Identify DeepSeek-specific content field if present; else choose generic thought/response/content field
+> # We will inspect features to choose a text field.
+> features = science_ds.features
+> text_field = None
+> # Candidate fields ordered by likelihood
+> candidates = [
+>     'deepseek_thought','deepseek','deepseek_content','deepseek_response','deepseek_cot','deepseek_r1','deepseek_output',
+>     'thought','cot','chain_of_thought','solution','response','answer','content','text'
+> ]
+> for cand in candidates:
+>     if cand in features and str(features[cand].dtype) == 'string':
+>         text_field = cand
+>         break
+>
+> # If not found, try to deduce from first example
+> if text_field is None and len(science_ds) > 0:
+>     ex = science_ds[0]
+>     for cand in candidates:
+>         if cand in ex and isinstance(ex[cand], str) and len(ex[cand].strip())>0:
+>             text_field = cand
+>             break
+>
+> # If still not found, consider nested structures with provider
+> provider_field = None
+> if text_field is None:
+>     # Look for a list/dict that may contain multiple providers
+>     ex = science_ds[0] if len(science_ds)>0 else {}
+>     for k,v in ex.items():
+>         if isinstance(v, list) and v and isinstance(v[0], dict):
+>             # try to find dicts with 'provider' or 'model' and 'text'
+>             for item in v:
+>                 keys = set(item.keys())
+>                 if any(s in keys for s in ['provider','model','source']) and any(t in keys for t in ['text','content','thought','response']):
+>                     provider_field = (k,'text' if 'text' in keys else ('content' if 'content' in keys else ('thought' if 'thought' in keys else 'response')))
+>                     break
+>         if provider_field:
+>             break
+>
+> # Build an iterator over DeepSeek content if provider_field set
+> def iter_texts():
+>     if len(science_ds) == 0:
+>         return
+>     if text_field is not None:
+>         for ex in science_ds:
+>             txt = ex.get(text_field)
+>             if isinstance(txt, str) and txt:
+>                 yield txt
+>     elif provider_field is not None:
+>         list_key, text_key = provider_field
+>         for ex in science_ds:
+>             items = ex.get(list_key) or []
+>             # Prefer items where provider indicates deepseek
+>             for it in items:
+>                 prov = (it.get('provider') or it.get('model') or it.get('source') or '')
+>                 if isinstance(prov, str) and 'deepseek' in prov.lower():
+>                     txt = it.get(text_key)
+>                     if isinstance(txt, str) and txt:
+>                         yield txt
+>         # If nothing yielded, fallback to all texts in that list
+>     else:
+>         raise SystemExit('Could not identify a suitable text field to tokenize')
+>
+> # Load tokenizer
+> tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+>
+> # Accumulate token count
+> total = 0
+> batch = []
+> BATCH_SIZE = 64
+> for txt in iter_texts():
+>     batch.append(txt)
+>     if len(batch) >= BATCH_SIZE:
+>         enc = tokenizer(batch, add_special_tokens=False)
+>         # enc['input_ids'] is a list of lists
+>         total += sum(len(ids) for ids in enc['input_ids'])
+>         batch = []
+> if batch:
+>     enc = tokenizer(batch, add_special_tokens=False)
+>     total += sum(len(ids) for ids in enc['input_ids'])
+>
+> print('TOTAL_TOKENS:', total)
+> with open('/app/answer.txt','w') as f:
+>     f.write(str(total))
+> print('WROTE /app/answer.txt')
+> PY
+None of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+Could not find a domain field or science split in dataset
+root@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+wc: /app/answer.txt: No such file or directory
+root@1e287e0ce32a:/app# python3 - << 'PY'
+> from datasets import load_dataset
+> from transformers import AutoTokenizer
+>
+> # Load tokenizer
+> tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+>
+> # Stream dataset to avoid full download wait
+> stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+>
+> def find_domain_field(ex):
+>     for k in ex.keys():
+>         kl = k.lower()
+>         if 'domain' in kl or 'category' in kl or 'subject' in kl or 'topic' in kl:
+>             return k
+>     return None
+>
+> def is_science_domain(val):
+>     if val is None:
+>         return False
+>     if isinstance(val, str):
+>         v = val.strip().lower()
+>         return (v == 'science') or v.startswith('science') or v in {'sci','scientific','natural science','natural-science','general science'}
+>     return False
+>
+> def extract_deepseek_texts(ex):
+>     texts = []
+>     # direct string fields indicating deepseek
+>     for k,v in ex.items():
+>         if isinstance(v, str) and 'deepseek' in k.lower():
+>             s = v.strip()
+>             if s:
+>                 texts.append(s)
+>     # dict keyed by model name or containing provider/model/source
+>     for k,v in ex.items():
+>         if isinstance(v, dict):
+>             # dict of multiple models
+>             for dk,dv in v.items():
+>                 if isinstance(dv, str) and 'deepseek' in str(dk).lower():
+>                     s = dv.strip()
+>                     if s:
+>                         texts.append(s)
+>                 elif isinstance(dv, dict):
+>                     prov = (dv.get('provider') or dv.get('model') or dv.get('source') or '')
+>                     if isinstance(prov, str) and 'deepseek' in prov.lower():
+>                         for tk in ['text','content','thought','response','output','cot','rationale']:
+>                             tv = dv.get(tk)
+>                             if isinstance(tv, str):
+>                                 s = tv.strip()
+>                                 if s:
+>                                     texts.append(s)
+>             # single dict with provider
+>             prov = (v.get('provider') or v.get('model') or v.get('source'))
+>             if isinstance(prov, str) and 'deepseek' in prov.lower():
+>                 for tk in ['text','content','thought','response','output','cot','rationale']:
+>                     tv = v.get(tk)
+>                     if isinstance(tv, str):
+>                         s = tv.strip()
+>                         if s:
+>                             texts.append(s)
+>     # list of dicts/items with provider
+>     for k,v in ex.items():
+>         if isinstance(v, list):
+>             for item in v:
+>                 if isinstance(item, dict):
+>                     prov = (item.get('provider') or item.get('model') or item.get('source') or '')
+>                     if isinstance(prov, str) and 'deepseek' in prov.lower():
+>                         for tk in ['text','content','thought','response','output','cot','rationale']:
+>                             tv = item.get(tk)
+>                             if isinstance(tv, str):
+>                                 s = tv.strip()
+>                                 if s:
+>                                     texts.append(s)
+>                     else:
+>                         # fields named with deepseek
+>                         for tk, tv in item.items():
+>                             if isinstance(tv, str) and 'deepseek' in tk.lower():
+>                                 s = tv.strip()
+>                                 if s:
+>                                     texts.append(s)
+>     return texts
+>
+> # Iterate and compute token count
+> itr = iter(stream)
+> try:
+>     first = next(itr)
+> except StopIteration:
+>     total = 0
+>     with open('/app/answer.txt','w') as f:
+>         f.write('0')
+>     print('TOTAL', 0)
+>     raise SystemExit()
+>
+> domain_field = find_domain_field(first)
+>
+> total = 0
+> batch = []
+> BATCH = 64
+>
+> # process first example
+> if is_science_domain(first.get(domain_field) if domain_field else None):
+>     batch.extend(extract_deepseek_texts(first))
+>
+> for ex in itr:
+>     domval = ex.get(domain_field) if domain_field else None
+>     if is_science_domain(domval):
+>         texts = extract_deepseek_texts(ex)
+>         if texts:
+>             batch.extend(texts)
+>     if len(batch) >= BATCH:
+>         enc = tokenizer(batch, add_special_tokens=False)
+>         total += sum(len(ids) for ids in enc['input_ids'])
+>         batch = []
+>
+> if batch:
+>     enc = tokenizer(batch, add_special_tokens=False)
+>     total += sum(len(ids) for ids in enc['input_ids'])
+>
+> with open('/app/answer.txt','w') as f:
+>     f.write(str(total))
+> print('TOTAL', total)
+> PY
+None of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+tokenizer_config.json: 7.30kB [00:00, 25.2MB/s]
+vocab.json: 2.78MB [00:00, 30.0MB/s]
+merges.txt: 1.67MB [00:00, 27.5MB/s]
+tokenizer.json: 7.03MB [00:00, 36.9MB/s]
+ls -l /app/answer.txt
+wc -c /app/answer.txt && echo && cat /app/answer.txt
+ls -l /app/answer.txt
+wc -c /app/answer.txt && echo && cat /app/answer.txt
+ls -l /app/answer.txt
+wc -c /app/answer.txt && echo && cat /app/answer.txt
+TOTAL 0
+root@1e287e0ce32a:/app# ls -l /app/answer.txt
+-rw-r--r-- 1 root root 1 Oct 15 06:36 /app/answer.txt
+root@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+1 /app/answer.txt
+
+0root@1e287e0ce32a:/app# ls -l /app/answer.txt
+-rw-r--r-- 1 root root 1 Oct 15 06:36 /app/answer.txt
+root@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+1 /app/answer.txt
+
+0root@1e287e0ce32a:/app# ls -l /app/answer.txt
+-rw-r--r-- 1 root root 1 Oct 15 06:36 /app/answer.txt
+root@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+1 /app/answer.txt
+
+0root@1e287e0ce32a:/app# ls -l /app/answer.txt
+-rw-r--r-- 1 root root 1 Oct 15 06:36 /app/answer.txt
+root@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+1 /app/answer.txt
+
+0root@1e287e0ce32a:/app# python3 - << 'PY'
+   for tk in TEXT_KEYS:
+                            tv = dv.get(tk)
+                            if isinstance(tv, str) and tv.strip():
+                                texts.append(tv.strip())
+            # Single-level dict with provider
+            prov = (v.get('provider') or v.get('model') or v.get('source'))
+            if isinstance(prov, str) and 'deepseek' in prov.lower():
+                for tk in TEXT_KEYS:
+                    tv = v.get(tk)
+                    if isinstance(tv, str) and tv.strip():
+                        texts.append(tv.strip())
+    # 3) Lists of dicts/items
+    for k, v in ex.items():
+        if isinstance(v, list):
+            for item in v:
+                if isinstance(item, dict):
+                    prov = (item.get('provider') or item.get('model') or item.get('source') or '')
+                    if isinstance(prov, str) and 'deepseek' in prov.lower():
+                        for tk in TEXT_KEYS:
+                            tv = item.get(tk)
+                            if isinstance(tv, str) and tv.strip():
+                                texts.append(tv.strip())
+                    else:
+                        # Fields within dict named with deepseek
+                        for tk, tv in item.items():
+                            if isinstance(tv, str) and 'deepseek' in tk.lower() and tv.strip():
+                                texts.append(tv.strip())
+    return texts
+
+# Initialize iterator and domain getter
+itr = iter(stream)
+try:
+    first = next(itr)
+except StopIteration:
+    total = 0
+    with open('/app/answer.txt', 'w') as f:
+        f.write('0')
+    print('TOTAL', 0)
+    raise SystemExit()
+
+domain_get = make_domain_getter(first)
+
+# Counting loop
+BATCH = 64
+batch = []
+TOTAL = 0
+
+# Process first example
+if is_science(domain_get(first)):
+    batch.extend(extract_deepseek_texts(first))
+
+for ex in itr:
+    dom = domain_get(ex)
+    if is_science(dom):
+        texts = extract_deepseek_texts(ex)
+        if texts:
+            batch.extend(texts)
+    if len(batch) >= BATCH:
+        enc = tokenizer> from datasets import load_dataset
+> from transformers import AutoTokenizer
+>
+> # Load tokenizer
+> print('Loading tokenizer...')
+> tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+>
+> print('Opening dataset stream...')
+> stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+>
+> # Determine domain getter (top-level or one-level nested)
+> def make_domain_getter(example):
+>     # Top-level search
+>     for k in example.keys():
+>         if 'domain' in k.lower():
+>             return lambda ex, kk=k: ex.get(kk)
+>     # One-level nested dict search
+>     for k,v in example.items():
+>         if isinstance(v, dict):
+>             for dk in v.keys():
+>                 if 'domain' in dk.lower():
+>                     return lambda ex, kk=k, dd=dk: (ex.get(kk) or {}).get(dd)
+>     return lambda ex: None
+>
+> # Science domain check
+> def is_science(val):
+>     if not isinstance(val, str):
+>         return False
+>     v = val.strip().lower()
+>     return ('science' in v) or (v in {'sci','scientific','natural science','natural-science'})
+>
+> # Extract DeepSeek texts from an example
+> TEXT_KEYS = ['text','content','thought','response','output','cot','rationale','answer']
+>
+> def extract_deepseek_texts(ex):
+>     texts = []
+>     # 1) Direct fields with 'deepseek' in key
+>     for k, v in ex.items():
+>         if isinstance(v, str) and 'deepseek' in k.lower():
+>             s = v.strip()
+>             if s:
+>                 texts.append(s)
+>     # 2) Dict values
+>     for k, v in ex.items():
+>         if isinstance(v, dict):
+>             # Dict where keys may be model names
+>             for dk, dv in v.items():
+>                 if isinstance(dv, str) and 'deepseek' in str(dk).lower():
+>                     s = dv.strip()
+>                     if s:
+>                         texts.append(s)
+>                 elif isinstance(dv, dict):
+>                     prov = (dv.get('provider') or dv.get('model') or dv.get('source') or '')
+>                     if isinstance(prov, str) and 'deepseek' in prov.lower():
+>                         for tk in TEXT_KEYS:
+>                             tv = dv.get(tk)
+>                             if isinstance(tv, str) and tv.strip():
+>                                 texts.append(tv.strip())
+>             # Single-level dict with provider
+>             prov = (v.get('provider') or v.get('model') or v.get('source'))
+>             if isinstance(prov, str) and 'deepseek' in prov.lower():
+>                 for tk in TEXT_KEYS:
+>                     tv = v.get(tk)
+>                     if isinstance(tv, str) and tv.strip():
+>                         texts.append(tv.strip())
+>     # 3) Lists of dicts/items
+>     for k, v in ex.items():
+>         if isinstance(v, list):
+>             for item in v:
+>                 if isinstance(item, dict):
+>                     prov = (item.get('provider') or item.get('model') or item.get('source') or '')
+>                     if isinstance(prov, str) and 'deepseek' in prov.lower():
+>                         for tk in TEXT_KEYS:
+>                             tv = item.get(tk)
+>                             if isinstance(tv, str) and tv.strip():
+>                                 texts.append(tv.strip())
+>                     else:
+>                         # Fields within dict named with deepseek
+>                         for tk, tv in item.items():
+>                             if isinstance(tv, str) and 'deepseek' in tk.lower() and tv.strip():
+>                                 texts.append(tv.strip())
+>     return texts
+>
+> # Initialize iterator and domain getter
+> itr = iter(stream)
+> try:
+>     first = next(itr)
+> except StopIteration:
+>     total = 0
+>     with open('/app/answer.txt', 'w') as f:
+>         f.write('0')
+>     print('TOTAL', 0)
+>     raise SystemExit()
+>
+> domain_get = make_domain_getter(first)
+>
+> # Counting loop
+> BATCH = 64
+> batch = []
+> TOTAL = 0
+>
+> # Process first example
+> if is_science(domain_get(first)):
+>     batch.extend(extract_deepseek_texts(first))
+>
+> for ex in itr:
+>     dom = domain_get(ex)
+>     if is_science(dom):
+>         texts = extract_deepseek_texts(ex)
+>         if texts:
+>             batch.extend(texts)
+>     if len(batch) >= BATCH:
+>         enc = tokenizer(batch, add_special_tokens=False)
+>         TOTAL += sum(len(ids) for ids in enc['input_ids'])
+>         batch = []
+>
+> # Flush remaining
+> if batch:
+>     enc = tokenizer(batch, add_special_tokens=False)
+>     TOTAL += sum(len(ids) for ids in enc['input_ids'])
+>
+> with open('/app/answer.txt', 'w') as f:
+>     f.write(str(TOTAL))
+> print('TOTAL', TOTAL)
+> PY
+None of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+Loading tokenizer...
+Opening dataset stream...
+wc -c /app/answer.txt && echo && cat /app/answer.txt
+python3 - << 'PY'
+from huggingface_hub import hf_hub_download
+from datasets import load_dataset_builder, load_dataset
+from transformers import AutoTokenizer
+import json
+
+print('Downloading README...')
+try:
+    readme_path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='README.md')
+    with open(readme_path, 'r', encoding='utf-8') as f:
+        readme = f.read()
+    print('\nREADME preview (first 150 lines):')
+    print('\n'.join(readme.splitlines()[:150]))
+except Exception as e:
+    print('Failed to fetch README:', e)
+
+print('\nLoading dataset builder info...')
+try:
+    builder = load_dataset_builder('open-thoughts/OpenThoughts-114k')
+    info = builder.info
+    print('Splits available:', [s.name for s in info.splits] if info.splits else 'None')
+    print('Features (if known):', info.features)
+except Exception as e:
+    print('Failed to load builder:', e)
+
+# Decide split to use
+split_name = 'science'
+try:
+    # Try streaming the science split directly
+    stream = load_dataset('open-thoughts/OpenThoughts-114k', split=split_name, streaming=True)
+    use_science_split = True
+    print('Using split:', split_name)
+except Exception:
+    # Fallback to train split and filter by domain
+    stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+    use_science_split = False
+    print('Using split: train (will filter by science domain)')
+
+# Inspect a few examples to infer schema
+def preview_examples(stream_iter, n=5):
+    out = []
+    for i, ex in enumerate(stream_iter):
+        out.append({k: (v if isinstance(v, (str,int,float)) else type(v).__name__) for k,v in ex.items()})
+        if i+1 >= n:
+            break
+    return out
+
+itr = iter(stream)
+preview = []
+first = None
+try:
+    first = next(itr)
+    preview = [ {k: (v if isinstance(v,(str,int,float)) else type(v).__name__) for k,v in first.items()} ]
+except StopIteration:
+    first = None
+
+if first is not None:
+    for i, ex in enumerate(itr):
+        preview.append({k: (v if isinstance(v,(str,int,float)) else type(v).__name__) for k,v in ex.items()})
+        if i >= 3:
+            break
+print('Example schema preview:', preview)
+
+# Determine domain accessor based on README guidance + observed keys
+domain_key = None
+nested_domain = None
+if first is not None:
+    for k in first.keys():
+        if 'domain' in k.lower():
+            domain_key = k
+            break
+    if domain_key is None:
+        # search one-level nested dicts
+        for k, v in first.items():
+            if isinstance(v, dict):
+                for dk in v.keys():
+                    if 'domain' in dk.lower():
+                        nested_domain = (k, dk)
+                        break
+                if nested_domain:
+                    break
+
+def get_domain(ex):
+    if domain_key:
+        return ex.get(domain_key)
+    if nested_domain:
+        parent, child = nested_domain
+        sub = ex.get(parent) or {}
+        return sub.get(child)
+    return None
+
+# Identify DeepSeek text extraction strategy
+text_fields_priority = ['cot','chain_of_thought','thought','rationale','reasoning','output','response','content','answer','text']
+
+def extract_deepseek_texts(ex):
+    texts = []
+    # Direct model/provider indicators
+    # Search top-level dicts/lists for entries with model/provider/source containing 'deepseek'
+    for k, v in ex.items():
+        if isinstance(v, dict):
+            # If dict maps model_name -> text or dict
+            for mk, mv in v.items():
+                mk_s = str(mk).lower()
+                if 'deepseek' in mk_s:
+                    if isinstance(mv, str):
+                        if mv.strip():
+                            texts.append(mv.strip())
+                    elif isinstance(mv, dict):
+                        for tk in text_fields_priority:
+                            tv = mv.get(tk)
+                            if isinstance(tv, str) and tv.strip():
+                                texts.append(tv.strip())
+                elif isinstance(mv, dict):
+     TOTAL 0
+root@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+1 /app/answer.txt
+
+0root@1e287e0ce32a:/app# python3 - << 'PY'
+> from huggingface_hub import hf_hub_download
+> from datasets import load_dataset_builder, load_dataset
+> from transformers import AutoTokenizer
+> import json
+>
+> print('Downloading README...')
+> try:
+>     readme_path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='README.md')
+>     with open(readme_path, 'r', encoding='utf-8') as f:
+>         readme = f.read()
+>     print('\nREADME preview (first 150 lines):')
+>     print('\n'.join(readme.splitlines()[:150]))
+> except Exception as e:
+>     print('Failed to fetch README:', e)
+>
+> print('\nLoading dataset builder info...')
+> try:
+>     builder = load_dataset_builder('open-thoughts/OpenThoughts-114k')
+>     info = builder.info
+>     print('Splits available:', [s.name for s in info.splits] if info.splits else 'None')
+>     print('Features (if known):', info.features)
+> except Exception as e:
+>     print('Failed to load builder:', e)
+>
+> # Decide split to use
+> split_name = 'science'
+> try:
+>     # Try streaming the science split directly
+>     stream = load_dataset('open-thoughts/OpenThoughts-114k', split=split_name, streaming=True)
+>     use_science_split = True
+>     print('Using split:', split_name)
+> except Exception:
+>     # Fallback to train split and filter by domain
+>     stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+>     use_science_split = False
+>     print('Using split: train (will filter by science domain)')
+>
+> # Inspect a few examples to infer schema
+> def preview_examples(stream_iter, n=5):
+>     out = []
+>     for i, ex in enumerate(stream_iter):
+>         out.append({k: (v if isinstance(v, (str,int,float)) else type(v).__name__) for k,v in ex.items()})
+>         if i+1 >= n:
+>             break
+>     return out
+>
+> itr = iter(stream)
+> preview = []
+> first = None
+> try:
+>     first = next(itr)
+>     preview = [ {k: (v if isinstance(v,(str,int,float)) else type(v).__name__) for k,v in first.items()} ]
+> except StopIteration:
+>     first = None
+>
+> if first is not None:
+>     for i, ex in enumerate(itr):
+>         preview.append({k: (v if isinstance(v,(str,int,float)) else type(v).__name__) for k,v in ex.items()})
+>         if i >= 3:
+>             break
+> print('Example schema preview:', preview)
+>
+> # Determine domain accessor based on README guidance + observed keys
+> domain_key = None
+> nested_domain = None
+> if first is not None:
+>     for k in first.keys():
+>         if 'domain' in k.lower():
+>             domain_key = k
+>             break
+>     if domain_key is None:
+>         # search one-level nested dicts
+>         for k, v in first.items():
+>             if isinstance(v, dict):
+>                 for dk in v.keys():
+>                     if 'domain' in dk.lower():
+>                         nested_domain = (k, dk)
+>                         break
+>                 if nested_domain:
+>                     break
+>
+r> def get_domain(ex):
+>     if domain_key:
+>         return ex.get(domain_key)
+>     if nested_domain:
+>         parent, child = nested_domain
+>         sub = ex.get(parent) or {}
+>         return sub.get(child)
+>     return None
+>
+> # Identify DeepSeek text extraction strategy
+> text_fields_priority = ['cot','chain_of_thought','thought','rationale','reasoning','output','response','content','answer','text']
+>
+> def extract_deepseek_texts(ex):
+>     texts = []
+>     # Direct model/provider indicators
+>     # Search top-level dicts/lists for entries with model/provider/source containing 'deepseek'
+>     for k, v in ex.items():
+>         if isinstance(v, dict):
+>             # If dict maps model_name -> text or dict
+>             for mk, mv in v.items():
+>                 mk_s = str(mk).lower()
+>                 if 'deepseek' in mk_s:
+>                     if isinstance(mv, str):
+>                         if mv.strip():
+>                             texts.append(mv.strip())
+>                     elif isinstance(mv, dict):
+>                         for tk in text_fields_priority:
+>                             tv = mv.get(tk)
+>                             if isinstance(tv, str) and tv.strip():
+>                                 texts.append(tv.strip())
+>                 elif isinstance(mv, dict):
+>                     prov = (mv.get('provider') or mv.get('model') or mv.get('source') or '')
+>                     if isinstance(prov, str) and 'deepseek' in prov.lower():
+>                         for tk in text_fields_priority:
+>                             tv = mv.get(tk)
+>                             if isinstance(tv, str) and tv.strip():
+>                                 texts.append(tv.strip())
+>             # Single dict with provider/model
+>             prov = (v.get('provider') or v.get('model') or v.get('source'))
+>             if isinstance(prov, str) and 'deepseek' in prov.lower():
+>                 for tk in text_fields_priority:
+>                     tv = v.get(tk)
+>                     if isinstance(tv, str) and tv.strip():
+>                         texts.append(tv.strip())
+>         elif isinstance(v, list):
+>             for item in v:
+>                 if isinstance(item, dict):
+>                     prov = (item.get('provider') or item.get('model') or item.get('source') or '')
+>                     if isinstance(prov, str) and 'deepseek' in prov.lower():
+>                         for tk in text_fields_priority:
+>                             tv = item.get(tk)
+>                             if isinstance(tv, str) and tv.strip():
+>                                 texts.append(tv.strip())
+>                     else:
+>                         for tk, tv in item.items():
+>                             if isinstance(tv, str) and 'deepseek' in tk.lower() and tv.strip():
+>                                 texts.append(tv.strip())
+>         elif isinstance(v, str) and 'deepseek' in k.lower():
+>             if v.strip():
+>                 texts.append(v.strip())
+>     return texts
+>
+> # Now perform counting with tokenizer
+> print('Loading tokenizer...')
+> tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+>
+> # Re-open stream for full iteration
+> try:
+>     if use_science_split:
+>         data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='science', streaming=True)
+>     else:
+>         data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+> except Exception:
+>     data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+>
+> BATCH = 128
+> batch = []
+> TOTAL = 0
+> count_examples = 0
+> for ex in data_stream:
+>     dom = get_domain(ex)
+>     if use_science_split or (isinstance(dom, str) and 'science' in dom.lower()):
+>         texts = extract_deepseek_texts(ex)
+>         if texts:
+>             batch.extend(texts)
+>         count_examples += 1
+>         if len(batch) >= BATCH:
+>             enc = tokenizer(batch, add_special_tokens=False)
+>             TOTAL += sum(len(ids) for ids in enc['input_ids'])
+>             batch = []
+>
+> if batch:
+>     enc = tokenizer(batch, add_special_tokens=False)
+>     TOTAL += sum(len(ids) for ids in enc['input_ids'])
+>
+> with open('/app/answer.txt','w') as f:
+>     f.write(str(TOTAL))
+> print('Science examples processed:', count_examples)
+> print('TOTAL_DEEPSEEK_TOKENS:', TOTAL)
+> PY
+None of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+Downloading README...
+
+README preview (first 150 lines):
+---
+dataset_info:
+- config_name: default
+  features:
+  - name: system
+    dtype: string
+  - name: conversations
+    list:
+    - name: from
+      dtype: string
+    - name: value
+      dtype: string
+  splits:
+  - name: train
+    num_bytes: 2635015668
+    num_examples: 113957
+  download_size: 1078777193
+  dataset_size: 2635015668
+- config_name: metadata
+  features:
+  - name: problem
+    dtype: string
+  - name: deepseek_reasoning
+    dtype: string
+  - name: deepseek_solution
+    dtype: string
+  - name: ground_truth_solution
+    dtype: string
+  - name: domain
+    dtype: string
+  - name: source
+    dtype: string
+  - name: test_cases
+    dtype: string
+  - name: starter_code
+    dtype: string
+  splits:
+  - name: train
+    num_bytes: 5525214077.699433
+    num_examples: 113957
+  download_size: 2469729724
+  dataset_size: 5525214077.699433
+configs:
+- config_name: default
+  data_files:
+  - split: train
+    path: data/train-*
+- config_name: metadata
+  data_files:
+  - split: train
+    path: metadata/train-*
+tags:
+- curator
+- synthetic
+license: apache-2.0
+---
+
+<p align="center">
+    <img src="open_thoughts.png" width="50%">
+</p>
+
+> [!NOTE]
+> We have released a paper for OpenThoughts! See our paper [here](https://arxiv.org/abs/2506.04178).
+
+<a href="https://github.com/bespokelabsai/curator/">
+ <img src="https://huggingface.co/datasets/bespokelabs/Bespoke-Stratos-17k/resolve/main/made_with_curator.png" alt="Made with Curator" width=200px>
+</a>
+
+# Open-Thoughts-114k
+
+## Dataset Description
+
+- **Homepage:** https://www.open-thoughts.ai/
+- **Repository:** https://github.com/open-thoughts/open-thoughts
+- **Point of Contact:** [Open Thoughts Team](contact@open-thoughts.ai)
+
+Open synthetic reasoning dataset with 114k high-quality examples covering math, science, code, and puzzles!
+
+Inspect the content with rich formatting with [Curator Viewer](https://curator.bespokelabs.ai/datasets/1389c194254c4ead96daaf145505c3d1).
+
+### Available Subsets
+
+**default** subset containing ready-to-train data used to finetune the [OpenThinker-7B](https://huggingface.co/open-thoughts/OpenThinker-7B) and [OpenThinker-32
+B](https://huggingface.co/open-thoughts/OpenThinker-32B) models:
+```
+ds = load_dataset("open-thoughts/OpenThoughts-114k", split="train")
+```
+**metadata** subset containing extra columns used in dataset construction:
+- `problem`
+- `ground_truth_solution`
+- `deepseek_reasoning`
+- `deepseek_solution`
+- `domain`
+- `source`
+- `test_cases` (code only)
+- `starter_code`(code only)
+
+```
+ds = load_dataset("open-thoughts/OpenThoughts-114k", "metadata", split="train")
+```
+
+# OpenThinker Models
+
+The numbers reported in the tables below are evaluated with our open-source tool [Evalchemy](https://github.com/mlfoundations/Evalchemy).
+
+|                             | AIME24   | MATH500 | GPQA-Diamond | LCBv2 Easy  | LCBv2 Medium  | LCBv2 Hard  | LCBv2 All  |
+| --------------------------- | -------- | ------- | ------------ | ----------- | ------------- | ----------- | ---------- |
+| [OpenThinker-32B](https://huggingface.co/open-thoughts/OpenThinker-32B)             | 66       | 90.6    | 61.6         | 95.1        | 70.9          | 26.8
+      | 68.9       |
+| [OpenThinker-7B](https://huggingface.co/open-thoughts/OpenThinker-7B)              | 31.3     | 83.0    | 42.4         | 75.3        | 28.6          | 6.5
+     | 39.9       |
+| Bespoke-Stratos-7B          | 22.7     | 79.6    | 38.9         | 71.4        | 25.2          | 0.8         | 35.8       |
+| DeepSeek-R1-Distill-Qwen-7B | 60       | 88.2    | 46.9         | 79.7        | 45.1          | 14.6        | 50.1       |
+| gpt-4o-0513                 | 8.7      | 75.8    | 46.5         | 87.4        | 42.7          | 8.9         | 50.5       |
+| o1-mini                     | 64       | 85.6    | 60           | 92.8        | 74.7          | 39.8        | 72.8       |
+
+We are fully open-source. Our [model weights](https://huggingface.co/open-thoughts), [datasets](https://huggingface.co/open-thoughts), [data generation code](ht
+tps://github.com/open-thoughts/open-thoughts), [evaluation code](https://github.com/mlfoundations/Evalchemy), and [training code](https://github.com/hiyouga/LLa
+MA-Factory) are all publicly available.
+
+|  | Open Weights | Open Data | Open Code |
+|--|--------------|-----------| --------- |
+|OpenThinker-32B|✅|[✅](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k)|[✅](https://github.com/open-thoughts/open-thoughts) |
+|OpenThinker-7B|✅|[✅](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k)|[✅](https://github.com/open-thoughts/open-thoughts) |
+|Bespoke-Stratos-7B|✅|[✅](https://huggingface.co/datasets/bespokelabs/Bespoke-Stratos-17k)|[✅](https://github.com/bespokelabsai/curator/tree/main/examples/be
+spoke-stratos-data-generation)|
+|DeepSeek-R1-Distill models|✅|❌|❌|
+|OpenAI/Gemini|❌|❌|❌|❌|
+
+We are actively working towards improving the dataset, so please stay tuned!
+
+# Data Curation Recipe
+
+Code
+- [BAAI/TACO](https://huggingface.co/datasets/BAAI/TACO)
+- [codeparrot/apps](https://huggingface.co/datasets/codeparrot/apps)
+- [deepmind/code_contests](https://huggingface.co/datasets/deepmind/code_contests)
+- [MatrixStudio/Codeforces-Python-Submissions](https://huggingface.co/datasets/MatrixStudio/Codeforces-Python-Submissions)
+
+Math
+- [AI-MO/NuminaMath-CoT](https://huggingface.co/datasets/AI-MO/NuminaMath-CoT)
+
+Science
+- [camel-ai/chemistry](https://huggingface.co/datasets/camel-ai/chemistry)
+- [camel-ai/biology](https://huggingface.co/datasets/camel-ai/biology)
+- [camel-ai/physics](https://huggingface.co/datasets/camel-ai/physics)
+
+Puzzle
+- [INK-USC/riddle_sense](https://huggingface.co/datasets/INK-USC/riddle_sense)
+
+Using a curated mix of the datasets above, we generate reasoning traces from DeepSeek-R1 and verify correctness to construct the final dataset.
+
+![diagram](diagram.png)
+
+The full code for the data generation pipeline is publicly available [in our github repo](https://github.com/open-thoughts/open-thoughts).
+
+
+Loading dataset builder info...
+Failed to load builder: 'str' object has no attribute 'name'
+Using split: train (will filter by science domain)
+Example schema preview: [{'system': "Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providi
+ng the final precise and accurate solutions. This requires engaging in a comprehensive cycle of analysis, summarizing, exploration, reassessment, reflection, ba
+cktracing, and iteration to develop well-considered thinking process. Please structure your response into two main sections: Thought and Solution. In the Though
+t section, detail your reasoning process using the specified format: <|begin_of_thought|> {thought with steps separated with '\\n\\n'} <|end_of_thought|> Each s
+tep should include detailed considerations such as analisying questions, summarizing relevant findings, brainstorming new ideas, verifying the accuracy of the c
+urrent steps, refining any errors, and revisiting previous steps. In the Solution section, based on various attempts, explorations, and reflections from the Tho
+ught section, systematically present the final solution that you deem correct. The solution should remain a logical, accurate, concise expression style and deta
+il necessary step needed to reach the conclusion, formatted as follows: <|begin_of_solution|> {final formatted, precise, and clear solution} <|end_of_solution|>
+ Now, try to solve the following question through the above guidelines:", 'conversations': 'list'}, {'system': "Your role as an assistant involves thoroughly ex
+ploring questions through a systematic long thinking process before providing the final precise and accurate solutions. This requires engaging in a comprehensiv
+e cycle of analysis, summarizing, exploration, reassessment, reflection, backtracing, and iteration to develop well-considered thinking process. Please structur
+e your response into two main sections: Thought and Solution. In the Thought section, detail your reasoning process using the specified format: <|begin_of_thoug
+ht|> {thought with steps separated with '\\n\\n'} <|end_of_thought|> Each step should include detailed considerations such as analisying questions, summarizing
+relevant findings, brainstorming new ideas, verifying the accuracy of the current steps, refining any errors, and revisiting previous steps. In the Solution sec
+tion, based on various attempts, explorations, and reflections from the Thought section, systematically present the final solution that you deem correct. The so
+lution should remain a logical, accurate, concise expression style and detail necessary step needed to reach the conclusion, formatted as follows: <|begin_of_so
+lution|> {final formatted, precise, and clear solution} <|end_of_solution|> Now, try to solve the following question through the above guidelines:", 'conversati
+ons': 'list'}, {'system': "Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the fin
+al precise and accurate solutions. This requires engaging in a comprehensive cycle of analysis, summarizing, exploration, reassessment, reflection, backtracing,
+ and iteration to develop well-considered thinking process. Please structure your response into two main sections: Thought and Solution. In the Thought section,
+ detail your reasoning process using the specified format: <|begin_of_thought|> {thought with steps separated with '\\n\\n'} <|end_of_thought|> Each step should
+ include detailed considerations such as analisying questions, summarizing relevant findings, brainstorming new ideas, verifying the accuracy of the current ste
+ps, refining any errors, and revisiting previous steps. In the Solution section, based on various attempts, explorations, and reflections from the Thought secti
+on, systematically present the final solution that you deem correct. The solution should remain a logical, accurate, concise expression style and detail necessa
+ry step needed to reach the conclusion, formatted as follows: <|begin_of_solution|> {final formatted, precise, and clear solution} <|end_of_solution|> Now, try
+to solve the following question through the above guidelines:", 'conversations': 'list'}, {'system': "Your role as an assistant involves thoroughly exploring qu
+estions through a systematic long thinking process before providing the final precise and accurate solutions. This requires engaging in a comprehensive cycle of
+ analysis, summarizing, exploration, reassessment, reflection, backtracing, and iteration to develop well-considered thinking process. Please structure your res
+ponse into two main sections: Thought and Solution. In the Thought section, detail your reasoning process using the specified format: <|begin_of_thought|> {thou
+ght with steps separated with '\\n\\n'} <|end_of_thought|> Each step should include detailed considerations such as analisying questions, summarizing relevant f
+indings, brainstorming new ideas, verifying the accuracy of the current steps, refining any errors, and revisiting previous steps. In the Solution section, base
+d on various attempts, explorations, and reflections from the Thought section, systematically present the final solution that you deem correct. The solution sho
+uld remain a logical, accurate, concise expression style and detail necessary step needed to reach the conclusion, formatted as follows: <|begin_of_solution|> {
+final formatted, precise, and clear solution} <|end_of_solution|> Now, try to solve the following question through the above guidelines:", 'conversations': 'lis
+t'}, {'system': "Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the final precise
+ and accurate solutions. This requires engaging in a comprehensive cycle of analysis, summarizing, exploration, reassessment, reflection, backtracing, and itera
+tion to develop well-considered thinking process. Please structure your response into two main sections: Thought and Solution. In the Thought section, detail yo
+ur reasoning process using the specified format: <|begin_of_thought|> {thought with steps separated with '\\n\\n'} <|end_of_thought|> Each step should include d
+etailed considerations such as analisying questions, summarizing relevant findings, brainstorming new ideas, verifying the accuracy of the current steps, refini
+ng any errors, and revisiting previous steps. In the Solution section, based on various attempts, explorations, and reflections from the Thought section, system
+atically present the final solution that you deem correct. The solution should remain a logical, accurate, concise expression style and detail necessary step ne
+eded to reach the conclusion, formatted as follows: <|begin_of_solution|> {final formatted, precise, and clear solution} <|end_of_solution|> Now, try to solve t
+he following question through the above guidelines:", 'conversations': 'list'}]
+Loading tokenizer...
+wc -c /app/answer.txt && echo && cat /app/answer.txt
+python3 - << 'PY'
+from huggingface_hub import hf_hub_download
+from datasets import load_dataset_builder
+import re
+
+print('Fetching README...')
+path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='README.md')
+text = open(path, 'r', encoding='utf-8').read()
+# Show lines mentioning domain/science/deepseek
+lines = text.splitlines()
+keys = ['domain','science','DeepSeek','deepseek','provider','model','conversations']
+for i, line in enumerate(lines):
+    if any(k.lower() in line.lower() for k in keys):
+        print(f'{i+1}:', line)
+
+print('\nBuilder info:')
+try:
+    builder = load_dataset_builder('open-thoughts/OpenThoughts-114k')
+    info = builder.info
+    print('Splits:', [s.name for s in info.splits] if info.splits else [])
+    print('Features:', info.features)
+except Exception as e:
+    print('Builder error:', e)
+PY
+python3 - << 'PY'
+from datasets import load_dataset
+import json
+
+stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+itr = iter(stream)
+try:
+    ex = next(itr)
+except StopIteration:
+    print('Empty dataset')
+    raise SystemExit()
+
+# Print top-level keys and types
+print('Top-level keys:', list(ex.keys()))
+for k,v in ex.items():
+    t = type(v).__name__
+    if isinstance(v, (str,int,float)):
+        print(f'- {k}: {t} sample:', str(v)[:200].replace('\n',' '))
+    else:
+        print(f'- {k}: {t}')
+
+# Try common domain locations
+domain = None
+if 'domain' in ex:
+    domain = ex['domain']
+elif 'meta' in ex and isinstance(ex['meta'], dict):
+    domain = ex['meta'].get('domain')
+print('domain guess:', domain)
+
+# Inspect conversations if present
+conv = ex.get('conversations')
+if isinstance(conv, list):
+    print('conversations length:', len(conv))
+    for i, item in enumerate(conv[:5]):
+        print(f'conv[{i}] keys:', list(item.keys()))
+        # sample fields
+        for fld in ['role','content','text','model','provider','source']:
+            if fld in item:
+                val = item[fld]
+                if isinstance(val, str):
+                    print(f'  {fld}:', val[:200].replace('\n',' '))
+                else:
+                    print(f'  {fld}:', type(val).__name__)
+PY
+python3 - << 'PY'
+from datasets import load_dataset
+from transformers import AutoTokenizer
+
+# Load tokenizer
+tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+
+# Stream data
+stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+
+# Determine domain accessor and deepseek extraction based on observed schema
+first = next(iter(stream))
+
+def get_domain(ex):
+    if 'domain' in ex and isinstance(ex['domain'], str):
+        return ex['domain']
+    if 'meta' in ex and isinstance(ex['meta'], dict):
+        val = ex['meta'].get('domain')
+        if isinstance(val, str):
+            return val
+    return None
+
+TEXT_KEYS = ['content','text','thought','cot','rationale','response','output','answer']
+
+def extract_deepseek_texts(ex):
+    texts = []
+    # Conversations list with possible model/provider
+    conv = ex.get('conversations')
+    if isinstance(conv, list):
+        for item in conv:
+            prov = None
+            for fld in ['model','provider','source']:
+                val = item.get(fld)
+                if isinstance(val, str):
+                    prov = val
+                    break
+            if isinstance(prov, str) and 'deepseek' in prov.lower():
+                for tk in TEXT_KEYS:
+                    tv = item.get(tk)
+                    if isinstance(tv, str) and tv.strip():
+                        texts.append(tv.strip())
+            # If key names include deepseek
+            for k, v in item.items():
+                if isinstance(v, str) and 'deepseek' in k.lower() and v.strip():
+                    texts.append(v.strip())
+    # Top-level dicts keyed by model names or provider
+    for k,v in ex.items():
+        if isinstance(v, dict):
+            prov = (v.get('provider') or v.get('model') or v.get('source'))
+         Science examples processed: 0
+TOTAL_DEEPSEEK_TOKENS: 0
+Exception ignored in: <generator object Parquet._generate_tables at 0x7d39544129f0>
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/datasets/packaged_modules/parquet/parquet.py", line 182, in _generate_tables
+AttributeError: 'NoneType' object has no attribute 'ArrowInvalid'
+root@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+1 /app/answer.txt
+
+0root@1e287e0ce32a:/app# python3 - << 'PY'
+> from huggingface_hub import hf_hub_download
+> from datasets import load_dataset_builder
+> import re
+>
+> print('Fetching README...')
+> path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='README.md')
+> text = open(path, 'r', encoding='utf-8').read()
+> # Show lines mentioning domain/science/deepseek
+> lines = text.splitlines()
+> keys = ['domain','science','DeepSeek','deepseek','provider','model','conversations']
+> for i, line in enumerate(lines):
+>     if any(k.lower() in line.lower() for k in keys):
+>         print(f'{i+1}:', line)
+>
+> print('\nBuilder info:')
+> try:
+>     builder = load_dataset_builder('open-thoughts/OpenThoughts-114k')
+>     info = builder.info
+>     print('Splits:', [s.name for s in info.splits] if info.splits else [])
+>     print('Features:', info.features)
+> except Exception as e:
+>     print('Builder error:', e)
+> PY
+Fetching README...
+7:   - name: conversations
+23:   - name: deepseek_reasoning
+25:   - name: deepseek_solution
+29:   - name: domain
+77: Open synthetic reasoning dataset with 114k high-quality examples covering math, science, code, and puzzles!
+83: **default** subset containing ready-to-train data used to finetune the [OpenThinker-7B](https://huggingface.co/open-thoughts/OpenThinker-7B) and [OpenThinke
+r-32B](https://huggingface.co/open-thoughts/OpenThinker-32B) models:
+90: - `deepseek_reasoning`
+91: - `deepseek_solution`
+92: - `domain`
+101: # OpenThinker Models
+110: | DeepSeek-R1-Distill-Qwen-7B | 60       | 88.2    | 46.9         | 79.7        | 45.1          | 14.6        | 50.1       |
+114: We are fully open-source. Our [model weights](https://huggingface.co/open-thoughts), [datasets](https://huggingface.co/open-thoughts), [data generation cod
+e](https://github.com/open-thoughts/open-thoughts), [evaluation code](https://github.com/mlfoundations/Evalchemy), and [training code](https://github.com/hiyoug
+a/LLaMA-Factory) are all publicly available.
+121: |DeepSeek-R1-Distill models|✅|❌|❌|
+137: Science
+145: Using a curated mix of the datasets above, we generate reasoning traces from DeepSeek-R1 and verify correctness to construct the final dataset.
+159: - 🤖 [OpenThinker-32B model](https://huggingface.co/open-thoughts/OpenThinker-32B)
+160: - 🤖 [OpenThinker-7B model](https://huggingface.co/open-thoughts/OpenThinker-7B)
+163: - 🤖 [Bespoke-Stratos-32B model](https://huggingface.co/bespokelabs/Bespoke-Stratos-32B)
+164: - 🤖 [Bespoke-Stratos-7B model](https://huggingface.co/bespokelabs/Bespoke-Stratos-7B)
+179:   title={OpenThoughts: Data Recipes for Reasoning Models},
+
+Builder info:
+Builder error: 'str' object has no attribute 'name'
+root@1e287e0ce32a:/app# python3 - << 'PY'
+> from datasets import load_dataset
+> import json
+>
+> stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+> itr = iter(stream)
+> try:
+>     ex = next(itr)
+> except StopIteration:
+>     print('Empty dataset')
+>     raise SystemExit()
+>
+> # Print top-level keys and types
+> print('Top-level keys:', list(ex.keys()))
+> for k,v in ex.items():
+>     t = type(v).__name__
+>     if isinstance(v, (str,int,float)):
+>         print(f'- {k}: {t} sample:', str(v)[:200].replace('\n',' '))
+>     else:
+>         print(f'- {k}: {t}')
+>
+> # Try common domain locations
+> domain = None
+> if 'domain' in ex:
+>     domain = ex['domain']
+> elif 'meta' in ex and isinstance(ex['meta'], dict):
+>     domain = ex['meta'].get('domain')
+> print('domain guess:', domain)
+>
+> # Inspect conversations if present
+> conv = ex.get('conversations')
+> if isinstance(conv, list):
+>     print('conversations length:', len(conv))
+>     for i, item in enumerate(conv[:5]):
+>         print(f'conv[{i}] keys:', list(item.keys()))
+>         # sample fields
+>         for fld in ['role','content','text','model','provider','source']:
+>             if fld in item:
+>                 val = item[fld]
+>                 if isinstance(val, str):
+>                     print(f'  {fld}:', val[:200].replace('\n',' '))
+>                 else:
+>                     print(f'  {fld}:', type(val).__name__)
+> PY
+Top-level keys: ['system', 'conversations']
+- system: str sample: Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the final pr
+ecise and accurate solutions. This requires engaging in a comp
+- conversations: list
+domain guess: None
+conversations length: 2
+conv[0] keys: ['from', 'value']
+conv[1] keys: ['from', 'value']
+Fatal Python error: PyGILState_Release: thread state 0x733294002ad0 must be current when releasing
+Python runtime state: finalizing (tstate=0x0000733303b6da70)
+
+Thread 0x00007333033b0b80 (most recent call first):
+  <no Python frame>
+
+Extension modules: numpy._core._multiarray_umath, numpy.linalg._umath_linalg, pyarrow.lib, numpy.random._common, numpy.random.bit_generator, numpy.random._bound
+ed_integers, numpy.random._pcg64, numpy.random._mt19937, numpy.random._generator, numpy.random._philox, numpy.random._sfc64, numpy.random.mtrand, pandas._libs.t
+slibs.ccalendar, pandas._libs.tslibs.np_datetime, pandas._libs.tslibs.dtypes, pandas._libs.tslibs.base, pandas._libs.tslibs.nattype, pandas._libs.tslibs.timezon
+es, pandas._libs.tslibs.fields, pandas._libs.tslibs.timedeltas, pandas._libs.tslibs.tzconversion, pandas._libs.tslibs.timestamps, pandas._libs.properties, panda
+s._libs.tslibs.offsets, pandas._libs.tslibs.strptime, pandas._libs.tslibs.parsing, pandas._libs.tslibs.conversion, pandas._libs.tslibs.period, pandas._libs.tsli
+bs.vectorized, pandas._libs.ops_dispatch, pandas._libs.missing, pandas._libs.hashtable, pandas._libs.algos, pandas._libs.interval, pandas._libs.lib, pyarrow._co
+mpute, pandas._libs.ops, pandas._libs.hashing, pandas._libs.arrays, pandas._libs.tslib, pandas._libs.sparse, pandas._libs.internals, pandas._libs.indexing, pand
+as._libs.index, pandas._libs.writers, pandas._libs.join, pandas._libs.window.aggregations, pandas._libs.window.indexers, pandas._libs.reshape, pandas._libs.grou
+pby, pandas._libs.json, pandas._libs.parsers, pandas._libs.testing, charset_normalizer.md, requests.packages.charset_normalizer.md, requests.packages.chardet.md
+, yaml._yaml, pyarrow._parquet, pyarrow._fs, pyarrow._azurefs, pyarrow._hdfs, pyarrow._gcsfs, pyarrow._s3fs, multidict._multidict, yarl._quoting_c, propcache._h
+elpers_c, aiohttp._http_writer, aiohttp._http_parser, aiohttp._websocket.mask, aiohttp._websocket.reader_c, frozenlist._frozenlist, xxhash._xxhash, pyarrow._ace
+ro, pyarrow._csv, pyarrow._json, pyarrow._substrait, pyarrow._dataset, pyarrow._dataset_orc, pyarrow._parquet_encryption, pyarrow._dataset_parquet_encryption, p
+yarrow._dataset_parquet (total: 81)
+Aborted (core dumped)
+root@1e287e0ce32a:/app# python3 - << 'PY'
+> from datasets import load_dataset
+> from transformers import AutoTokenizer
+>
+> # Load tokenizer
+> tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+>
+> # Stream data
+> stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+>
+> # Determine domain accessor and deepseek extraction based on observed schema
+> first = next(iter(stream))
+>
+> def get_domain(ex):
+>     if 'domain' in ex and isinstance(ex['domain'], str):
+>         return ex['domain']
+>     if 'meta' in ex and isinstance(ex['meta'], dict):
+>         val = ex['meta'].get('domain')
+>         if isinstance(val, str):
+>             return val
+>     return None
+>
+> TEXT_KEYS = ['content','text','thought','cot','rationale','response','output','answer']
+>
+> def extract_deepseek_texts(ex):
+>     texts = []
+>     # Conversations list with possible model/provider
+>     conv = ex.get('conversations')
+>     if isinstance(conv, list):
+>         for item in conv:
+>             prov = None
+>             for fld in ['model','provider','source']:
+>                 val = item.get(fld)
+>                 if isinstance(val, str):
+>                     prov = val
+>                     break
+>             if isinstance(prov, str) and 'deepseek' in prov.lower():
+>                 for tk in TEXT_KEYS:
+>                     tv = item.get(tk)
+>                     if isinstance(tv, str) and tv.strip():
+>                         texts.append(tv.strip())
+>             # If key names include deepseek
+>             for k, v in item.items():
+>                 if isinstance(v, str) and 'deepseek' in k.lower() and v.strip():
+>                     texts.append(v.strip())
+>     # Top-level dicts keyed by model names or provider
+>     for k,v in ex.items():
+>         if isinstance(v, dict):
+>             prov = (v.get('provider') or v.get('model') or v.get('source'))
+>             if isinstance(prov, str) and 'deepseek' in prov.lower():
+>                 for tk in TEXT_KEYS:
+>                     tv = v.get(tk)
+>                     if isinstance(tv, str) and tv.strip():
+>                         texts.append(tv.strip())
+>             # dict mapping model_name -> value
+>             for mk, mv in v.items():
+>                 if isinstance(mv, str) and 'deepseek' in str(mk).lower() and mv.strip():
+>                     texts.append(mv.strip())
+>                 elif isinstance(mv, dict):
+>                     prov2 = (mv.get('provider') or mv.get('model') or mv.get('source') or '')
+>                     if isinstance(prov2, str) and 'deepseek' in prov2.lower():
+>                         for tk in TEXT_KEYS:
+>                             tv = mv.get(tk)
+>                             if isinstance(tv, str) and tv.strip():
+>                                 texts.append(tv.strip())
+>     # Direct fields named with deepseek
+>     for k,v in ex.items():
+>         if isinstance(v, str) and 'deepseek' in k.lower() and v.strip():
+>             texts.append(v.strip())
+>     return texts
+>
+> # Counting
+> BATCH = 64
+> TOTAL = 0
+> batch = []
+>
+> # Re-open stream for full iteration
+> data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+> for ex in data_stream:
+>     dom = get_domain(ex)
+>     if isinstance(dom, str) and 'science' in dom.lower():
+>         texts = extract_deepseek_texts(ex)
+>         if texts:
+>             batch.extend(texts)
+>         if len(batch) >= BATCH:
+>             enc = tokenizer(batch, add_special_tokens=False)
+>             TOTAL += sum(len(ids) for ids in enc['input_ids'])
+>             batch = []
+>
+> if batch:
+>     enc = tokenizer(batch, add_special_tokens=False)
+>     TOTAL += sum(len(ids) for ids in enc['input_ids'])
+>
+> with open('/app/answer.txt','w') as f:
+>     f.write(str(TOTAL))
+> print('TOTAL_DEEPSEEK_TOKENS_SCIENCE:', TOTAL)
+> PY
+None of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+wc -c /app/answer.txt && echo && cat /app/answer.txt
+python3 - << 'PY'
+from huggingface_hub import HfApi, hf_hub_download
+import json
+api = HfApi()
+files = api.list_repo_files('open-thoughts/OpenThoughts-114k', repo_type='dataset')
+print('Total files:', len(files))
+print('Sample data files mentioning science:')
+for f in files:
+    if 'science' in f.lower():
+        print(' -', f)
+# Try to get dataset infos
+try:
+    info_path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='dataset_infos.json')
+    info = json.load(open(info_path,'r'))
+    print('dataset_infos keys:', list(info.keys()))
+    # Print splits for default config
+    default_cfg = next(iter(info.keys()))
+    splits = info[default_cfg].get('splits',{})
+    print('Splits listed:', list(splits.keys()))
+except Exception as e:
+    print('Failed to fetch dataset_infos.json:', e)
+PY
+python3 - << 'PY'
+from datasets import load_dataset
+# Try streaming science split and preview
+try:
+    stream = load_dataset('open-thoughts/OpenThoughts-114k', split='science', streaming=True)
+    use_science = True
+    print('Streaming split: science')
+except Exception as e:
+    stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+    use_science = False
+    print('Streaming split: train (fallback). Error:', e)
+
+itr = iter(stream)
+preview = []
+for i in range(5):
+    try:
+        ex = next(itr)
+    except StopIteration:
+        break
+    keys = list(ex.keys())
+    preview.append(keys)
+    # Show nested keys in conversations if present
+    conv = ex.get('conversations')
+    if isinstance(conv, list) and conv:
+        print('conversations sample keys:', [list(conv[0].keys())])
+    # Show possible domain fields
+    for k in keys:
+        if 'domain' in k.lower():
+            print('Found domain field:', k, 'value:', ex.get(k))
+    # Show any provider/model/source in top-level
+    for k in keys:
+        val = ex.get(k)
+        if isinstance(val, dict):
+            for kk in ['provider','model','source']:
+                if kk in val:
+                    print('Top-level dict has', kk, ':', val.get(kk))
+print('Preview keys:', preview)
+PY
+python3 - << 'PY'
+from datasets import load_dataset
+from transformers import AutoTokenizer
+
+# Load tokenizer
+tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+
+# Prefer science split; fallback to train with domain filter
+try:
+    data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='science', streaming=True)
+    use_science = True
+except Exception:
+    data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+    use_science = False
+
+TEXT_KEYS = ['content','text','thought','cot','rationale','response','output','answer']
+
+# Attempt to detect domain key from the first element for fallback filtering
+domain_key = None
+nested_domain = None
+try:
+    first = next(iter(data_stream))
+    # We need to re-open the stream after peeking
+    data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split=('science' if use_science else 'train'), streaming=True)
+    for k in first.keys():
+        if 'domain' in k.lower():
+            domain_key = k
+            break
+    if domain_key is None:
+        for k,v in first.items():
+            if isinstance(v, dict):
+                for dk in v.keys():
+                    if 'domain' in dk.lower():
+                        nested_domain = (k, dk)
+                        break
+                if nested_domain:
+                    break
+except Exception:
+    pass
+
+def get_domain(ex):
+    if domain_key and isinstance(ex.get(domain_key), str):
+        return ex.get(domain_key)
+    if nested_domain:
+        parent, child = nested_domain
+        sub = ex.get(parent) or {}
+        val = sub.get(child)
+        if isinstance(val, str):
+            return val
+    return None
+
+# DeepSeek text extraction
+def extract_deepseek_texts(ex):
+    texts = []
+    # Conversations
+    conv = ex.get('conversations')
+    if isinstance(conv, list):
+        for item in conv:
+         TOTAL_DEEPSEEK_TOKENS_SCIENCE: 0
+root@1e287e0ce32a:/app# wc -c /app/answer.txt && echo && cat /app/answer.txt
+1 /app/answer.txt
+
+0root@1e287e0ce32a:/app# python3 - << 'PY'
+> from huggingface_hub import HfApi, hf_hub_download
+> import json
+> api = HfApi()
+> files = api.list_repo_files('open-thoughts/OpenThoughts-114k', repo_type='dataset')
+> print('Total files:', len(files))
+> print('Sample data files mentioning science:')
+> for f in files:
+>     if 'science' in f.lower():
+>         print(' -', f)
+> # Try to get dataset infos
+> try:
+>     info_path = hf_hub_download(repo_id='open-thoughts/OpenThoughts-114k', repo_type='dataset', filename='dataset_infos.json')
+>     info = json.load(open(info_path,'r'))
+>     print('dataset_infos keys:', list(info.keys()))
+>     # Print splits for default config
+>     default_cfg = next(iter(info.keys()))
+>     splits = info[default_cfg].get('splits',{})
+>     print('Splits listed:', list(splits.keys()))
+> except Exception as e:
+>     print('Failed to fetch dataset_infos.json:', e)
+> PY
+Total files: 23
+Sample data files mentioning science:
+Failed to fetch dataset_infos.json: 404 Client Error. (Request ID: Root=1-68ef42bd-1e7bf3aa79592e7f7c512376;9e4d3d62-543c-4dc6-a39a-fae37b0c1961)
+
+Entry Not Found for url: https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k/resolve/main/dataset_infos.json.
+root@1e287e0ce32a:/app# python3 - << 'PY'
+> from datasets import load_dataset
+> # Try streaming science split and preview
+> try:
+>     stream = load_dataset('open-thoughts/OpenThoughts-114k', split='science', streaming=True)
+>     use_science = True
+>     print('Streaming split: science')
+> except Exception as e:
+>     stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+>     use_science = False
+>     print('Streaming split: train (fallback). Error:', e)
+>
+> itr = iter(stream)
+> preview = []
+> for i in range(5):
+>     try:
+>         ex = next(itr)
+>     except StopIteration:
+>         break
+>     keys = list(ex.keys())
+>     preview.append(keys)
+>     # Show nested keys in conversations if present
+>     conv = ex.get('conversations')
+>     if isinstance(conv, list) and conv:
+>         print('conversations sample keys:', [list(conv[0].keys())])
+>     # Show possible domain fields
+>     for k in keys:
+>         if 'domain' in k.lower():
+>             print('Found domain field:', k, 'value:', ex.get(k))
+>     # Show any provider/model/source in top-level
+>     for k in keys:
+>         val = ex.get(k)
+>         if isinstance(val, dict):
+>             for kk in ['provider','model','source']:
+>                 if kk in val:
+>                     print('Top-level dict has', kk, ':', val.get(kk))
+> print('Preview keys:', preview)
+> PY
+Streaming split: train (fallback). Error: Bad split: science. Available splits: ['train']
+conversations sample keys: [['from', 'value']]
+conversations sample keys: [['from', 'value']]
+conversations sample keys: [['from', 'value']]
+conversations sample keys: [['from', 'value']]
+conversations sample keys: [['from', 'value']]
+Preview keys: [['system', 'conversations'], ['system', 'conversations'], ['system', 'conversations'], ['system', 'conversations'], ['system', 'conversations']]
+Fatal Python error: PyGILState_Release: thread state 0x7619bc002ad0 must be current when releasing
+Python runtime state: finalizing (tstate=0x0000761a2cf04a70)
+
+Thread 0x0000761a2c747b80 (most recent call first):
+  <no Python frame>
+Aborted (core dumped)
+root@1e287e0ce32a:/app# python3 - << 'PY'
+> from datasets import load_dataset
+> from transformers import AutoTokenizer
+>
+> # Load tokenizer
+> tokenizer = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+>
+> # Prefer science split; fallback to train with domain filter
+> try:
+>     data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='science', streaming=True)
+>     use_science = True
+> except Exception:
+>     data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split='train', streaming=True)
+>     use_science = False
+>
+> TEXT_KEYS = ['content','text','thought','cot','rationale','response','output','answer']
+>
+> # Attempt to detect domain key from the first element for fallback filtering
+> domain_key = None
+> nested_domain = None
+> try:
+>     first = next(iter(data_stream))
+>     # We need to re-open the stream after peeking
+>     data_stream = load_dataset('open-thoughts/OpenThoughts-114k', split=('science' if use_science else 'train'), streaming=True)
+>     for k in first.keys():
+>         if 'domain' in k.lower():
+>             domain_key = k
+>             break
+>     if domain_key is None:
+>         for k,v in first.items():
+>             if isinstance(v, dict):
+>                 for dk in v.keys():
+>                     if 'domain' in dk.lower():
+>                         nested_domain = (k, dk)
+>                         break
+>                 if nested_domain:
+>                     break
+> except Exception:
+>     pass
+>
+> def get_domain(ex):
+>     if domain_key and isinstance(ex.get(domain_key), str):
+>         return ex.get(domain_key)
+>     if nested_domain:
+>         parent, child = nested_domain
+>         sub = ex.get(parent) or {}
+>         val = sub.get(child)
+>         if isinstance(val, str):
+>             return val
+>     return None
+>
+> # DeepSeek text extraction
+> def extract_deepseek_texts(ex):
+>     texts = []
+>     # Conversations
+>     conv = ex.get('conversations')
+>     if isinstance(conv, list):
+>         for item in conv:
+>             prov = None
+>             for fld in ['model','provider','source']:
+>                 val = item.get(fld)
+>                 if isinstance(val, str):
+>                     prov = val
+>                     break
+>             if isinstance(prov, str) and 'deepseek' in prov.lower():
+>                 for tk in TEXT_KEYS:
+>                     tv = item.get(tk)
+>                     if isinstance(tv, str) and tv.strip():
+>                         texts.append(tv.strip())
+>             for k, v in item.items():
+>                 if isinstance(v, str) and 'deepseek' in k.lower() and v.strip():
+>                     texts.append(v.strip())
+>     # Top-level dicts
+>     for k, v in ex.items():
+>         if isinstance(v, dict):
+>             prov = (v.get('provider') or v.get('model') or v.get('source'))
+>             if isinstance(prov, str) and 'deepseek' in prov.lower():
+>                 for tk in TEXT_KEYS:
+>                     tv = v.get(tk)
+>                     if isinstance(tv, str) and tv.strip():
+>                         texts.append(tv.strip())
+>             for mk, mv in v.items():
+>                 if isinstance(mv, str) and 'deepseek' in str(mk).lower() and mv.strip():
+>                     texts.append(mv.strip())
+>                 elif isinstance(mv, dict):
+>                     prov2 = (mv.get('provider') or mv.get('model') or mv.get('source') or '')
+>                     if isinstance(prov2, str) and 'deepseek' in prov2.lower():
+>                         for tk in TEXT_KEYS:
+>                             tv = mv.get(tk)
+>                             if isinstance(tv, str) and tv.strip():
+>                                 texts.append(tv.strip())
+>     # Direct fields named with deepseek
+>     for k, v in ex.items():
+>         if isinstance(v, str) and 'deepseek' in k.lower() and v.strip():
+>             texts.append(v.strip())
+>     return texts
+>
+> # Counting loop
+> TOTAL = 0
+> batch = []
+> BATCH = 128
+>
+> for ex in data_stream:
+>     if use_science:
+>         eligible = True
+>     else:
+>         dom = get_domain(ex)
+>         eligible = isinstance(dom, str) and 'science' in dom.lower()
+>     if eligible:
+>         texts = extract_deepseek_texts(ex)
+>         if texts:
+>             batch.extend(texts)
+>         if len(batch) >= BATCH:
+>             enc = tokenizer(batch, add_special_tokens=False)
+>             TOTAL += sum(len(ids) for ids in enc['input_ids'])
+>             batch = []
+>
+> if batch:
+>     enc = tokenizer(batch, add_special_tokens=False)
+>     TOTAL += sum(len(ids) for ids in enc['input_ids'])
+>
+> with open('/app/answer.txt','w') as f:
+>     f.write(str(TOTAL))
+> print('TOTAL_DEEPSEEK_TOKENS_SCIENCE:', TOTAL)
+> PY
+None of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+wc -c /app/answer.txt && echo && cat /app/answer.txt
+

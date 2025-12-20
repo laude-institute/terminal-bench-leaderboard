@@ -1,0 +1,368 @@
+root@06074a99c194:/app# ls -la /app
+total 16
+drwxr-xr-x 1 root root 4096 Oct 15 09:20 .
+drwxr-xr-x 1 root root 4096 Oct 15 09:21 ..
+-rw-rw-r-- 1 root root 5548 Oct  8 15:44 data.hex
+root@06074a99c194:/app# head -n 40 /app/data.hex
+0000000 000407 002046 000036 001074 000424 000000 000000 000001
+0000020 170011 010600 011046 005720 010066 000002 004767 000150
+0000040 022626 005000 104401 004567 001354 000002 016500 000004
+0000060 072027 177776 016501 000004 072127 177775 074100 016501
+0000100 000004 072127 177773 074100 016501 000004 074100 042700
+0000120 177776 072027 000017 016501 000004 006201 050100 000400
+0000140 000167 001300 004567 001256 000002 017516 000004 004737
+0000160 000026 010075 000004 010001 005701 006700 071065 000006
+0000200 010100 000400 000167 001234 004567 001212 000006 012765
+0000220 002322 177770 005065 177766 026527 177766 000024 002035
+0000240 012716 000144 010546 062716 177770 004737 000124 005726
+0000260 010016 012746 002046 004737 000316 005726 016501 177766
+0000300 005201 006700 071027 000012 005701 001004 012716 002052
+0000320 004737 000316 005265 177766 000737 000167 001106 004567
+0000340 001064 000200 016567 000004 001556 010504 062704 000006
+0000360 117700 001544 001411 005267 001536 020027 000045 001406
+0000400 010016 004737 001224 000764 000167 001030 005067 001512
+0000420 005067 001476 127727 001500 000055 001004 005267 001470
+0000440 005267 001466 004367 000474 002106 005067 001456 020027
+0000460 000056 001003 004367 000454 002102 010603 012701 000472
+0000500 012102 001736 020021 001374 000112 000542 000144 000670
+0000520 000157 000662 000170 000764 000146 000776 000145 000620
+0000540 000143 000636 000163 000556 000154 001010 000162 000000
+0000560 000000 012401 002005 005401 112723 000055 000401 012401
+0000600 004767 000002 000516 005000 071027 000012 010146 010001
+0000620 001402 004767 177760 012600 062700 000060 110023 000207
+0000640 112423 001001 005303 112423 001074 005303 000472 016701
+0000660 001240 005003 011402 105722 001402 005203 077104 012402
+0000700 000462 012702 002054 000402 012702 002060 012401 001405
+0000720 005767 001176 001402 112723 000060 005000 004767 000002
+0000740 000440 010146 073012 001402 004767 177766 012600 046200
+0000760 000002 062700 000060 020027 000071 003402 062700 000007
+0001000 110023 000207 016702 001124 004767 000216 000412 016702
+0001020 001112 004767 000204 000405 012404 012467 001072 000167
+0001040 177316 010602 160203 010446 012746 000040 010304 005403
+0001060 066703 001042 003406 005767 001040 001003 004737 001224
+0001100 077303 005704 001404 112216 004737 001224 077404 005703
+0001120 003405 012716 000040 004737 001224 077303 005726 012604
+0001140 000167 177214 005067 000764 005001 117700 000752 005267
+0001160 000746 162700 000060 020027 177772 001002 012400 000403
+root@06074a99c194:/app# awk 'BEGIN{IGNORECASE=1} /^[0-9a-f]/ {for (i=2;i<=NF;i++) if ($i ~ /^[0-9a-f]{2}$/) printf "%s",$i } END{print ""}' /app/data.hex | xxd
+-r -p > /app/program.bin
+bash: xxd: command not found
+awk: close failed on file /dev/stdout (Broken pipe)
+root@06074a99c194:/app# ls -la /app/program.bin
+-rw-r--r-- 1 root root 0 Oct 15 09:21 /app/program.bin
+root@06074a99c194:/app# file /app/program.bin
+bash: file: command not found
+root@06074a99c194:/app# chmod +x /app/program.bin
+root@06074a99c194:/app# /app/program.bin
+root@06074a99c194:/app# : > /app/program.bin
+root@06074a99c194:/app# awk 'function o2d(s, n,i,c){n=0; for(i=1;i<=length(s);i++){c=substr(s,i,1); n=n*8 + (c+0)} return n} /^[0-7]/ {for (i=2;i<=NF;i++){ if (
+$i ~ /^[0-7]{6}$/){ n=o2d($i); lo = n % 256; hi = int(n/256)%256; printf "%c%c", lo, hi }}}' /app/data.hex > /app/program.bin
+root@06074a99c194:/app# ls -la /app/program.bin
+-rwxr-xr-x 1 root root 0 Oct 15 09:23 /app/program.bin
+root@06074a99c194:/app# head -c 16 /app/program.bin | od -An -t x1
+root@06074a99c194:/app# python3 - << 'PY'
+> import re
+> with open('/app/program.bin','rb') as f:
+>     b=f.read()
+> # Print short header info
+> print('MAGIC_WORDS_OCT:', [oct(int.from_bytes(b[i:i+2],'little')) for i in range(0,min(8,len(b)),2)])
+> # Extract printable ASCII strings (len>=3)
+> strings = re.findall(rb'[ -~]{3,}', b)
+> for s in strings:
+>     try:
+>         print('STR:', s.decode('ascii'))
+>     except:
+>         pass
+> PY
+MAGIC_WORDS_OCT: []
+root@06074a99c194:/app# chmod +x /app/program.bin
+root@06074a99c194:/app# /app/program.bin || true
+root@06074a99c194:/app# python3 - << 'PY'
+> import re, os
+> out_path = '/app/program.bin'
+> with open('/app/data.hex','r') as f, open(out_path,'wb') as out:
+>     for line in f:
+>         for tok in line.split():
+>             if re.fullmatch(r'[0-7]{6}', tok):
+>                 n = int(tok, 8)
+>                 out.write(bytes((n & 0xff, (n >> 8) & 0xff)))
+> print('SIZE', os.path.getsize(out_path))
+> with open(out_path,'rb') as f:
+>     head = f.read(16)
+> print('HEAD', ' '.join(f'{x:02o}' for x in head))
+> magic = int.from_bytes(head[:2], 'little') if len(head) >= 2 else None
+> print('MAGIC_OCT', oct(magic) if magic is not None else None)
+> PY
+SIZE 1384
+HEAD 07 01 46 04 36 00 74 02 24 01 00 00 00 00 01 00
+MAGIC_OCT 0o407
+root@06074a99c194:/app# python3 - << 'PY'
+> import re
+> with open('/app/program.bin','rb') as f:
+>     b=f.read()
+> import sys
+> print('TOTAL_BYTES', len(b))
+> for s in re.findall(rb'[ -~]{3,}', b):
+>     try:
+>         print('STR:', s.decode('ascii'))
+>     except Exception:
+>         pass
+> PY
+TOTAL_BYTES 1384
+STR: @xA
+STR: @xA
+STR:  BA
+STR: W |
+STR:  B@
+STR: %d
+STR: crt0.o
+STR: a.o
+STR: printf.o
+STR: ffltpr.o
+STR: putchr.o
+STR: rsave.o
+STR: ecvt.o
+STR: savr5
+STR: _main
+STR: rsave
+STR: rretrn
+STR: _printf
+STR: _ndigit
+STR: pfloat
+STR: pscien
+STR: _putchar"
+STR: _flush
+STR: _fout
+STR: mrsave
+STR: ecvt
+STR: fcvt
+root@06074a99c194:/app# chmod +x /app/program.bin
+root@06074a99c194:/app# /app/program.bin || true
+bash: /app/program.bin: cannot execute binary file: Exec format error
+root@06074a99c194:/app# python3 - << 'PY'
+> import struct
+> p = '/app/program.bin'
+> with open(p,'rb') as f:
+>     b=f.read()
+> # Parse header (16 bytes)
+> if len(b) < 16:
+>     print('ERR: too small')
+> else:
+>     a_magic,a_text,a_data,a_bss,a_syms,a_entry,a_unused,a_flag = struct.unpack('<8H', b[:16])
+>     print('HDR', oct(a_magic), a_text, a_data, a_bss, a_syms, a_entry, a_flag)
+>     text = b[16:16+a_text]
+>     data = b[16+a_text:16+a_text+a_data]
+>     print('TEXT_LEN', len(text), 'DATA_LEN', len(data))
+>     # Show printable strings in data
+>     import re
+>     strs = re.findall(rb'[ -~]{2,}', data)
+>     for s in strs:
+>         try:
+>             print('DATA_STR:', s.decode('ascii'))
+>         except:
+>             print('DATA_STR_BYTES:', s)
+>     # Find %d and context in whole file
+>     idx = b.find(b'%d')
+>     print('PCTD_IDX', idx)
+>     if idx != -1:
+>         start = max(0, idx-16); end = min(len(b), idx+16)
+>         seg = b[start:end]
+>         print('CTX', seg)
+> PY
+HDR 0o407 1062 30 572 276 0 1
+TEXT_LEN 1062 DATA_LEN 30
+DATA_STR: %d
+PCTD_IDX 1078
+CTX b'T\x06\xc0\x15T\x06\x83\x15V\xf5\x16\xf5V\xf0\x87\x00%d \x00\n\x00\xfc\xff\xf0\xff\xfd\xff\xf8\xff\x04\x89'
+root@06074a99c194:/app# python3 - << 'PY'
+> # Try to find a likely integer literal in data near format strings
+> import struct, re
+> with open('/app/program.bin','rb') as f:
+>     b=f.read()
+> # header
+> a_magic,a_text,a_data,a_bss,a_syms,a_entry,a_unused,a_flag = struct.unpack('<8H', b[:16])
+> text = b[16:16+a_text]
+> data = b[16+a_text:16+a_text+a_data]
+> # Heuristic: print 16-bit values in data
+> vals = [int.from_bytes(data[i:i+2],'little') for i in range(0,len(data)-1,2)]
+> print('DATA_WORDS_OCT_FIRST_16', [oct(v) for v in vals[:16]])
+> # Show bytes around data '%d'
+> idx = data.find(b'%d')
+> print('DATA_%d_IDX', idx)
+> if idx!=-1:
+>     s=max(0, idx-32); e=min(len(data), idx+32)
+>     print('DATA_CTX', data[s:e])
+> # Scan text for immediate words that look small integers (<=32767) used near jsr to printf
+> # Very rough: list first 64 16-bit words as octal
+> twords = [int.from_bytes(text[i:i+2],'little') for i in range(0,len(text)-1,2)]
+> print('TEXT_WORDS_OCT_FIRST_32', [oct(v) for v in twords[:32]])
+> PY
+DATA_WORDS_OCT_FIRST_16 ['0o62045', '0o40', '0o12', '0o177774', '0o177760', '0o177775', '0o177770', '0o104404', '0o2124', '0o0', '0o37314', '0o146314', '0o14631
+4', '0o146315', '0o12']
+DATA_%d_IDX 0
+DATA_CTX b'%d \x00\n\x00\xfc\xff\xf0\xff\xfd\xff\xf8\xff\x04\x89T\x04\x00\x00\xcc>\xcc\xcc\xcc\xcc\xcd\xcc\n\x00'
+TEXT_WORDS_OCT_FIRST_32 ['0o170011', '0o10600', '0o11046', '0o5720', '0o10066', '0o2', '0o4767', '0o150', '0o22626', '0o5000', '0o104401', '0o4567', '0o1354', '
+0o2', '0o16500', '0o4', '0o72027', '0o177776', '0o16501', '0o4', '0o72127', '0o177775', '0o74100', '0o16501', '0o4', '0o72127', '0o177773', '0o74100', '0o16501'
+, '0o4', '0o74100', '0o42700']
+root@06074a99c194:/app# python3 - << 'PY'
+> import struct
+> p='/app/program.bin'
+> with open(p,'rb') as f:
+>     b=f.read()
+> # parse header
+> am,a_text,a_data,a_bss,a_syms,a_entry,a_unused,a_flag = struct.unpack('<8H', b[:16])
+> text = b[16:16+a_text]
+> data = b[16+a_text:16+a_text+a_data]
+> # helper to read words
+> def words(buf):
+>     return [int.from_bytes(buf[i:i+2],'little') for i in range(0,len(buf)-1,2)]
+> tw = words(text)
+> # search for pattern jsr pc, 001224 (likely _printf)
+> # jsr opcode for pc is 0o004737 based on hexdump; check sequences
+> calls=[]
+> for i in range(len(tw)-1):
+>     if tw[i]==0o004737 and tw[i+1]==0o001224:
+>         calls.append(i)
+> print('PRINTF_CALL_IDX_WORDS', calls[:10])
+> # For each call, look back for MOV $imm, -(sp) opcode 012706 repeatedly
+> # The pattern: for printf(fmt, val), typically push val then push fmt then jsr
+> outs=[]
+> for ci in calls:
+>     # scan back up to 10 words for pushes
+>     args=[]
+>     j=ci-1
+>     # collect up to first two immediates
+>     while j>=0 and len(args)<3 and j>=ci-10:
+>         if tw[j]==0o012706:  # MOV $imm, -(sp)
+>             if j+1 < len(tw):
+>                 args.append(('imm', tw[j+1], j))
+>                 j-=2
+>                 continue
+>         j-=1
+>     # reverse to get call order: last push is fmt
+>     args=args[::-1]
+>     outs.append(args)
+> print('ARGS_NEAR_PRINTF', outs[:5])
+> # Determine data base address and fmt address
+> data_base = a_text  # in absolute addressing for 0407, data starts at text size
+> fmt_addr = data_base  # '%d ' starts at beginning of data
+> newline_addr = data_base + 4  # '\n' string
+> print('ADDRS', {'data_base':data_base, 'fmt_addr':fmt_addr, 'newline_addr':newline_addr})
+> # Summarize calls: print args translated
+> def to_oct(n):
+>     return oct(n)
+> summ=[]
+> for args in outs:
+>     human=[]
+>     for kind,val,idx in args:
+>         tag=''
+>         if val==fmt_addr:
+>             tag='FMT_%dSPC'
+>         elif val==newline_addr:
+>             tag='FMT_NL'
+>         human.append({'kind':kind,'val_dec':val,'val_oct':to_oct(val),'tag':tag})
+>     summ.append(human)
+> print('CALL_ARG_SUMMARY', summ[:5])
+> # Try to find pushes of small integer immediates near printf call
+> ints=[]
+> for args in outs:
+>     imms=[v for k,v,_ in args if k=='imm']
+>     ints.append(imms)
+> print('IMM_VALUES_NEAR_PRINTF', ints[:5])
+> # Also, scan for any sequence of printf calls pattern: val then fmt then jsr
+> # Build a heuristic list of printed integers
+> printed=[]
+> for args in outs:
+>     # if two immediates, second equal fmt_addr, first is value
+>     if len(args)>=2 and args[-1][1]==fmt_addr:
+>         # take prior immediate as value
+>         # search for immediate before fmt
+>         val=None
+>         for k,v,pos in reversed(args[:-1]):
+>             if k=='imm':
+>                 val=v; break
+>         if val is not None:
+>             # interpret as signed 16-bit
+>             if val>=0x8000:
+>                 sval=val-0x10000
+>             else:
+>                 sval=val
+>             printed.append(sval)
+> print('PRINTED_INTS_HEURISTIC', printed)
+> PY
+PRINTF_CALL_IDX_WORDS [121, 278, 284, 291]
+ARGS_NEAR_PRINTF [[], [], [], []]
+ADDRS {'data_base': 1062, 'fmt_addr': 1062, 'newline_addr': 1066}
+CALL_ARG_SUMMARY [[], [], [], []]
+IMM_VALUES_NEAR_PRINTF [[], [], [], []]
+PRINTED_INTS_HEURISTIC []
+root@06074a99c194:/app# python3 - << 'PY'
+> # As a fallback, scan entire text for the MOV $imm, -(sp) opcode followed by fmt and preceding immediate for integer value
+> import struct
+> p='/app/program.bin'
+> with open(p,'rb') as f:
+>     b=f.read()
+> am,a_text,a_data,a_bss,a_syms,a_entry,a_unused,a_flag = struct.unpack('<8H', b[:16])
+> text=b[16:16+a_text]
+> def words(buf):
+>     return [int.from_bytes(buf[i:i+2],'little') for i in range(0,len(buf)-1,2)]
+> tw=words(text)
+> fmt_addr=a_text
+> printed=[]
+> for i in range(len(tw)-3):
+>     if tw[i]==0o012706 and tw[i+2]==0o012706 and tw[i+3]==fmt_addr:
+>         val=tw[i+1]
+>         sval=val-0x10000 if val>=0x8000 else val
+>         printed.append(sval)
+> print('SEQ_PRINTED', printed)
+> print('UNIQUE', list(dict.fromkeys(printed)))
+> PY
+SEQ_PRINTED []
+UNIQUE []
+root@06074a99c194:/app# python3 - << 'PY'
+e
+        break
+print('HAS_NL', has_nl)
+PY
+> import struct
+> p='/app/program.bin'
+> with open(p,'rb') as f:
+>     b=f.read()
+> # header
+> am,a_text,a_data,a_bss,a_syms,a_entry,a_unused,a_flag = struct.unpack('<8H', b[:16])
+> text=b[16:16+a_text]
+> # convert to words
+> tw=[int.from_bytes(text[i:i+2],'little') for i in range(0,len(text)-1,2)]
+> FMT_ADDR=a_text  # '%d ' at start of data (octal 2046)
+> NL_ADDR=a_text+4 # '\n' at offset +4 (octal 2052)
+> # opcodes
+> PUSH_IMM=0o012746
+> JSR_PC=0o004737
+> PRINTF_OFF=0o001224
+> vals=[]
+> i=0
+> while i < len(tw)-5:
+>     if tw[i]==PUSH_IMM and tw[i+2]==PUSH_IMM and tw[i+3]==FMT_ADDR and tw[i+4]==JSR_PC and tw[i+5]==PRINTF_OFF:
+>         val=tw[i+1]
+>         if val>=0x8000:
+>             val=val-0x10000
+>         vals.append(val)
+>         i+=6
+>         continue
+>     i+=1
+> print('COUNT', len(vals))
+> print('VALUES', vals)
+> print('OUTPUT', ' '.join(str(v) for v in vals))
+> # Detect newline call presence
+> has_nl=False
+> for j in range(len(tw)-3):
+>     if tw[j]==PUSH_IMM and tw[j+1]==NL_ADDR and tw[j+2]==JSR_PC and tw[j+3]==PRINTF_OFF:
+>         has_nl=True
+>         break
+> print('HAS_NL', has_nl)
+> PY
+COUNT 0
+VALUES []
+OUTPUT
+HAS_NL False
+root@06074a99c194:/app#

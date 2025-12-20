@@ -1,0 +1,562 @@
+[?2004hroot@7f972afc73c3:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@7f972afc73c3:/app# clear
+[?2004l[H[J[3J[?2004hroot@7f972afc73c3:/app# ls -la
+[?2004ltotal 96
+drwxr-xr-x 1 root root  4096 Nov  9 09:38 .
+drwxr-xr-x 1 root root  4096 Dec 10 03:30 ..
+-rw-rw-r-- 1 root root 88805 Nov  9 09:38 graphene.dat
+[?2004hroot@7f972afc73c3:/app# cat > fit_raman.py << 'PY'
+[?2004lNone
+    }
+
+    x0_min = x[?2004h> import os
+[?2004l[?2004h> import re
+[?2004l[?2004h> import json
+[?2004l[?2004h> import math
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> 
+[?2004l[?2004h> # Lorentzian function components
+[?2004l[?2004h> # Model: y = b + a * (gamma^2 / ((x - x0)^2 + gamma^2))
+[?2004l[?2004h> 
+[?2004l[?2004h> def lorentz_f(x, x0, gamma):
+[?2004l[?2004h>     return (gamma * gamma) / ((x - x0) ** 2 + (gamma ** 2))
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_two_column_numeric(path):
+[?2004l[?2004h>     x_vals = []
+[?2004l[?2004h>     y_vals = []
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         with open(path, 'r', errors='ignore') as f:
+[?2004l[?2004h>             for line in f:
+[?2004l[?2004h>                 line = line.strip()
+[?2004l[?2004h>                 if not line:
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 if line.startswith('#'):
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 # Split by comma or whitespace
+[?2004l[?2004h>                 parts = re.split(r'[\s,;\t]+', line)
+[?2004l[?2004h>                 # Filter out non-numeric tokens
+[?2004l[?2004h>                 nums = []
+[?2004l[?2004h>                 for p in parts:
+[?2004l[?2004h>                     try:
+[?2004l[?2004h>                         val = float(p)
+[?2004l[?2004h>                         if math.isfinite(val):
+[?2004l[?2004h>                             nums.append(val)
+[?2004l[?2004h>                     except Exception:
+[?2004l[?2004h>                         pass
+[?2004l[?2004h>                 if len(nums) >= 2:
+[?2004l[?2004h>                     x_vals.append(nums[0])
+[?2004l[?2004h>                     y_vals.append(nums[1])
+[?2004l[?2004h>         if len(x_vals) >= 10:
+[?2004l[?2004h>             x = np.array(x_vals, dtype=float)
+[?2004l[?2004h>             y = np.array(y_vals, dtype=float)
+[?2004l[?2004h>             # Remove NaN/Inf
+[?2004l[?2004h>             mask = np.isfinite(x) & np.isfinite(y)
+[?2004l[?2004h>             x = x[mask]
+[?2004l[?2004h>             y = y[mask]
+[?2004l[?2004h>             if len(x) >= 10:
+[?2004l[?2004h>                 return x, y
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         pass
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def choose_data_file(base_dir='.'):
+[?2004l[?2004h>     candidates = []
+[?2004l[?2004h>     exts = ('.txt', '.csv', '.dat', '.tsv')
+[?2004l[?2004h>     for name in os.listdir(base_dir):
+[?2004l[?2004h>         p = os.path.join(base_dir, name)
+[?2004l[?2004h>         if os.path.isfile(p) and name.lower().endswith(exts):
+[?2004l[?2004h>             if name == 'results.json' or name == 'fit_raman.py':
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             res = read_two_column_numeric(p)
+[?2004l[?2004h>             if res is not None:
+[?2004l[?2004h>                 x, y = res
+[?2004l[?2004h>                 candidates.append((p, len(x)))
+[?2004l[?2004h>     if not candidates:
+[?2004l[?2004h>         # Try any file
+[?2004l[?2004h>         for name in os.listdir(base_dir):
+[?2004l[?2004h>             p = os.path.join(base_dir, name)
+[?2004l[?2004h>             if os.path.isfile(p) and name not in ('results.json', 'fit_raman.py'):
+[?2004l[?2004h>                 res = read_two_column_numeric(p)
+[?2004l[?2004h>                 if res is not None:
+[?2004l[?2004h>                     x, y = res
+[?2004l[?2004h>                     candidates.append((p, len(x)))
+[?2004l[?2004h>     if not candidates:
+[?2004l[?2004h>         return None
+[?2004l[?2004h>     # Choose the one with the most rows
+[?2004l[?2004h>     candidates.sort(key=lambda t: t[1], reverse=True)
+[?2004l[?2004h>     return candidates[0][0]
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def window_data(x, y, xmin, xmax):
+[?2004l[?2004h>     mask = (x >= xmin) & (x <= xmax)
+[?2004l[?2004h>     if np.count_nonzero(mask) >= max(10, int(0.01 * len(x))):
+[?2004l[?2004h>         return x[mask], y[mask]
+[?2004l[?2004h>     return None, None
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def peak_region_or_fallback(x, y, target_min, target_max):
+[?2004l[?2004h>     wx, wy = window_data(x, y, target_min, target_max)
+[?2004l[?2004h>     if wx is not None:
+[?2004l[?2004h>         return wx, wy
+[?2004l[?2004h>     # Fallback: pick around the global max in a wider band
+[?2004l[?2004h>     idx_max = int(np.argmax(y))
+[?2004l[?2004h>     x0_guess = float(x[idx_max])
+[?2004l[?2004h>     half_width = 100.0
+[?2004l[?2004h>     xmin = x0_guess - half_width
+[?2004l[?2004h>     xmax = x0_guess + half_width
+[?2004l[?2004h>     mask = (x >= xmin) & (x <= xmax)
+[?2004l[?2004h>     if np.count_nonzero(mask) >= 10:
+[?2004l[?2004h>         return x[mask], y[mask]
+[?2004l[?2004h>     # As last resort, just return the entire data
+[?2004l[?2004h>     return x, y
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def initial_x0_guess(wx, wy, expected_min=None, expected_max=None):
+[?2004l[?2004h>     # Choose max within expected window if provided
+[?2004l[?2004h>     if expected_min is not None and expected_max is not None:
+[?2004l[?2004h>         mask = (wx >= expected_min) & (wx <= expected_max)
+[?2004l[?2004h>         if np.count_nonzero(mask) >= 1:
+[?2004l[?2004h>             subx = wx[mask]
+[?2004l[?2004h>             suby = wy[mask]
+[?2004l[?2004h>             return float(subx[int(np.argmax(suby))])
+[?2004l[?2004h>     return float(wx[int(np.argmax(wy))])
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def grid_fit_lorentz(wx, wy, x0_center, x0_span, gamma_min, gamma_max, gamma_step=1.0, x0_step=1.0):
+[?2004l[?2004h>     # Solve amplitude (a) and offset (b) via linear least squares for each (x0, gamma)
+[?2004l[?2004h>     n = len(wx)
+[?2004l[?2004h>     Sy = float(np.sum(wy))
+[?2004l[?2004h>     y2 = float(np.sum(wy * wy))
+[?2004l[?2004h> 
+[?2004l[?2004h>     best = {
+[?2004l[?2004h>         'sse': float('inf'),
+[?2004l[?2004h>         'x0': None,
+[?2004l[?2004h>         'gamma': None,
+[?2004l[?2004h>         'amplitude': None,
+[?2004l[?2004h>         'offset': None
+[?2004l[?2004h>     }
+[?2004l[?2004h> 
+[?2004l[?2004h>     x0_min = x0_center - x0_span
+[?2004l[?2004h>     x0_max = x0_center + x0_span
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Ensure reasonable bounds
+[?2004l[?2004h>     if gamma_min <= 0:
+[?2004l[?2004h>         gamma_min = 1.0
+[?2004l[?2004h>     if gamma_step <= 0:
+[?2004l[?2004h>         gamma_step = 1.0
+[?2004l[?2004h>     if x0_step <= 0:
+[?2004l[?2004h>         x0_step = 1.0
+[?2004l[?2004h> 
+[?2004l[?2004h>     x0_values = np.arange(x0_min, x0_max + 0.5 * x0_step, x0_step)
+[?2004l[?2004h>     gamma_values = np.arange(gamma_min, gamma_max + 0.5 * gamma_step, gamma_step)
+[?2004l[?2004h> 
+[?2004l[?2004h>     for x0 in x0_values:
+[?2004l[?2004h>         for gamma in gamma_values:
+[?2004l[?2004h>             f = lorentz_f(wx, x0, gamma)
+[?2004l[?2004h>             Sff = float(np.sum(f * f))
+[?2004l[?2004h>             Sf = float(np.sum(f))
+[?2004l[?2004h>             Syf = float(np.sum(wy * f))
+[?2004l[?2004h>             # Solve [a, b] from normal equations
+[?2004l[?2004h>             det = Sff * n - Sf * Sf
+[?2004l[?2004h>             if det == 0:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             a = (Syf * n - Sf * Sy) / det
+[?2004l[?2004h>             b = (Sff * Sy - Sf * Syf) / det
+[?2004l[?2004h>             # Enforce physically reasonable amplitude
+[?2004l[?2004h>             if not np.isfinite(a) or not np.isfinite(b):
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             if a < 0:
+[?2004l[?2004h>                 # Skip negative amplitude solutions
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             # Compute SSE
+[?2004l[?2004h>             y_model = b + a * f
+[?2004l[?2004h>             resid = wy - y_model
+[?2004l[?2004h>             sse = float(np.sum(resid * resid))
+[?2004l[?2004h>             if sse < best['sse']:
+[?2004l[?2004h>                 best['sse'] = sse
+[?2004l[?2004h>                 best['x0'] = float(x0)
+[?2004l[?2004h>                 best['gamma'] = float(gamma)
+[?2004l[?2004h>                 best['amplitude'] = float(a)
+[?2004l[?2004h>                 best['offset'] = float(b)
+[?2004l[?2004h>     return best
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def fit_peak(wx, wy, expected_range, default_gamma_bounds):
+[?2004l[?2004h>     # Estimate center
+[?2004l[?2004h>     x0_guess = initial_x0_guess(wx, wy, expected_range[0], expected_range[1])
+[?2004l[?2004h>     # Span for x0 grid around the guess
+[?2004l[?2004h>     x0_span = 50.0
+[?2004l[?2004h>     # Gamma bounds depending on peak
+[?2004l[?2004h>     gamma_min, gamma_max = default_gamma_bounds
+[?2004l[?2004h>     result = grid_fit_lorentz(wx, wy, x0_guess, x0_span, gamma_min, gamma_max, gamma_step=1.0, x0_step=1.0)
+[?2004l[?2004h>     # If grid search failed, fallback to simple estimates
+[?2004l[?2004h>     if result['x0'] is None:
+[?2004l[?2004h>         # Simple estimates
+[?2004l[?2004h>         x0 = x0_guess
+[?2004l[?2004h>         # Half-maximum width estimation
+[?2004l[?2004h>         peak = float(np.max(wy))
+[?2004l[?2004h>         baseline = float(np.percentile(wy, 10))
+[?2004l[?2004h>         half = baseline + 0.5 * (peak - baseline)
+[?2004l[?2004h>         indices = np.where(wy >= half)[0]
+[?2004l[?2004h>         if len(indices) >= 2:
+[?2004l[?2004h>             gamma_est = 0.5 * abs(wx[indices[-1]] - wx[indices[0]])
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             gamma_est = (gamma_min + gamma_max) / 2.0
+[?2004l[?2004h>         f = lorentz_f(wx, x0, gamma_est)
+[?2004l[?2004h>         Sff = float(np.sum(f * f))
+[?2004l[?2004h>         Sf = float(np.sum(f))
+[?2004l[?2004h>         Syf = float(np.sum(wy * f))
+[?2004l[?2004h>         n = len(wx)
+[?2004l[?2004h>         Sy = float(np.sum(wy))
+[?2004l[?2004h>         det = Sff * n - Sf * Sf
+[?2004l[?2004h>         if det != 0:
+[?2004l[?2004h>             a = (Syf * n - Sf * Sy) / det
+[?2004l[?2004h>             b = (Sff * Sy - Sf * Syf) / det
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             a = max(peak - baseline, 0.0)
+[?2004l[?2004h>             b = baseline
+[?2004l[?2004h>         result = {
+[?2004l[?2004h>             'sse': float('nan'),
+[?2004l[?2004h>             'x0': float(x0),
+[?2004l[?2004h>             'gamma': float(gamma_est),
+[?2004l[?2004h>             'amplitude': float(max(a, 0.0)),
+[?2004l[?2004h>             'offset': float(b)
+[?2004l[?2004h>         }
+[?2004l[?2004h>     return result
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     data_file = choose_data_file('.')
+[?2004l[?2004h>     if not data_file:
+[?2004l[?2004h>         raise RuntimeError('No suitable two-column numeric spectrum file found in current directory.')
+[?2004l[?2004h>     x, y = read_two_column_numeric(data_file)
+[?2004l[?2004h>     if x is None:
+[?2004l[?2004h>         raise RuntimeError('Failed to read spectrum data.')
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Sort by x to make windowing easier
+[?2004l[?2004h>     order = np.argsort(x)
+[?2004l[?2004h>     x = x[order]
+[?2004l[?2004h>     y = y[order]
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Define expected ranges for G and 2D peaks (graphene)
+[?2004l[?2004h>     G_range = (1500.0, 1650.0)
+[?2004l[?2004h>     D2_range = (2600.0, 2850.0)
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Select regions
+[?2004l[?2004h>     gx, gy = peak_region_or_fallback(x, y, G_range[0], G_range[1])
+[?2004l[?2004h>     d2x, d2y = peak_region_or_fallback(x, y, D2_range[0], D2_range[1])
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Default gamma bounds (FWHM roughly 10-40 for G, 20-80 for 2D)
+[?2004l[?2004h>     G_gamma_bounds = (5.0, 60.0)
+[?2004l[?2004h>     D2_gamma_bounds = (10.0, 120.0)
+[?2004l[?2004h> 
+[?2004l[?2004h>     G_fit = fit_peak(gx, gy, G_range, G_gamma_bounds)
+[?2004l[?2004h>     D2_fit = fit_peak(d2x, d2y, D2_range, D2_gamma_bounds)
+[?2004l[?2004h> 
+[?2004l[?2004h>     results = {
+[?2004l[?2004h>         'G': {
+[?2004l[?2004h>             'x0': float(G_fit['x0']),
+[?2004l[?2004h>             'gamma': float(G_fit['gamma']),
+[?2004l[?2004h>             'amplitude': float(G_fit['amplitude']),
+[?2004l[?2004h>             'offset': float(G_fit['offset'])
+[?2004l[?2004h>         },
+[?2004l[?2004h>         '2D': {
+[?2004l[?2004h>             'x0': float(D2_fit['x0']),
+[?2004l[?2004h>             'gamma': float(D2_fit['gamma']),
+[?2004l[?2004h>             'amplitude': float(D2_fit['amplitude']),
+[?2004l[?2004h>             'offset': float(D2_fit['offset'])
+[?2004l[?2004h>         }
+[?2004l[?2004h>     }
+[?2004l[?2004h> 
+[?2004l[?2004h>     with open('results.json', 'w') as f:
+[?2004l[?2004h>         json.dump(results, f, indent=2)
+[?2004l[?2004h> 
+[?2004l[?2004h>     print('Data file:', data_file)
+[?2004l[?2004h>     print(json.dumps(results, indent=2))
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7f972afc73c3:/app# python3 fit_raman.py
+[?2004lTraceback (most recent call last):
+  File [35m"/app/fit_raman.py"[0m, line [35m5[0m, in [35m<module>[0m
+    import numpy as np
+[1;35mModuleNotFoundError[0m: [35mNo module named 'numpy'[0m
+[?2004hroot@7f972afc73c3:/app# cat results.json
+[?2004lcat: results.json: No such file or directory
+[?2004hroot@7f972afc73c3:/app# rm -f fit_raman.py
+[?2004l[?2004hroot@7f972afc73c3:/app# cat > fit_raman.py << 'PY'
+[?2004lnot (math.isfinite(a) and [?2004h> import os
+[?2004l[?2004h> import re
+[?2004l[?2004h> import json
+[?2004l[?2004h> import math
+[?2004l[?2004h> 
+[?2004l[?2004h> # Lorentzian basis function: L(x; x0, gamma) = gamma^2 / ((x - x0)^2 + gamma^2)
+[?2004l[?2004h> 
+[?2004l[?2004h> def lorentz_f(x, x0, gamma):
+[?2004l[?2004h>     denom = (x - x0) * (x - x0) + gamma * gamma
+[?2004l[?2004h>     if denom == 0.0:
+[?2004l[?2004h>         return float('inf')
+[?2004l[?2004h>     return (gamma * gamma) / denom
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_two_column_numeric(path):
+[?2004l[?2004h>     xs = []
+[?2004l[?2004h>     ys = []
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         with open(path, 'r', errors='ignore') as f:
+[?2004l[?2004h>             for line in f:
+[?2004l[?2004h>                 line = line.strip()
+[?2004l[?2004h>                 if not line or line.startswith('#'):
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 parts = re.split(r'[\s,;\t]+', line)
+[?2004l[?2004h>                 nums = []
+[?2004l[?2004h>                 for p in parts:
+[?2004l[?2004h>                     try:
+[?2004l[?2004h>                         v = float(p)
+[?2004l[?2004h>                         if math.isfinite(v):
+[?2004l[?2004h>                             nums.append(v)
+[?2004l[?2004h>                     except Exception:
+[?2004l[?2004h>                         pass
+[?2004l[?2004h>                 if len(nums) >= 2:
+[?2004l[?2004h>                     xs.append(nums[0])
+[?2004l[?2004h>                     ys.append(nums[1])
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return None, None
+[?2004l[?2004h>     if len(xs) < 10:
+[?2004l[?2004h>         return None, None
+[?2004l[?2004h>     # Sort by x
+[?2004l[?2004h>     order = sorted(range(len(xs)), key=lambda i: xs[i])
+[?2004l[?2004h>     x_sorted = [xs[i] for i in order]
+[?2004l[?2004h>     y_sorted = [ys[i] for i in order]
+[?2004l[?2004h>     return x_sorted, y_sorted
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def window_data(x, y, xmin, xmax):
+[?2004l[?2004h>     idxs = [i for i, xv in enumerate(x) if xv >= xmin and xv <= xmax]
+[?2004l[?2004h>     if len(idxs) >= max(10, len(x) // 100):
+[?2004l[?2004h>         wx = [x[i] for i in idxs]
+[?2004l[?2004h>         wy = [y[i] for i in idxs]
+[?2004l[?2004h>         return wx, wy
+[?2004l[?2004h>     return None, None
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def peak_region_or_fallback(x, y, target_min, target_max):
+[?2004l[?2004h>     wx, wy = window_data(x, y, target_min, target_max)
+[?2004l[?2004h>     if wx is not None:
+[?2004l[?2004h>         return wx, wy
+[?2004l[?2004h>     # Fallback: choose around global max
+[?2004l[?2004h>     imax = max(range(len(y)), key=lambda i: y[i])
+[?2004l[?2004h>     x0_guess = x[imax]
+[?2004l[?2004h>     half_width = 100.0
+[?2004l[?2004h>     xmin = x0_guess - half_width
+[?2004l[?2004h>     xmax = x0_guess + half_width
+[?2004l[?2004h>     idxs = [i for i, xv in enumerate(x) if xv >= xmin and xv <= xmax]
+[?2004l[?2004h>     if len(idxs) >= 10:
+[?2004l[?2004h>         return [x[i] for i in idxs], [y[i] for i in idxs]
+[?2004l[?2004h>     return x, y
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def initial_x0_guess(wx, wy, expected_min=None, expected_max=None):
+[?2004l[?2004h>     if expected_min is not None and expected_max is not None:
+[?2004l[?2004h>         idxs = [i for i, xv in enumerate(wx) if xv >= expected_min and xv <= expected_max]
+[?2004l[?2004h>         if idxs:
+[?2004l[?2004h>             imax = max(idxs, key=lambda i: wy[i])
+[?2004l[?2004h>             return float(wx[imax])
+[?2004l[?2004h>     imax = max(range(len(wy)), key=lambda i: wy[i])
+[?2004l[?2004h>     return float(wx[imax])
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def solve_ab(f_vals, y_vals):
+[?2004l[?2004h>     # Solve for a and b in y ~ b + a * f using normal equations
+[?2004l[?2004h>     n = len(f_vals)
+[?2004l[?2004h>     Sf = 0.0
+[?2004l[?2004h>     Sff = 0.0
+[?2004l[?2004h>     Sy = 0.0
+[?2004l[?2004h>     Syf = 0.0
+[?2004l[?2004h>     for i in range(n):
+[?2004l[?2004h>         f = f_vals[i]
+[?2004l[?2004h>         y = y_vals[i]
+[?2004l[?2004h>         Sf += f
+[?2004l[?2004h>         Sff += f * f
+[?2004l[?2004h>         Sy += y
+[?2004l[?2004h>         Syf += y * f
+[?2004l[?2004h>     det = Sff * n - Sf * Sf
+[?2004l[?2004h>     if det == 0.0:
+[?2004l[?2004h>         return None, None
+[?2004l[?2004h>     a = (Syf * n - Sf * Sy) / det
+[?2004l[?2004h>     b = (Sff * Sy - Sf * Syf) / det
+[?2004l[?2004h>     return a, b
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def sse_from_model(f_vals, y_vals, a, b):
+[?2004l[?2004h>     sse = 0.0
+[?2004l[?2004h>     for i in range(len(f_vals)):
+[?2004l[?2004h>         y_model = b + a * f_vals[i]
+[?2004l[?2004h>         r = y_vals[i] - y_model
+[?2004l[?2004h>         sse += r * r
+[?2004l[?2004h>     return sse
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def grid_fit_lorentz(wx, wy, x0_center, x0_span, gamma_min, gamma_max, gamma_step=1.0, x0_step=1.0):
+[?2004l[?2004h>     best = {
+[?2004l[?2004h>         'sse': float('inf'),
+[?2004l[?2004h>         'x0': None,
+[?2004l[?2004h>         'gamma': None,
+[?2004l[?2004h>         'amplitude': None,
+[?2004l[?2004h>         'offset': None
+[?2004l[?2004h>     }
+[?2004l[?2004h>     if gamma_min <= 0.0:
+[?2004l[?2004h>         gamma_min = 1.0
+[?2004l[?2004h>     if gamma_step <= 0.0:
+[?2004l[?2004h>         gamma_step = 1.0
+[?2004l[?2004h>     if x0_step <= 0.0:
+[?2004l[?2004h>         x0_step = 1.0
+[?2004l[?2004h>     x0_min = x0_center - x0_span
+[?2004l[?2004h>     x0_max = x0_center + x0_span
+[?2004l[?2004h>     x0 = x0_min
+[?2004l[?2004h>     while x0 <= x0_max + 1e-9:
+[?2004l[?2004h>         gamma = gamma_min
+[?2004l[?2004h>         while gamma <= gamma_max + 1e-9:
+[?2004l[?2004h>             f_vals = [lorentz_f(xi, x0, gamma) for xi in wx]
+[?2004l[?2004h>             # Skip if any infs
+[?2004l[?2004h>             if any((not math.isfinite(f)) for f in f_vals):
+[?2004l[?2004h>                 gamma += gamma_step
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             a, b = solve_ab(f_vals, wy)
+[?2004l[?2004h>             if a is None or b is None:
+[?2004l[?2004h>                 gamma += gamma_step
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             if not (math.isfinite(a) and math.isfinite(b)):
+[?2004l[?2004h>                 gamma += gamma_step
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             if a < 0.0:
+[?2004l[?2004h>                 gamma += gamma_step
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             sse = sse_from_model(f_vals, wy, a, b)
+[?2004l[?2004h>             if sse < best['sse']:
+[?2004l[?2004h>                 best['sse'] = sse
+[?2004l[?2004h>                 best['x0'] = float(x0)
+[?2004l[?2004h>                 best['gamma'] = float(gamma)
+[?2004l[?2004h>                 best['amplitude'] = float(a)
+[?2004l[?2004h>                 best['offset'] = float(b)
+[?2004l[?2004h>             gamma += gamma_step
+[?2004l[?2004h>         x0 += x0_step
+[?2004l[?2004h>     return best
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def fit_peak(wx, wy, expected_range, default_gamma_bounds):
+[?2004l[?2004h>     x0_guess = initial_x0_guess(wx, wy, expected_range[0], expected_range[1])
+[?2004l[?2004h>     x0_span = 50.0
+[?2004l[?2004h>     gamma_min, gamma_max = default_gamma_bounds
+[?2004l[?2004h>     result = grid_fit_lorentz(wx, wy, x0_guess, x0_span, gamma_min, gamma_max, gamma_step=1.0, x0_step=1.0)
+[?2004l[?2004h>     if result['x0'] is None:
+[?2004l[?2004h>         # Fallback simple estimate
+[?2004l[?2004h>         x0 = x0_guess
+[?2004l[?2004h>         # Estimate baseline and width
+[?2004l[?2004h>         peak = max(wy)
+[?2004l[?2004h>         baseline = sorted(wy)[max(0, len(wy)//10 - 1)]
+[?2004l[?2004h>         half = baseline + 0.5 * (peak - baseline)
+[?2004l[?2004h>         idxs = [i for i in range(len(wy)) if wy[i] >= half]
+[?2004l[?2004h>         if len(idxs) >= 2:
+[?2004l[?2004h>             gamma_est = 0.5 * abs(wx[idxs[-1]] - wx[idxs[0]])
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             gamma_est = (gamma_min + gamma_max) * 0.5
+[?2004l[?2004h>         f_vals = [lorentz_f(xi, x0, gamma_est) for xi in wx]
+[?2004l[?2004h>         a, b = solve_ab(f_vals, wy)
+[?2004l[?2004h>         if a is None or b is None:
+[?2004l[?2004h>             a = max(peak - baseline, 0.0)
+[?2004l[?2004h>             b = baseline
+[?2004l[?2004h>         result = {
+[?2004l[?2004h>             'sse': float('nan'),
+[?2004l[?2004h>             'x0': float(x0),
+[?2004l[?2004h>             'gamma': float(gamma_est),
+[?2004l[?2004h>             'amplitude': float(max(a, 0.0)),
+[?2004l[?2004h>             'offset': float(b)
+[?2004l[?2004h>         }
+[?2004l[?2004h>     return result
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     data_file = 'graphene.dat' if os.path.isfile('graphene.dat') else None
+[?2004l[?2004h>     if not data_file:
+[?2004l[?2004h>         raise RuntimeError('graphene.dat not found.')
+[?2004l[?2004h>     x, y = read_two_column_numeric(data_file)
+[?2004l[?2004h>     if x is None or y is None:
+[?2004l[?2004h>         raise RuntimeError('Failed to read spectrum data from %s' % data_file)
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Expected ranges for graphene peaks
+[?2004l[?2004h>     G_range = (1500.0, 1650.0)
+[?2004l[?2004h>     D2_range = (2600.0, 2850.0)
+[?2004l[?2004h> 
+[?2004l[?2004h>     gx, gy = peak_region_or_fallback(x, y, G_range[0], G_range[1])
+[?2004l[?2004h>     d2x, d2y = peak_region_or_fallback(x, y, D2_range[0], D2_range[1])
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Gamma bounds (FWHM ~ 2*gamma). Keep broad to be robust.
+[?2004l[?2004h>     G_gamma_bounds = (5.0, 60.0)
+[?2004l[?2004h>     D2_gamma_bounds = (10.0, 120.0)
+[?2004l[?2004h> 
+[?2004l[?2004h>     G_fit = fit_peak(gx, gy, G_range, G_gamma_bounds)
+[?2004l[?2004h>     D2_fit = fit_peak(d2x, d2y, D2_range, D2_gamma_bounds)
+[?2004l[?2004h> 
+[?2004l[?2004h>     results = {
+[?2004l[?2004h>         'G': {
+[?2004l[?2004h>             'x0': float(G_fit['x0']),
+[?2004l[?2004h>             'gamma': float(G_fit['gamma']),
+[?2004l[?2004h>             'amplitude': float(G_fit['amplitude']),
+[?2004l[?2004h>             'offset': float(G_fit['offset'])
+[?2004l[?2004h>         },
+[?2004l[?2004h>         '2D': {
+[?2004l[?2004h>             'x0': float(D2_fit['x0']),
+[?2004l[?2004h>             'gamma': float(D2_fit['gamma']),
+[?2004l[?2004h>             'amplitude': float(D2_fit['amplitude']),
+[?2004l[?2004h>             'offset': float(D2_fit['offset'])
+[?2004l[?2004h>         }
+[?2004l[?2004h>     }
+[?2004l[?2004h> 
+[?2004l[?2004h>     with open('results.json', 'w') as f:
+[?2004l[?2004h>         json.dump(results, f, indent=2)
+[?2004l[?2004h> 
+[?2004l[?2004h>     print(json.dumps(results, indent=2))
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@7f972afc73c3:/app# python3 fit_raman.py
+[?2004l{
+  "G": {
+    "x0": 1778.0,
+    "gamma": 5.0,
+    "amplitude": 46301.68886692359,
+    "offset": 494742.07252306555
+  },
+  "2D": {
+    "x0": 2839.0,
+    "gamma": 10.0,
+    "amplitude": 116639.0306441936,
+    "offset": 486590.6439284872
+  }
+}
+[?2004hroot@7f972afc73c3:/app# cat results.json
+[?2004l{
+  "G": {
+    "x0": 1778.0,
+    "gamma": 5.0,
+    "amplitude": 46301.68886692359,
+    "offset": 494742.07252306555
+  },
+  "2D": {
+    "x0": 2839.0,
+    "gamma": 10.0,
+    "amplitude": 116639.0306441936,
+    "offset": 486590.6439284872
+  }
+}[?2004hroot@7f972afc73c3:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@7f972afc73c3:/app# 

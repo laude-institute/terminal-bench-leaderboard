@@ -1,0 +1,3558 @@
+[?2004hroot@f35655d69977:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@f35655d69977:/app# clear
+[?2004l[H[J[3J[?2004hroot@f35655d69977:/app# ls -la
+[?2004ltotal 16
+drwxr-xr-x 1 root root 4096 Oct 14 18:10 .
+drwxr-xr-x 1 root root 4096 Oct 14 18:10 ..
+drwxr-xr-x 1 root root 4096 Oct 14 18:10 data
+-rw-rw-r-- 1 root root 3420 Oct  8 15:44 schema.json
+[?2004hroot@f35655d69977:/app# pwd
+[?2004l/app
+[?2004hroot@f35655d69977:/app# cat schema.json
+[?2004l{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["metadata", "organization", "statistics"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["version", "timestamp", "generator"],
+      "properties": {
+        "version": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "generator": { "type": "string" }
+      }
+    },
+    "organization": {
+      "type": "object",
+      "required": ["name", "founded", "departments"],
+      "properties": {
+        "name": { "type": "string" },
+        "founded": { "type": "string", "format": "date" },
+        "departments": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "budget", "employees", "projects"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "budget": { "type": "number", "minimum": 0 },
+              "employees": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "object",
+                  "required": ["id", "name", "position", "skills", "years_of_service"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "name": { "type": "string" },
+                    "position": { "type": "string" },
+                    "skills": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": { "type": "string" }
+                    },
+                    "years_of_service": { "type": "integer", "minimum": 0 }
+                  }
+                }
+              },
+              "projects": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["name", "status", "members", "deadline"],
+                  "properties": {
+                    "name": { "type": "string" },
+                    "status": { 
+                      "type": "string",
+                      "enum": ["Planning", "In Progress", "Testing", "Completed", "On Hold"]
+                    },
+                    "members": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "deadline": { "type": "string", "format": "date" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "required": [
+        "averageDepartmentBudget", 
+        "totalEmployees", 
+        "skillDistribution", 
+        "departmentSizes", 
+        "projectStatusDistribution",
+        "averageYearsOfService"
+      ],
+      "properties": {
+        "averageDepartmentBudget": { "type": "number" },
+        "totalEmployees": { "type": "integer" },
+        "skillDistribution": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "departmentSizes": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "projectStatusDistribution": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "averageYearsOfService": { "type": "number" }
+      }
+    }
+  }
+}[?2004hroot@f35655d69977:/app# head -n 20 departments.csv
+[?2004lhead: cannot open 'departments.csv' for reading: No such file or directory
+[?2004hroot@f35655d69977:/app# head -n 20 employees.csv
+[?2004lhead: cannot open 'employees.csv' for reading: No such file or directory
+[?2004hroot@f35655d69977:/app# head -n 20 projects.csv
+[?2004lhead: cannot open 'projects.csv' for reading: No such file or directory
+[?2004hroot@f35655d69977:/app# printf '%s' "#!/usr/bin/env python3
+[?2004lbash: !/usr/bin/env: event not found
+[?2004hroot@f35655d69977:/app# import csv, json, sys, os
+[?2004lmployees = len(employees)
+total_departments = len(departmentsbash: import: command not found
+[?2004hroot@f35655d69977:/app# from collections import defaultdict
+[?2004lbash: from: command not found
+[?2004hroot@f35655d69977:/app# 
+[?2004l[?2004hroot@f35655d69977:/app# # Paths
+[?2004l[?2004hroot@f35655d69977:/app# base_dir = os.path.abspath('.')
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# departments_path = os.path.join(base_dir, 'departments.csv')
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# employees_path = os.path.join(base_dir, 'employees.csv')
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# projects_path = os.path.join(base_dir, 'projects.csv')
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# schema_path = os.path.join(base_dir, 'schema.json')
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# output_path = os.path.join(base_dir, 'organization.json')
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# 
+[?2004l[?2004hroot@f35655d69977:/app# # Load schema (may contain keys we need to include)
+[?2004l[?2004hroot@f35655d69977:/app# try:
+[?2004llbash: try:: command not found
+[?2004hroot@f35655d69977:/app#     with open(schema_path, 'r', encoding='utf-8') as f:
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#         schema = json.load(f)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# except Exception as e:
+[?2004lbash: except: command not found
+[?2004hroot@f35655d69977:/app#     schema = {}
+[?2004lbash: schema: command not found
+[?2004hroot@f35655d69977:/app# 
+[?2004l[?2004hroot@f35655d69977:/app# # Helper to read CSV into dicts
+[?2004l[?2004hroot@f35655d69977:/app# def read_csv_dicts(path):
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     with open(path, 'r', encoding='utf-8') as f:
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#         reader = csv.DictReader(f)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#         rows = [ {k.strip(): (v.strip() if isinstance(v, str) else v) for k, v in row.items()} for row in reader ]
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     return rows
+[?2004lbash: return: rows: numeric argument required
+bash: return: can only `return' from a function or sourced script
+[?2004hroot@f35655d69977:/app# 
+[?2004l[?2004hroot@f35655d69977:/app# # Read input data
+[?2004l[?2004hroot@f35655d69977:/app# departments = read_csv_dicts(departments_path)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# employees = read_csv_dicts(employees_path)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# projects = read_csv_dicts(projects_path)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# 
+[?2004l[?2004hroot@f35655d69977:/app# # Normalize IDs to strings for consistent mapping
+[?2004l[?2004hroot@f35655d69977:/app# for d in departments:
+[?2004l[?2004h>     if 'department_id' in d:
+[?2004lbash: syntax error near unexpected token `if'
+[?2004hroot@f35655d69977:/app#         d['department_id'] = str(d['department_id'])
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# for e in employees:
+[?2004l[?2004h>     if 'employee_id' in e:
+[?2004lbash: syntax error near unexpected token `if'
+[?2004hroot@f35655d69977:/app#         e['employee_id'] = str(e['employee_id'])
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     if 'department_id' in e:
+[?2004l[?2004h>         e['department_id'] = str(e['department_id'])
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     # cast numeric fields if present
+[?2004l[?2004hroot@f35655d69977:/app#     for num_field in ['salary', 'age']:
+[?2004l[?2004h>         if num_field in e and e[num_field] not in (None, ''):
+[?2004lbash: syntax error near unexpected token `if'
+[?2004hroot@f35655d69977:/app#             try:
+[?2004lbash: try:: command not found
+[?2004hroot@f35655d69977:/app#                 e[num_field] = float(e[num_field])
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#             except:
+[?2004lbash: except:: command not found
+[?2004hroot@f35655d69977:/app#                 pass
+[?2004lbash: pass: command not found
+[?2004hroot@f35655d69977:/app# for p in projects:
+[?2004l[?2004h>     if 'project_id' in p:
+[?2004lbash: syntax error near unexpected token `if'
+[?2004hroot@f35655d69977:/app#         p['project_id'] = str(p['project_id'])
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     if 'department_id' in p:
+[?2004l[?2004h>         p['department_id'] = str(p['department_id'])
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     # cast numeric fields if present
+[?2004l[?2004hroot@f35655d69977:/app#     for num_field in ['budget']:
+[?2004l[?2004h>         if num_field in p and p[num_field] not in (None, ''):
+[?2004lbash: syntax error near unexpected token `if'
+[?2004hroot@f35655d69977:/app#             try:
+[?2004lbash: try:: command not found
+[?2004hroot@f35655d69977:/app#                 p[num_field] = float(p[num_field])
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#             except:
+[?2004lbash: except:: command not found
+[?2004hroot@f35655d69977:/app#                 pass
+[?2004lbash: pass: command not found
+[?2004hroot@f35655d69977:/app# 
+[?2004l[?2004hroot@f35655d69977:/app# # Index employees and projects by department
+[?2004l[?2004hroot@f35655d69977:/app# emps_by_dept = defaultdict(list)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# for e in employees:
+[?2004l[?2004h>     dept_id = e.get('department_id')
+[?2004lbash: syntax error near unexpected token `dept_id'
+[?2004hroot@f35655d69977:/app#     emps_by_dept[dept_id].append(e)
+[?2004lbash: syntax error near unexpected token `e'
+[?2004hroot@f35655d69977:/app# 
+[?2004l[?2004hroot@f35655d69977:/app# projects_by_dept = defaultdict(list)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# for pr in projects:
+[?2004l[?2004h>     dept_id = pr.get('department_id')
+[?2004lbash: syntax error near unexpected token `dept_id'
+[?2004hroot@f35655d69977:/app#     projects_by_dept[dept_id].append(pr)
+[?2004lbash: syntax error near unexpected token `pr'
+[?2004hroot@f35655d69977:/app# 
+[?2004l[?2004hroot@f35655d69977:/app# # Build organization metadata (derive from schema if present)
+[?2004l[?2004hroot@f35655d69977:/app# org_meta = {
+[?2004lbash: org_meta: command not found
+[?2004hroot@f35655d69977:/app#     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     'generated_at': __import__('datetime').datetime.utcnow().isoformat() + 'Z',
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     'source_files': ['departments.csv', 'employees.csv', 'projects.csv']
+[?2004lbash: source_files:: command not found
+[?2004hroot@f35655d69977:/app# }
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f35655d69977:/app# # If schema specifies additional metadata fields, initialize them
+[?2004l[?2004hroot@f35655d69977:/app# if 'metadata' in schema:
+[?2004l[?2004h>     for k, v in schema['metadata'].items():
+[?2004lbash: syntax error near unexpected token `v'
+[?2004hroot@f35655d69977:/app#         org_meta.setdefault(k, v)
+[?2004lbash: syntax error near unexpected token `k,'
+[?2004hroot@f35655d69977:/app# 
+[?2004l[?2004hroot@f35655d69977:/app# # Build departments with nested employees and projects
+[?2004l[?2004hroot@f35655d69977:/app# org_departments = []
+[?2004lbash: org_departments: command not found
+[?2004hroot@f35655d69977:/app# for d in departments:
+[?2004l[?2004h>     dept_id = d.get('department_id')
+[?2004lbash: syntax error near unexpected token `dept_id'
+[?2004hroot@f35655d69977:/app#     dept = {
+[?2004lbash: dept: command not found
+[?2004hroot@f35655d69977:/app#         'department_id': dept_id,
+[?2004lbash: department_id:: command not found
+[?2004hroot@f35655d69977:/app#         'name': d.get('name') or d.get('department_name') or d.get('name', ''),
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#         'manager': d.get('manager') if 'manager' in d else d.get('manager_name', ''),
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#         'employees': emps_by_dept.get(dept_id, []),
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#         'projects': projects_by_dept.get(dept_id, [])
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     }
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f35655d69977:/app#     # Compute per-department stats
+[?2004l[?2004hroot@f35655d69977:/app#     emp_list = dept['employees']
+[?2004lbash: emp_list: command not found
+[?2004hroot@f35655d69977:/app#     proj_list = dept['projects']
+[?2004lbash: proj_list: command not found
+[?2004hroot@f35655d69977:/app#     stats = {
+[?2004lbash: stats: command not found
+[?2004hroot@f35655d69977:/app#         'employee_count': len(emp_list),
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#         'project_count': len(proj_list)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     }
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f35655d69977:/app#     # salary stats if available
+[?2004l[?2004hroot@f35655d69977:/app#     salaries = [e['salary'] for e in emp_list if isinstance(e.get('salary'), (int, float))]
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     if salaries:
+[?2004l[?2004h>         stats['salary_min'] = min(salaries)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#         stats['salary_max'] = max(salaries)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#         stats['salary_avg'] = sum(salaries) / len(salaries)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     # project budget stats if available
+[?2004l[?2004hroot@f35655d69977:/app#     budgets = [p['budget'] for p in proj_list if isinstance(p.get('budget'), (int, float))]
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     if budgets:
+[?2004l[?2004h>         stats['budget_total'] = sum(budgets)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#         stats['budget_avg'] = sum(budgets) / len(budgets)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     dept['stats'] = stats
+[?2004lbash: dept[stats]: command not found
+[?2004hroot@f35655d69977:/app#     org_departments.append(dept)
+[?2004lbash: syntax error near unexpected token `dept'
+[?2004hroot@f35655d69977:/app# 
+[?2004l[?2004hroot@f35655d69977:/app# # Global statistics
+[?2004l[?2004hroot@f35655d69977:/app# total_employees = len(employees)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# total_departments = len(departments)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# total_projects = len(projects)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# 
+[?2004l[?2004hroot@f35655d69977:/app# global_stats = {
+[?2004lbash: global_stats: command not found
+[?2004hroot@f35655d69977:/app#     'total_departments': total_departments,
+[?2004lbash: total_departments:: command not found
+[?2004hroot@f35655d69977:/app#     'total_employees': total_employees,
+[?2004lbash: total_employees:: command not found
+[?2004hroot@f35655d69977:/app#     'total_projects': total_projects
+[?2004lbash: total_projects:: command not found
+[?2004hroot@f35655d69977:/app# }
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f35655d69977:/app# # global salary stats
+[?2004l[?2004hroot@f35655d69977:/app# all_salaries = [e['salary'] for e in employees if isinstance(e.get('salary'), (int, float))]
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# if all_salaries:
+[?2004l[?2004h>     global_stats['salary_min'] = min(all_salaries)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     global_stats['salary_max'] = max(all_salaries)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     global_stats['salary_avg'] = sum(all_salaries) / len(all_salaries)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# # global project budget stats
+[?2004l[?2004hroot@f35655d69977:/app# all_budgets = [p['budget'] for p in projects if isinstance(p.get('budget'), (int, float))]
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# if all_budgets:
+[?2004l[?2004h>     global_stats['budget_total'] = sum(all_budgets)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     global_stats['budget_avg'] = sum(all_budgets) / len(all_budgets)
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app# 
+[?2004l[?2004hroot@f35655d69977:/app# # Assemble final organization object following schema keys where possible
+[?2004l[?2004hroot@f35655d69977:/app# organization = {
+[?2004lbash: organization: command not found
+[?2004hroot@f35655d69977:/app#     'metadata': org_meta,
+[?2004lbash: metadata:: command not found
+[?2004hroot@f35655d69977:/app#     'departments': org_departments,
+[?2004lbash: departments:: command not found
+[?2004hroot@f35655d69977:/app#     'statistics': global_stats
+[?2004lbash: statistics:: command not found
+[?2004hroot@f35655d69977:/app# }
+[?2004lbash: syntax error near unexpected token `}'
+[?2004hroot@f35655d69977:/app# # If schema defines a top-level key, respect it
+[?2004l[?2004hroot@f35655d69977:/app# if 'title' in schema:
+[?2004l[?2004h>     organization['title'] = schema['title']
+[?2004l[?2004h> if 'version' in schema:
+[?2004l[?2004h>     organization['version'] = schema['version']
+[?2004l[?2004h> 
+[?2004l[?2004h> # Write output JSON
+[?2004l[?2004h> with open(output_path, 'w', encoding='utf-8') as f:
+[?2004lbash: syntax error near unexpected token `('
+[?2004hroot@f35655d69977:/app#     json.dump(organization, f, indent=2, ensure_ascii=False)
+[?2004lbash: syntax error near unexpected token `organization,'
+[?2004hroot@f35655d69977:/app# 
+[?2004l[?2004hroot@f35655d69977:/app# print(f'Wrote {output_path}')
+[?2004lbash: syntax error near unexpected token `f'Wrote {output_path}''
+[?2004hroot@f35655d69977:/app# " > csv_to_json.py
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> cat > csv_to_json.py << 'PY'
+[?2004l []
+for e in employees_csv:
+    dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+    dept_id = str(dept_id) if dept_id is not None else ''
+    emp = {
+        'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+        'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+        'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+        'skills': split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or ''),
+        'years_of_service': to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+    }
+    all_employees.append(emp)
+    employees_by_dept.setdefault(dept_id, []).append(emp)
+
+# Projects by department
+projects_by_dept = {}
+for p in projects_csv:
+    dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+    dept_id = str(dept_id) if dept_id is not None else ''
+    status_raw = p.get('status') or p.get('state') or 'Planning'
+    status = status_raw.strip().title()
+    if status not in ALLOWED_STATUSES:
+        # Try common variants
+        mapping = {
+            'planned': 'Planning',
+            'in progress': 'In Progress',
+            'progress': 'In Progress',
+            'testing': 'Testing',
+            'complete': 'Completed',
+            'completed': 'Completed',
+            'on hold': 'On Hold',
+            'hold': 'On Hold'
+        }
+        status = mapping.get(status_raw.strip().lower(), 'Planning')
+    proj = {
+        'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+        'status': status,
+        'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+        'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+    }
+    # Keep budget for departmental aggregation if present
+    proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+    proj['_budget'] = proj_budget
+    [?2004h> #!/usr/bin/env python3
+[?2004lbash: !/usr/bin/env: event not found
+[?2004h> import csv
+[?2004l[?2004h> import json
+[?2004ln[?2004h> import os
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+[?2004l[?2004h> DATA_DIR = os.path.join(BASE_DIR, 'data')
+[?2004l[?2004h> SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.json')
+[?2004l[?2004h> OUTPUT_PATH = os.path.join(BASE_DIR, 'organization.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> ALLOWED_STATUSES = {"Planning", "In Progress", "Testing", "Completed", "On Hold"}
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv_dicts(path):
+[?2004l[?2004h>     with open(path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         rows = []
+[?2004l[?2004h>         for row in reader:
+[?2004l[?2004h>             clean = {}
+[?2004l[?2004h>             for k, v in row.items():
+[?2004l[?2004h>                 k2 = (k or '').strip()
+[?2004l[?2004h>                 if isinstance(v, str):
+[?2004l[?2004h>                     v2 = v.strip()
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v2 = v
+[?2004l[?2004h>                 clean[k2] = v2
+[?2004l[?2004h>             rows.append(clean)
+[?2004l[?2004h>         return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_float(value, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return float(str(value).replace(',', ''))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_int(value, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return int(float(str(value).replace(',', '')))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     parts = [s]
+[?2004l[?2004h>     for sep in [',', ';', '|']:
+[?2004l[?2004h>         new_parts = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             new_parts.extend(p.split(sep))
+[?2004l[?2004h>         parts = new_parts
+[?2004l[?2004h>     return [p.strip() for p in parts if p.strip()]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load schema (optional use for defaults)
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         schema = json.load(f)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     schema = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read data
+[?2004l[?2004h> departments_csv = read_csv_dicts(os.path.join(DATA_DIR, 'departments.csv'))
+[?2004l[?2004h> employees_csv = read_csv_dicts(os.path.join(DATA_DIR, 'employees.csv'))
+[?2004l[?2004h> projects_csv = read_csv_dicts(os.path.join(DATA_DIR, 'projects.csv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prepare lookups and transformation
+[?2004l[?2004h> # Employees by department
+[?2004l[?2004h> employees_by_dept = {}
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_csv:
+[?2004l[?2004h>     dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     emp = {
+[?2004l[?2004h>         'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+[?2004l[?2004h>         'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+[?2004l[?2004h>         'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+[?2004l[?2004h>         'skills': split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or ''),
+[?2004l[?2004h>         'years_of_service': to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp)
+[?2004l[?2004h>     employees_by_dept.setdefault(dept_id, []).append(emp)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Projects by department
+[?2004l[?2004h> projects_by_dept = {}
+[?2004l[?2004h> for p in projects_csv:
+[?2004l[?2004h>     dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     status_raw = p.get('status') or p.get('state') or 'Planning'
+[?2004l[?2004h>     status = status_raw.strip().title()
+[?2004l[?2004h>     if status not in ALLOWED_STATUSES:
+[?2004l[?2004h>         # Try common variants
+[?2004l[?2004h>         mapping = {
+[?2004l[?2004h>             'planned': 'Planning',
+[?2004l[?2004h>             'in progress': 'In Progress',
+[?2004l[?2004h>             'progress': 'In Progress',
+[?2004l[?2004h>             'testing': 'Testing',
+[?2004l[?2004h>             'complete': 'Completed',
+[?2004l[?2004h>             'completed': 'Completed',
+[?2004l[?2004h>             'on hold': 'On Hold',
+[?2004l[?2004h>             'hold': 'On Hold'
+[?2004l[?2004h>         }
+[?2004l[?2004h>         status = mapping.get(status_raw.strip().lower(), 'Planning')
+[?2004l[?2004h>     proj = {
+[?2004l[?2004h>         'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+[?2004l[?2004h>         'status': status,
+[?2004l[?2004h>         'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+[?2004l[?2004h>         'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+[?2004l[?2004h>     }
+[?2004l[?2004h>     # Keep budget for departmental aggregation if present
+[?2004l[?2004h>     proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+[?2004l[?2004h>     proj['_budget'] = proj_budget
+[?2004l[?2004h>     projects_by_dept.setdefault(dept_id, []).append(proj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> for d in departments_csv:
+[?2004l[?2004h>     dept_id = str(d.get('id') or d.get('department_id') or d.get('dept_id') or d.get('code') or '')
+[?2004l[?2004h>     dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or ''
+[?2004l[?2004h>     dept_budget = to_float(d.get('budget') or d.get('department_budget') or d.get('budget_total') or 0.0)
+[?2004l[?2004h>     # If budget missing or zero, try to compute from projects
+[?2004l[?2004h>     if dept_budget == 0.0:
+[?2004l[?2004h>         proj_list = projects_by_dept.get(dept_id, [])
+[?2004l[?2004h>         dept_budget = sum(p.get('_budget', 0.0) for p in proj_list)
+[?2004l[?2004h>     dept = {
+[?2004l[?2004h>         'id': dept_id,
+[?2004l[?2004h>         'name': dept_name,
+[?2004l[?2004h>         'budget': dept_budget,
+[?2004l[?2004h>         'employees': employees_by_dept.get(dept_id, []),
+[?2004l[?2004h>         'projects': [{k: v for k, v in prj.items() if not k.startswith('_')} for prj in projects_by_dept.get(dept_id, [])]
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'generator': 'csv_to_json.py'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info (set sensible defaults)
+[?2004l[?2004h> organization_info = {
+[?2004l[?2004h>     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004l[?2004h>     'founded': schema.get('organization', {}).get('founded', '2000-01-01'),
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Statistics
+[?2004l[?2004h> avg_budget = 0.0
+[?2004l[?2004h> if departments:
+[?2004l[?2004h>     avg_budget = sum(d['budget'] for d in departments) / len(departments)
+[?2004l[?2004h> 
+[?2004l[?2004h> total_employees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Skill distribution
+[?2004l[?2004h> skill_dist = {}
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for s in e.get('skills', []):
+[?2004l[?2004h>         skill_dist[s] = skill_dist.get(s, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> # Department sizes by id
+[?2004l[?2004h> dept_sizes = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     dept_sizes[d['id']] = len(d.get('employees', []))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Project status distribution
+[?2004l[?2004h> status_dist = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for p in d.get('projects', []):
+[?2004l[?2004h>         st = p.get('status') or 'Planning'
+[?2004l[?2004h>         status_dist[st] = status_dist.get(st, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> # Average years of service
+[?2004l[?2004h> years_list = [e.get('years_of_service', 0) for e in all_employees]
+[?2004l[?2004h> avg_years = (sum(years_list) / len(years_list)) if years_list else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': avg_budget,
+[?2004l[?2004h>     'totalEmployees': total_employees,
+[?2004l[?2004h>     'skillDistribution': skill_dist,
+[?2004l[?2004h>     'departmentSizes': dept_sizes,
+[?2004l[?2004h>     'projectStatusDistribution': status_dist,
+[?2004l[?2004h>     'averageYearsOfService': avg_years
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Final object per schema
+[?2004l[?2004h> final_obj = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization_info,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Write output
+[?2004l[?2004h> with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(final_obj, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print(f"Wrote {OUTPUT_PATH}")
+[?2004l[?2004h> PY
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> cat > csv_to_json.py << 'PY'
+[?2004l[?2004h> import csv
+[?2004l[?2004h> import json
+[?2004l[?2004h> import os
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+[?2004l[?2004h> DATA_DIR = os.path.join(BASE_DIR, 'data')
+[?2004l[?2004h> SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.json')
+[?2004l[?2004h> OUTPUT_PATH = os.path.join(BASE_DIR, 'organization.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> ALLOWED_STATUSES = {"Planning", "In Progress", "Testing", "Completed", "On Hold"}
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv_dicts(path):
+[?2004l[?2004h>     with open(path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         rows = []
+[?2004l[?2004h>         for row in reader:
+[?2004l[?2004h>             clean = {}
+[?2004l[?2004h>             for k, v in row.items():
+[?2004l[?2004h>                 k2 = (k or '').strip()
+[?2004l[?2004h>                 if isinstance(v, str):
+[?2004l[?2004h>                     v2 = v.strip()
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v2 = v
+[?2004l[?2004h>                 clean[k2] = v2
+[?2004l[?2004h>             rows.append(clean)
+[?2004l[?2004h>         return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_float(value, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return float(str(value).replace(',', ''))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_int(value, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return int(float(str(value).replace(',', '')))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     parts = [s]
+[?2004l[?2004h>     for sep in [',', ';', '|']:
+[?2004l[?2004h>         new_parts = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             new_parts.extend(p.split(sep))
+[?2004l[?2004h>         parts = new_parts
+[?2004l[?2004h>     return [p.strip() for p in parts if p.strip()]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load schema (optional use for defaults)
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         schema = json.load(f)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     schema = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read data
+[?2004l[?2004h> departments_csv = read_csv_dicts(os.path.join(DATA_DIR, 'departments.csv'))
+[?2004l[?2004h> employees_csv = read_csv_dicts(os.path.join(DATA_DIR, 'employees.csv'))
+[?2004l[?2004h> projects_csv = read_csv_dicts(os.path.join(DATA_DIR, 'projects.csv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prepare lookups and transformation
+[?2004l[?2004h> employees_by_dept = {}
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_csv:
+[?2004l[?2004h>     dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+[?2004l[?2004h>     if not skills:
+[?2004l[?2004h>         skills = ['General']
+[?2004l[?2004h>     emp = {
+[?2004l[?2004h>         'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+[?2004l[?2004h>         'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+[?2004l[?2004h>         'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+[?2004l[?2004h>         'skills': skills,
+[?2004l[?2004h>         'years_of_service': to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp)
+[?2004l[?2004h>     employees_by_dept.setdefault(dept_id, []).append(emp)
+[?2004l[?2004h> 
+[?2004l[?2004h> projects_by_dept = {}
+[?2004l[?2004h> for p in projects_csv:
+[?2004l[?2004h>     dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     status_raw = p.get('status') or p.get('state') or 'Planning'
+[?2004l[?2004h>     status = status_raw.strip().title()
+[?2004l[?2004h>     if status not in ALLOWED_STATUSES:
+[?2004l[?2004h>         mapping = {
+[?2004l[?2004h>             'planned': 'Planning',
+[?2004l[?2004h>             'in progress': 'In Progress',
+[?2004l[?2004h>             'progress': 'In Progress',
+[?2004l[?2004h>             'testing': 'Testing',
+[?2004l[?2004h>             'complete': 'Completed',
+[?2004l[?2004h>             'completed': 'Completed',
+[?2004l[?2004h>             'on hold': 'On Hold',
+[?2004l[?2004h>             'hold': 'On Hold'
+[?2004l[?2004h>         }
+[?2004l[?2004h>         status = mapping.get(status_raw.strip().lower(), 'Planning')
+[?2004l[?2004h>     proj = {
+[?2004l[?2004h>         'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+[?2004l[?2004h>         'status': status,
+[?2004l[?2004h>         'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+[?2004l[?2004h>         'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+[?2004l[?2004h>     }
+[?2004l[?2004h>     proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+[?2004l[?2004h>     proj['_budget'] = proj_budget
+[?2004l[?2004h>     projects_by_dept.setdefault(dept_id, []).append(proj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> for d in departments_csv:
+[?2004l[?2004h>     dept_id = str(d.get('id') or d.get('department_id') or d.get('dept_id') or d.get('code') or '')
+[?2004l[?2004h>     dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or ''
+[?2004l[?2004h>     dept_budget = to_float(d.get('budget') or d.get('department_budget') or d.get('budget_total') or 0.0)
+[?2004l[?2004h>     if dept_budget == 0.0:
+[?2004l[?2004h>         proj_list = projects_by_dept.get(dept_id, [])
+[?2004l[?2004h>         dept_budget = sum(p.get('_budget', 0.0) for p in proj_list)
+[?2004l[?2004h>     dept = {
+[?2004l[?2004h>         'id': dept_id,
+[?2004l[?2004h>         'name': dept_name,
+[?2004l[?2004h>         'budget': dept_budget,
+[?2004l[?2004h>         'employees': employees_by_dept.get(dept_id, []),
+[?2004l[?2004h>         'projects': [{k: v for k, v in prj.items() if not k.startswith('_')} for prj in projects_by_dept.get(dept_id, [])]
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'generator': 'csv_to_json.py'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info
+[?2004l[?2004h> organization_info = {
+[?2004l[?2004h>     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004l[?2004h>     'founded': schema.get('organization', {}).get('founded', '2000-01-01'),
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Statistics
+[?2004l[?2004h> avg_budget = 0.0
+[?2004l[?2004h> if departments:
+[?2004l[?2004h>     avg_budget = sum(d['budget'] for d in departments) / len(departments)
+[?2004l[?2004h> 
+[?2004l[?2004h> total_employees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> skill_dist = {}
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for s in e.get('skills', []):
+[?2004l[?2004h>         skill_dist[s] = skill_dist.get(s, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> dept_sizes = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     dept_sizes[d['id']] = len(d.get('employees', []))
+[?2004l[?2004h> 
+[?2004l[?2004h> status_dist = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for p in d.get('projects', []):
+[?2004l[?2004h>         st = p.get('status') or 'Planning'
+[?2004l[?2004h>         status_dist[st] = status_dist.get(st, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> years_list = [e.get('years_of_service', 0) for e in all_employees]
+[?2004l[?2004h> avg_years = (sum(years_list) / len(years_list)) if years_list else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': avg_budget,
+[?2004l[?2004h>     'totalEmployees': total_employees,
+[?2004l[?2004h>     'skillDistribution': skill_dist,
+[?2004l[?2004h>     'departmentSizes': dept_sizes,
+[?2004l[?2004h>     'projectStatusDistribution': status_dist,
+[?2004l[?2004h>     'averageYearsOfService': avg_years
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> final_obj = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization_info,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(final_obj, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Wrote {}".format(OUTPUT_PATH))
+[?2004l[?2004h> PY
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> cat > csv_to_json.py << 'PY'
+[?2004l'
+    status_raw = p.get('status') or p.get('state') or 'Planning'
+    status = status_raw.strip().title()
+    if status not in ALLOWED_STATUSES:
+        mapping = {
+            'planned': 'Planning',
+            'in progress': 'In Progress',
+            'progress': 'In Progress',
+            'testing': 'Testing',
+            'complete': 'Completed',
+            'completed': 'Completed',
+            'on hold': 'On Hold',
+            'hold': 'On Hold'
+        }
+        status = mapping.get(status_raw.strip().lower(), 'Planning')
+    proj = {
+        'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+        'status': status,
+        'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+        'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+    }
+    proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+    proj['_budget'] = proj_budget
+    projects_by_dept.setdefault(dept_id, []).append(proj)
+
+# Build departments
+departments = []
+fo[?2004h> import csv
+[?2004l[?2004h> import json
+[?2004l[?2004h> import os
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+[?2004l[?2004h> DATA_DIR = os.path.join(BASE_DIR, 'data')
+[?2004l[?2004h> SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.json')
+[?2004l[?2004h> OUTPUT_PATH = os.path.join(BASE_DIR, 'organization.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> ALLOWED_STATUSES = {"Planning", "In Progress", "Testing", "Completed", "On Hold"}
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv_dicts(path):
+[?2004l[?2004h>     with open(path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         rows = []
+[?2004l[?2004h>         for row in reader:
+[?2004l[?2004h>             clean = {}
+[?2004l[?2004h>             for k, v in row.items():
+[?2004l[?2004h>                 k2 = (k or '').strip()
+[?2004l[?2004h>                 if isinstance(v, str):
+[?2004l[?2004h>                     v2 = v.strip()
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v2 = v
+[?2004l[?2004h>                 clean[k2] = v2
+[?2004l[?2004h>             rows.append(clean)
+[?2004l[?2004h>         return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_float(value, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return float(str(value).replace(',', ''))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_int(value, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return int(float(str(value).replace(',', '')))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     parts = [s]
+[?2004l[?2004h>     for sep in [',', ';', '|']:
+[?2004l[?2004h>         new_parts = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             new_parts.extend(p.split(sep))
+[?2004l[?2004h>         parts = new_parts
+[?2004l[?2004h>     return [p.strip() for p in parts if p.strip()]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load schema (optional use for defaults)
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         schema = json.load(f)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     schema = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read data
+[?2004l[?2004h> departments_csv = read_csv_dicts(os.path.join(DATA_DIR, 'departments.csv'))
+[?2004l[?2004h> employees_csv = read_csv_dicts(os.path.join(DATA_DIR, 'employees.csv'))
+[?2004l[?2004h> projects_csv = read_csv_dicts(os.path.join(DATA_DIR, 'projects.csv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prepare lookups and transformation
+[?2004l[?2004h> employees_by_dept = {}
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_csv:
+[?2004l[?2004h>     dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+[?2004l[?2004h>     if not skills:
+[?2004l[?2004h>         skills = ['General']
+[?2004l[?2004h>     emp = {
+[?2004l[?2004h>         'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+[?2004l[?2004h>         'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+[?2004l[?2004h>         'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+[?2004l[?2004h>         'skills': skills,
+[?2004l[?2004h>         'years_of_service': to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp)
+[?2004l[?2004h>     employees_by_dept.setdefault(dept_id, []).append(emp)
+[?2004l[?2004h> 
+[?2004l[?2004h> projects_by_dept = {}
+[?2004l[?2004h> for p in projects_csv:
+[?2004l[?2004h>     dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     status_raw = p.get('status') or p.get('state') or 'Planning'
+[?2004l[?2004h>     status = status_raw.strip().title()
+[?2004l[?2004h>     if status not in ALLOWED_STATUSES:
+[?2004l[?2004h>         mapping = {
+[?2004l[?2004h>             'planned': 'Planning',
+[?2004l[?2004h>             'in progress': 'In Progress',
+[?2004l[?2004h>             'progress': 'In Progress',
+[?2004l[?2004h>             'testing': 'Testing',
+[?2004l[?2004h>             'complete': 'Completed',
+[?2004l[?2004h>             'completed': 'Completed',
+[?2004l[?2004h>             'on hold': 'On Hold',
+[?2004l[?2004h>             'hold': 'On Hold'
+[?2004l[?2004h>         }
+[?2004l[?2004h>         status = mapping.get(status_raw.strip().lower(), 'Planning')
+[?2004l[?2004h>     proj = {
+[?2004l[?2004h>         'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+[?2004l[?2004h>         'status': status,
+[?2004l[?2004h>         'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+[?2004l[?2004h>         'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+[?2004l[?2004h>     }
+[?2004l[?2004h>     proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+[?2004l[?2004h>     proj['_budget'] = proj_budget
+[?2004l[?2004h>     projects_by_dept.setdefault(dept_id, []).append(proj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> for d in departments_csv:
+[?2004l[?2004h>     dept_id = str(d.get('id') or d.get('department_id') or d.get('dept_id') or d.get('code') or '')
+[?2004l[?2004h>     dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or ''
+[?2004l[?2004h>     dept_budget = to_float(d.get('budget') or d.get('department_budget') or d.get('budget_total') or 0.0)
+[?2004l[?2004h>     if dept_budget == 0.0:
+[?2004l[?2004h>         proj_list = projects_by_dept.get(dept_id, [])
+[?2004l[?2004h>         dept_budget = sum(p.get('_budget', 0.0) for p in proj_list)
+[?2004l[?2004h>     dept = {
+[?2004l[?2004h>         'id': dept_id,
+[?2004l[?2004h>         'name': dept_name,
+[?2004l[?2004h>         'budget': dept_budget,
+[?2004l[?2004h>         'employees': employees_by_dept.get(dept_id, []),
+[?2004l[?2004h>         'projects': [{k: v for k, v in prj.items() if not k.startswith('_')} for prj in projects_by_dept.get(dept_id, [])]
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'generator': 'csv_to_json.py'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info
+[?2004l[?2004h> organization_info = {
+[?2004l[?2004h>     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004l[?2004h>     'founded': schema.get('organization', {}).get('founded', '2000-01-01'),
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Statistics
+[?2004l[?2004h> avg_budget = 0.0
+[?2004l[?2004h> if departments:
+[?2004l[?2004h>     avg_budget = sum(d['budget'] for d in departments) / len(departments)
+[?2004l[?2004h> 
+[?2004l[?2004h> total_employees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> skill_dist = {}
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for s in e.get('skills', []):
+[?2004l[?2004h>         skill_dist[s] = skill_dist.get(s, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> dept_sizes = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     dept_sizes[d['id']] = len(d.get('employees', []))
+[?2004l[?2004h> 
+[?2004l[?2004h> status_dist = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for p in d.get('projects', []):
+[?2004l[?2004h>         st = p.get('status') or 'Planning'
+[?2004l[?2004h>         status_dist[st] = status_dist.get(st, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> years_list = [e.get('years_of_service', 0) for e in all_employees]
+[?2004l[?2004h> avg_years = (sum(years_list) / len(years_list)) if years_list else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': avg_budget,
+[?2004l[?2004h>     'totalEmployees': total_employees,
+[?2004l[?2004h>     'skillDistribution': skill_dist,
+[?2004l[?2004h>     'departmentSizes': dept_sizes,
+[?2004l[?2004h>     'projectStatusDistribution': status_dist,
+[?2004l[?2004h>     'averageYearsOfService': avg_years
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> final_obj = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization_info,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(final_obj, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Wrote {}".format(OUTPUT_PATH))
+[?2004l[?2004h> PY
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> sed -n '1,200p' csv_to_json.py
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> rm -f csv_to_json.py
+[?2004l[?2004h> cat > csv_to_json.py << 'PY'
+[?2004l[?2004h> import csv
+[?2004lw = p.get('status') or p.get('state') or 'Planning'
+    status = status_raw.strip().title()
+    if status not in ALLOWED_STATUSES:
+        mapping = {
+            'planned': 'Planning',
+            'in progress': 'In Progress',
+            'progress': 'In Progress',
+            'testing': 'Testing',
+            'complete': 'Completed',
+            'completed': 'Completed',
+            'on hold': 'On Hold',
+            'hold': 'On Hold'
+        }
+        status = mapping.get(status_raw.strip().lower(), 'Planning')
+    proj = {
+        'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+        'status': status,
+        'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+        'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+    }
+    proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+    proj['_budget'] = proj_budget
+    projects_by_dept.setdefault(dept_id, []).append(proj)
+
+# Build departments
+departments = []
+for d in departments_csv:
+  [?2004h> import json
+[?2004l[?2004h> import os
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+[?2004l[?2004h> DATA_DIR = os.path.join(BASE_DIR, 'data')
+[?2004l[?2004h> SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.json')
+[?2004l[?2004h> OUTPUT_PATH = os.path.join(BASE_DIR, 'organization.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> ALLOWED_STATUSES = {"Planning", "In Progress", "Testing", "Completed", "On Hold"}
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv_dicts(path):
+[?2004l[?2004h>     with open(path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         rows = []
+[?2004l[?2004h>         for row in reader:
+[?2004l[?2004h>             clean = {}
+[?2004l[?2004h>             for k, v in row.items():
+[?2004l[?2004h>                 k2 = (k or '').strip()
+[?2004l[?2004h>                 if isinstance(v, str):
+[?2004l[?2004h>                     v2 = v.strip()
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v2 = v
+[?2004l[?2004h>                 clean[k2] = v2
+[?2004l[?2004h>             rows.append(clean)
+[?2004l[?2004h>         return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_float(value, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return float(str(value).replace(',', ''))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_int(value, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return int(float(str(value).replace(',', '')))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     parts = [s]
+[?2004l[?2004h>     for sep in [',', ';', '|']:
+[?2004l[?2004h>         new_parts = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             new_parts.extend(p.split(sep))
+[?2004l[?2004h>         parts = new_parts
+[?2004l[?2004h>     return [p.strip() for p in parts if p.strip()]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load schema for defaults
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         schema = json.load(f)
+[?2004l[?2004h> except Exception:
+[?2004l
+dept_sizes = {}
+for d in departments:
+    dept_sizes[d['id']] = len(d.get('employees', []))
+
+status_dist = {}
+for d in departments:
+    for p in d.get('projects', []):
+        st = p.get('status') or 'Planning'
+  [?2004h>     schema = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read data
+[?2004l[?2004h> departments_csv = read_csv_dicts(os.path.join(DATA_DIR, 'departments.csv'))
+[?2004l[?2004h> employees_csv = read_csv_dicts(os.path.join(DATA_DIR, 'employees.csv'))
+[?2004l[?2004h> projects_csv = read_csv_dicts(os.path.join(DATA_DIR, 'projects.csv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prepare lookups and transformation
+[?2004l[?2004h> employees_by_dept = {}
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_csv:
+[?2004l[?2004h>     dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+[?2004l[?2004h>     if not skills:
+[?2004l[?2004h>         skills = ['General']
+[?2004l[?2004h>     emp = {
+[?2004l[?2004h>         'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+[?2004l[?2004h>         'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+[?2004l[?2004h>         'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+[?2004l[?2004h>         'skills': skills,
+[?2004l[?2004h>         'years_of_service': to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp)
+[?2004l[?2004h>     employees_by_dept.setdefault(dept_id, []).append(emp)
+[?2004l[?2004h> 
+[?2004l[?2004h> projects_by_dept = {}
+[?2004l[?2004h> for p in projects_csv:
+[?2004l[?2004h>     dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     status_raw = p.get('status') or p.get('state') or 'Planning'
+[?2004l[?2004h>     status = status_raw.strip().title()
+[?2004l[?2004h>     if status not in ALLOWED_STATUSES:
+[?2004l[?2004h>         mapping = {
+[?2004l[?2004h>             'planned': 'Planning',
+[?2004l[?2004h>             'in progress': 'In Progress',
+[?2004l[?2004h>             'progress': 'In Progress',
+[?2004l[?2004h>             'testing': 'Testing',
+[?2004l[?2004h>             'complete': 'Completed',
+[?2004l[?2004h>             'completed': 'Completed',
+[?2004l[?2004h>             'on hold': 'On Hold',
+[?2004l[?2004h>             'hold': 'On Hold'
+[?2004l[?2004h>         }
+[?2004l[?2004h>         status = mapping.get(status_raw.strip().lower(), 'Planning')
+[?2004l[?2004h>     proj = {
+[?2004l[?2004h>         'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+[?2004l[?2004h>         'status': status,
+[?2004l[?2004h>         'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+[?2004l[?2004h>         'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+[?2004l[?2004h>     }
+[?2004l[?2004h>     proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+[?2004l[?2004h>     proj['_budget'] = proj_budget
+[?2004l[?2004h>     projects_by_dept.setdefault(dept_id, []).append(proj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> for d in departments_csv:
+[?2004l[?2004h>     dept_id = str(d.get('id') or d.get('department_id') or d.get('dept_id') or d.get('code') or '')
+[?2004l[?2004h>     dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or ''
+[?2004l[?2004h>     dept_budget = to_float(d.get('budget') or d.get('department_budget') or d.get('budget_total') or 0.0)
+[?2004l[?2004h>     if dept_budget == 0.0:
+[?2004l[?2004h>         proj_list = projects_by_dept.get(dept_id, [])
+[?2004l[?2004h>         dept_budget = sum(p.get('_budget', 0.0) for p in proj_list)
+[?2004l[?2004h>     dept = {
+[?2004l[?2004h>         'id': dept_id,
+[?2004l[?2004h>         'name': dept_name,
+[?2004l[?2004h>         'budget': dept_budget,
+[?2004l[?2004h>         'employees': employees_by_dept.get(dept_id, []),
+[?2004l[?2004h>         'projects': [{k: v for k, v in prj.items() if not k.startswith('_')} for prj in projects_by_dept.get(dept_id, [])]
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'generator': 'csv_to_json.py'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info
+[?2004l[?2004h> organization_info = {
+[?2004l[?2004h>     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004l[?2004h>     'founded': schema.get('organization', {}).get('founded', '2000-01-01'),
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Statistics
+[?2004l[?2004h> avg_budget = 0.0
+[?2004l[?2004h> if departments:
+[?2004l[?2004h>     avg_budget = sum(d['budget'] for d in departments) / len(departments)
+[?2004l[?2004h> 
+[?2004l[?2004h> total_employees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> skill_dist = {}
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for s in e.get('skills', []):
+[?2004l[?2004h>         skill_dist[s] = skill_dist.get(s, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> dept_sizes = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     dept_sizes[d['id']] = len(d.get('employees', []))
+[?2004l[?2004h> 
+[?2004l[?2004h> status_dist = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for p in d.get('projects', []):
+[?2004l[?2004h>         st = p.get('status') or 'Planning'
+[?2004l[?2004h>         status_dist[st] = status_dist.get(st, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> years_list = [e.get('years_of_service', 0) for e in all_employees]
+[?2004l[?2004h> avg_years = (sum(years_list) / len(years_list)) if years_list else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': avg_budget,
+[?2004l[?2004h>     'totalEmployees': total_employees,
+[?2004l[?2004h>     'skillDistribution': skill_dist,
+[?2004l[?2004h>     'departmentSizes': dept_sizes,
+[?2004l[?2004h>     'projectStatusDistribution': status_dist,
+[?2004l[?2004h>     'averageYearsOfService': avg_years
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> final_obj = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization_info,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(final_obj, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Wrote {}".format(OUTPUT_PATH))
+[?2004l[?2004h> PY
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> sed -n '1,200p' csv_to_json.py
+[?2004l[?2004h> rm -f csv_to_json.py
+[?2004l[?2004h> cat << 'PY' > csv_to_json.py
+[?2004lw = p.get('status') or p.get('state') or 'Planning'
+    status = status_raw.strip().title()
+    if status not in ALLOWED_STATUSES:
+        mapping = {
+            'planned': 'Planning',
+            'in progress': 'In Progress',
+            'progress': 'In Progress',
+            'testing': 'Testing',
+            'complete': 'Completed',
+            'completed': 'Completed',
+            'on hold': 'On Hold',
+            'hold': 'On Hold'
+        }
+        status = mapping.get(status_raw.strip().lower(), 'Planning')
+    proj = {
+        'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+        'status': status,
+        'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+        'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+    }
+    proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+    proj['_budget'] = proj_budget
+    projects_by_dept.setdefault(dept_id, []).append(proj)
+
+# Build departments
+departments = []
+for d in departme[?2004h> import csv
+[?2004l[?2004h> import json
+[?2004l[?2004h> import os
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+[?2004l[?2004h> DATA_DIR = os.path.join(BASE_DIR, 'data')
+[?2004l[?2004h> SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.json')
+[?2004l[?2004h> OUTPUT_PATH = os.path.join(BASE_DIR, 'organization.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> ALLOWED_STATUSES = {"Planning", "In Progress", "Testing", "Completed", "On Hold"}
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv_dicts(path):
+[?2004l[?2004h>     with open(path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         rows = []
+[?2004l[?2004h>         for row in reader:
+[?2004l[?2004h>             clean = {}
+[?2004l[?2004h>             for k, v in row.items():
+[?2004l[?2004h>                 k2 = (k or '').strip()
+[?2004l[?2004h>                 if isinstance(v, str):
+[?2004l[?2004h>                     v2 = v.strip()
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v2 = v
+[?2004l[?2004h>                 clean[k2] = v2
+[?2004l[?2004h>             rows.append(clean)
+[?2004l[?2004h>         return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_float(value, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return float(str(value).replace(',', ''))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_int(value, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return int(float(str(value).replace(',', '')))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     parts = [s]
+[?2004l[?2004h>     for sep in [',', ';', '|']:
+[?2004l[?2004h>         new_parts = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             new_parts.extend(p.split(sep))
+[?2004l[?2004h>         parts = new_parts
+[?2004l[?2004h>     return [p.strip() for p in parts if p.strip()]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load schema for defaults
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         schema = json.load(f)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     schema = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read data
+[?2004l[?2004h> departments_csv = read_csv_dicts(os.path.join(DATA_DIR, 'departments.csv'))
+[?2004l[?2004h> employees_csv = read_csv_dicts(os.path.join(DATA_DIR, 'employees.csv'))
+[?2004l[?2004h> projects_csv = read_csv_dicts(os.path.join(DATA_DIR, 'projects.csv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prepare lookups and transformation
+[?2004l[?2004h> employees_by_dept = {}
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_csv:
+[?2004l[?2004h>     dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+[?2004l[?2004h>     if not skills:
+[?2004l[?2004h>         skills = ['General']
+[?2004l[?2004h>     emp = {
+[?2004l[?2004h>         'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+[?2004l[?2004h>         'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+[?2004l[?2004h>         'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+[?2004l[?2004h>         'skills': skills,
+[?2004l[?2004h>         'years_of_service': to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp)
+[?2004l[?2004h>     employees_by_dept.setdefault(dept_id, []).append(emp)
+[?2004l[?2004h> 
+[?2004l[?2004h> projects_by_dept = {}
+[?2004l[?2004h> for p in projects_csv:
+[?2004l[?2004h>     dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     status_raw = p.get('status') or p.get('state') or 'Planning'
+[?2004l[?2004h>     status = status_raw.strip().title()
+[?2004l[?2004h>     if status not in ALLOWED_STATUSES:
+[?2004l[?2004h>         mapping = {
+[?2004l[?2004h>             'planned': 'Planning',
+[?2004l[?2004h>             'in progress': 'In Progress',
+[?2004l[?2004h>             'progress': 'In Progress',
+[?2004l[?2004h>             'testing': 'Testing',
+[?2004l[?2004h>             'complete': 'Completed',
+[?2004l[?2004h>             'completed': 'Completed',
+[?2004l[?2004h>             'on hold': 'On Hold',
+[?2004l[?2004h>             'hold': 'On Hold'
+[?2004l[?2004h>         }
+[?2004l[?2004h>         status = mapping.get(status_raw.strip().lower(), 'Planning')
+[?2004l[?2004h>     proj = {
+[?2004l[?2004h>         'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+[?2004l[?2004h>         'status': status,
+[?2004l[?2004h>         'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+[?2004l[?2004h>         'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+[?2004l[?2004h>     }
+[?2004l[?2004h>     proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+[?2004l[?2004h>     proj['_budget'] = proj_budget
+[?2004l[?2004h>     projects_by_dept.setdefault(dept_id, []).append(proj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> for d in departments_csv:
+[?2004l[?2004h>     dept_id = str(d.get('id') or d.get('department_id') or d.get('dept_id') or d.get('code') or '')
+[?2004l[?2004h>     dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or ''
+[?2004l[?2004h>     dept_budget = to_float(d.get('budget') or d.get('department_budget') or d.get('budget_total') or 0.0)
+[?2004l[?2004h>     if dept_budget == 0.0:
+[?2004l[?2004h>         proj_list = projects_by_dept.get(dept_id, [])
+[?2004l[?2004h>         dept_budget = sum(p.get('_budget', 0.0) for p in proj_list)
+[?2004l[?2004h>     dept = {
+[?2004l[?2004h>         'id': dept_id,
+[?2004l[?2004h>         'name': dept_name,
+[?2004l[?2004h>         'budget': dept_budget,
+[?2004l[?2004h>         'employees': employees_by_dept.get(dept_id, []),
+[?2004l[?2004h>         'projects': [{k: v for k, v in prj.items() if not k.startswith('_')} for prj in projects_by_dept.get(dept_id, [])]
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'generator': 'csv_to_json.py'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info
+[?2004l[?2004h> organization_info = {
+[?2004l[?2004h>     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004l[?2004h>     'founded': schema.get('organization', {}).get('founded', '2000-01-01'),
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Statistics
+[?2004l[?2004h> avg_budget = 0.0
+[?2004l[?2004h> if departments:
+[?2004l[?2004h>     avg_budget = sum(d['budget'] for d in departments) / len(departments)
+[?2004l[?2004h> 
+[?2004l[?2004h> total_employees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> skill_dist = {}
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for s in e.get('skills', []):
+[?2004l[?2004h>         skill_dist[s] = skill_dist.get(s, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> dept_sizes = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     dept_sizes[d['id']] = len(d.get('employees', []))
+[?2004l[?2004h> 
+[?2004l[?2004h> status_dist = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for p in d.get('projects', []):
+[?2004l[?2004h>         st = p.get('status') or 'Planning'
+[?2004l[?2004h>         status_dist[st] = status_dist.get(st, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> years_list = [e.get('years_of_service', 0) for e in all_employees]
+[?2004l[?2004h> avg_years = (sum(years_list) / len(years_list)) if years_list else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': avg_budget,
+[?2004l[?2004h>     'totalEmployees': total_employees,
+[?2004l[?2004h>     'skillDistribution': skill_dist,
+[?2004l[?2004h>     'departmentSizes': dept_sizes,
+[?2004l[?2004h>     'projectStatusDistribution': status_dist,
+[?2004l[?2004h>     'averageYearsOfService': avg_years
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> final_obj = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization_info,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(final_obj, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Wrote {}".format(OUTPUT_PATH))
+[?2004l[?2004h> PY
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> sed -n '1,200p' csv_to_json.py
+[?2004l[?2004h> rm -f csv_to_json.py
+[?2004l[?2004h> cat << 'PY' > csv_to_json.py
+[?2004l[?2004h> import csv
+[?2004lments = []
+for d in departments_csv:
+  [?2004h> import json
+[?2004l[?2004h> import os
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+[?2004l[?2004h> DATA_DIR = os.path.join(BASE_DIR, 'data')
+[?2004l[?2004h> SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.json')
+[?2004l[?2004h> OUTPUT_PATH = os.path.join(BASE_DIR, 'organization.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> ALLOWED_STATUSES = {"Planning", "In Progress", "Testing", "Completed", "On Hold"}
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv_dicts(path):
+[?2004l[?2004h>     with open(path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         rows = []
+[?2004l[?2004h>         for row in reader:
+[?2004l[?2004h>             clean = {}
+[?2004l[?2004h>             for k, v in row.items():
+[?2004l[?2004h>                 k2 = (k or '').strip()
+[?2004l[?2004h>                 if isinstance(v, str):
+[?2004l[?2004h>                     v2 = v.strip()
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v2 = v
+[?2004l[?2004h>                 clean[k2] = v2
+[?2004l[?2004h>             rows.append(clean)
+[?2004l[?2004h>         return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_float(value, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return float(str(value).replace(',', ''))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_int(value, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return int(float(str(value).replace(',', '')))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     parts = [s]
+[?2004l[?2004h>     for sep in [',', ';', '|']:
+[?2004l[?2004h>         new_parts = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             new_parts.extend(p.split(sep))
+[?2004l[?2004h>         parts = new_parts
+[?2004l[?2004h>     return [p.strip() for p in parts if p.strip()]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load schema for defaults
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         schema = json.load(f)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     schema = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read data
+[?2004l[?2004h> departments_csv = read_csv_dicts(os.path.join(DATA_DIR, 'departments.csv'))
+[?2004l[?2004h> employees_csv = read_csv_dicts(os.path.join(DATA_DIR, 'employees.csv'))
+[?2004l[?2004h> projects_csv = read_csv_dicts(os.path.join(DATA_DIR, 'projects.csv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prepare lookups and transformation
+[?2004l[?2004h> employees_by_dept = {}
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_csv:
+[?2004l[?2004h>     dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+[?2004l[?2004h>     if not skills:
+[?2004l[?2004h>         skills = ['General']
+[?2004l[?2004h>     emp = {
+[?2004l[?2004h>         'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+[?2004l[?2004h>         'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+[?2004l[?2004h>         'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+[?2004l[?2004h>         'skills': skills,
+[?2004l[?2004h>         'years_of_service': to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp)
+[?2004l[?2004h>     employees_by_dept.setdefault(dept_id, []).append(emp)
+[?2004l[?2004h> 
+[?2004l[?2004h> projects_by_dept = {}
+[?2004l[?2004h> for p in projects_csv:
+[?2004l[?2004h>     dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     status_raw = p.get('status') or p.get('state') or 'Planning'
+[?2004l[?2004h>     status = status_raw.strip().title()
+[?2004l[?2004h>     if status not in ALLOWED_STATUSES:
+[?2004l[?2004h>         mapping = {
+[?2004l[?2004h>             'planned': 'Planning',
+[?2004l[?2004h>             'in progress': 'In Progress',
+[?2004l[?2004h>             'progress': 'In Progress',
+[?2004l[?2004h>             'testing': 'Testing',
+[?2004l[?2004h>             'complete': 'Completed',
+[?2004l[?2004h>             'completed': 'Completed',
+[?2004l[?2004h>             'on hold': 'On Hold',
+[?2004l[?2004h>             'hold': 'On Hold'
+[?2004l[?2004h>         }
+[?2004l[?2004h>         status = mapping.get(status_raw.strip().lower(), 'Planning')
+[?2004l[?2004h>     proj = {
+[?2004l[?2004h>         'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+[?2004l[?2004h>         'status': status,
+[?2004l[?2004h>         'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+[?2004l[?2004h>         'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+[?2004l[?2004h>     }
+[?2004l[?2004h>     proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+[?2004l[?2004h>     proj['_budget'] = proj_budget
+[?2004l[?2004h>     projects_by_dept.setdefault(dept_id, []).append(proj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> for d in departments_csv:
+[?2004l[?2004h>     dept_id = str(d.get('id') or d.get('department_id') or d.get('dept_id') or d.get('code') or '')
+[?2004l[?2004h>     dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or ''
+[?2004l[?2004h>     dept_budget = to_float(d.get('budget') or d.get('department_budget') or d.get('budget_total') or 0.0)
+[?2004l[?2004h>     if dept_budget == 0.0:
+[?2004l[?2004h>         proj_list = projects_by_dept.get(dept_id, [])
+[?2004l[?2004h>         dept_budget = sum(p.get('_budget', 0.0) for p in proj_list)
+[?2004l[?2004h>     dept = {
+[?2004l[?2004h>         'id': dept_id,
+[?2004l[?2004h>         'name': dept_name,
+[?2004l[?2004h>         'budget': dept_budget,
+[?2004l[?2004h>         'employees': employees_by_dept.get(dept_id, []),
+[?2004l[?2004h>         'projects': [{k: v for k, v in prj.items() if not k.startswith('_')} for prj in projects_by_dept.get(dept_id, [])]
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'generator': 'csv_to_json.py'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info
+[?2004l[?2004h> organization_info = {
+[?2004l[?2004h>     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004l[?2004h>     'founded': schema.get('organization', {}).get('founded', '2000-01-01'),
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Statistics
+[?2004l[?2004h> avg_budget = 0.0
+[?2004l[?2004h> if departments:
+[?2004l[?2004h>     avg_budget = sum(d['budget'] for d in departments) / len(departments)
+[?2004l[?2004h> 
+[?2004l[?2004h> total_employees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> skill_dist = {}
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for s in e.get('skills', []):
+[?2004l[?2004h>         skill_dist[s] = skill_dist.get(s, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> dept_sizes = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     dept_sizes[d['id']] = len(d.get('employees', []))
+[?2004l[?2004h> 
+[?2004l[?2004h> status_dist = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for p in d.get('projects', []):
+[?2004l[?2004h>         st = p.get('status') or 'Planning'
+[?2004l[?2004h>         status_dist[st] = status_dist.get(st, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> years_list = [e.get('years_of_service', 0) for e in all_employees]
+[?2004l[?2004h> avg_years = (sum(years_list) / len(years_list)) if years_list else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': avg_budget,
+[?2004l[?2004h>     'totalEmployees': total_employees,
+[?2004l[?2004h>     'skillDistribution': skill_dist,
+[?2004l[?2004h>     'departmentSizes': dept_sizes,
+[?2004l[?2004h>     'projectStatusDistribution': status_dist,
+[?2004l[?2004h>     'averageYearsOfService': avg_years
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> final_obj = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization_info,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(final_obj, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Wrote {}".format(OUTPUT_PATH))
+[?2004l[?2004h> PY
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> sed -n '1,200p' csv_to_json.py
+[?2004l[?2004h> rm -f csv_to_json.py
+[?2004l[?2004h> cat << 'PY' > csv_to_json.py
+[?2004l[?2004h> import csv
+[?2004l[?2004h> import json
+[?2004l[?2004h> import os
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+[?2004l[?2004h> DATA_DIR = os.path.join(BASE_DIR, 'data')
+[?2004lent_[?2004h> SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.json')
+[?2004l[?2004h> OUTPUT_PATH = os.path.join(BASE_DIR, 'organization.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> ALLOWED_STATUSES = {"Planning", "In Progress", "Testing", "Completed", "On Hold"}
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv_dicts(path):
+[?2004l[?2004h>     with open(path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         rows = []
+[?2004l[?2004h>         for row in reader:
+[?2004l[?2004h>             clean = {}
+[?2004l[?2004h>             for k, v in row.items():
+[?2004l[?2004h>                 k2 = (k or '').strip()
+[?2004l[?2004h>                 if isinstance(v, str):
+[?2004l[?2004h>                     v2 = v.strip()
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v2 = v
+[?2004l[?2004h>                 clean[k2] = v2
+[?2004l[?2004h>             rows.append(clean)
+[?2004l[?2004h>         return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_float(value, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return float(str(value).replace(',', ''))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_int(value, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return int(float(str(value).replace(',', '')))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     parts = [s]
+[?2004l[?2004h>     for sep in [',', ';', '|']:
+[?2004l[?2004h>         new_parts = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             new_parts.extend(p.split(sep))
+[?2004l[?2004h>         parts = new_parts
+[?2004l[?2004h>     return [p.strip() for p in parts if p.strip()]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load schema for defaults
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         schema = json.load(f)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     schema = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read data
+[?2004l[?2004h> departments_csv = read_csv_dicts(os.path.join(DATA_DIR, 'departments.csv'))
+[?2004l[?2004h> employees_csv = read_csv_dicts(os.path.join(DATA_DIR, 'employees.csv'))
+[?2004l[?2004h> projects_csv = read_csv_dicts(os.path.join(DATA_DIR, 'projects.csv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prepare lookups and transformation
+[?2004l[?2004h> employees_by_dept = {}
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_csv:
+[?2004l[?2004h>     dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+[?2004l[?2004h>     if not skills:
+[?2004l[?2004h>         skills = ['General']
+[?2004l[?2004h>     emp = {
+[?2004l[?2004h>         'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+[?2004l[?2004h>         'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+[?2004l[?2004h>         'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+[?2004l[?2004h>         'skills': skills,
+[?2004l[?2004h>         'years_of_service': to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp)
+[?2004l[?2004h>     employees_by_dept.setdefault(dept_id, []).append(emp)
+[?2004l[?2004h> 
+[?2004l[?2004h> projects_by_dept = {}
+[?2004l[?2004h> for p in projects_csv:
+[?2004l[?2004h>     dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     status_raw = p.get('status') or p.get('state') or 'Planning'
+[?2004l[?2004h>     status = status_raw.strip().title()
+[?2004l[?2004h>     if status not in ALLOWED_STATUSES:
+[?2004l[?2004h>         mapping = {
+[?2004l[?2004h>             'planned': 'Planning',
+[?2004l[?2004h>             'in progress': 'In Progress',
+[?2004l[?2004h>             'progress': 'In Progress',
+[?2004l[?2004h>             'testing': 'Testing',
+[?2004l[?2004h>             'complete': 'Completed',
+[?2004l[?2004h>             'completed': 'Completed',
+[?2004l[?2004h>             'on hold': 'On Hold',
+[?2004l[?2004h>             'hold': 'On Hold'
+[?2004l[?2004h>         }
+[?2004l[?2004h>         status = mapping.get(status_raw.strip().lower(), 'Planning')
+[?2004l[?2004h>     proj = {
+[?2004l[?2004h>         'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+[?2004l[?2004h>         'status': status,
+[?2004l[?2004h>         'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+[?2004l[?2004h>         'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+[?2004l[?2004h>     }
+[?2004l[?2004h>     proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+[?2004l[?2004h>     proj['_budget'] = proj_budget
+[?2004l[?2004h>     projects_by_dept.setdefault(dept_id, []).append(proj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> for d in departments_csv:
+[?2004l[?2004h>     dept_id = str(d.get('id') or d.get('department_id') or d.get('dept_id') or d.get('code') or '')
+[?2004l[?2004h>     dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or ''
+[?2004l[?2004h>     dept_budget = to_float(d.get('budget') or d.get('department_budget') or d.get('budget_total') or 0.0)
+[?2004l[?2004h>     if dept_budget == 0.0:
+[?2004l[?2004h>         proj_list = projects_by_dept.get(dept_id, [])
+[?2004l[?2004h>         dept_budget = sum(p.get('_budget', 0.0) for p in proj_list)
+[?2004l[?2004h>     dept = {
+[?2004l[?2004h>         'id': dept_id,
+[?2004l[?2004h>         'name': dept_name,
+[?2004l[?2004h>         'budget': dept_budget,
+[?2004l[?2004h>         'employees': employees_by_dept.get(dept_id, []),
+[?2004l[?2004h>         'projects': [{k: v for k, v in prj.items() if not k.startswith('_')} for prj in projects_by_dept.get(dept_id, [])]
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'generator': 'csv_to_json.py'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info
+[?2004l[?2004h> organization_info = {
+[?2004l[?2004h>     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004l[?2004h>     'founded': schema.get('organization', {}).get('founded', '2000-01-01'),
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Statistics
+[?2004l[?2004h> avg_budget = 0.0
+[?2004l[?2004h> if departments:
+[?2004l[?2004h>     avg_budget = sum(d['budget'] for d in departments) / len(departments)
+[?2004l[?2004h> 
+[?2004l[?2004h> total_employees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> skill_dist = {}
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for s in e.get('skills', []):
+[?2004l[?2004h>         skill_dist[s] = skill_dist.get(s, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> dept_sizes = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     dept_sizes[d['id']] = len(d.get('employees', []))
+[?2004l[?2004h> 
+[?2004l[?2004h> status_dist = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for p in d.get('projects', []):
+[?2004l[?2004h>         st = p.get('status') or 'Planning'
+[?2004l[?2004h>         status_dist[st] = status_dist.get(st, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> years_list = [e.get('years_of_service', 0) for e in all_employees]
+[?2004l[?2004h> avg_years = (sum(years_list) / len(years_list)) if years_list else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': avg_budget,
+[?2004l[?2004h>     'totalEmployees': total_employees,
+[?2004l[?2004h>     'skillDistribution': skill_dist,
+[?2004l[?2004h>     'departmentSizes': dept_sizes,
+[?2004l[?2004h>     'projectStatusDistribution': status_dist,
+[?2004l[?2004h>     'averageYearsOfService': avg_years
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> final_obj = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization_info,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(final_obj, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Wrote {}".format(OUTPUT_PATH))
+[?2004l[?2004h> PY
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> sed -n '1,200p' csv_to_json.py
+[?2004l[?2004h> rm -f csv_to_json.py
+[?2004l[?2004h> cat << 'PY' > csv_to_json.py
+[?2004l or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+    dept_id = str(dept_id) if dept_id is not None else ''
+    skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+    if not skills:
+        skills = ['General']
+    emp = {
+        'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+        'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+        'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+        'skills': skills,
+        'years_of_service': to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+    }
+    all_employees.append(emp)
+    employees_by_dept.setdefault(dept_id, []).append(emp)
+
+projects_by_dept = {}
+for p in projects_csv:
+    dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+    dept_id = str(dept_id) if dept_id is not None else ''
+    status_raw = p.get('status') or p.get('state') or 'Planning'
+    status = status_raw.strip().title()
+    if status not in ALLOWED_STATUSES:
+        mapping = {
+            'planned': 'Planning',
+            'in progress': 'In Progress',
+            'progress': 'In Progress',
+            'testing': 'Testing',
+            'complete': 'Completed',
+            'completed': 'Completed',
+            'on hold': 'On Hold',
+            'hold': 'On Hold'
+        }
+        status = mapping.get(status_raw.strip().lower(), 'Planning')
+    proj = {
+        'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+        'status': status,
+        'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+        'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+    }
+    proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+    proj['_budget'] = proj_budget
+    projects_by_dept.setdefault(dept_id, []).append(proj)
+
+# Build departments
+departments = []
+for d in departme[?2004h> import csv
+[?2004l[?2004h> import json
+[?2004l[?2004h> import os
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+[?2004l[?2004h> DATA_DIR = os.path.join(BASE_DIR, 'data')
+[?2004l[?2004h> SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.json')
+[?2004l[?2004h> OUTPUT_PATH = os.path.join(BASE_DIR, 'organization.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> ALLOWED_STATUSES = {"Planning", "In Progress", "Testing", "Completed", "On Hold"}
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv_dicts(path):
+[?2004l[?2004h>     with open(path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         rows = []
+[?2004l[?2004h>         for row in reader:
+[?2004l[?2004h>             clean = {}
+[?2004l[?2004h>             for k, v in row.items():
+[?2004l[?2004h>                 k2 = (k or '').strip()
+[?2004l[?2004h>                 if isinstance(v, str):
+[?2004l[?2004h>                     v2 = v.strip()
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v2 = v
+[?2004l[?2004h>                 clean[k2] = v2
+[?2004l[?2004h>             rows.append(clean)
+[?2004l[?2004h>         return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_float(value, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return float(str(value).replace(',', ''))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_int(value, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return int(float(str(value).replace(',', '')))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     parts = [s]
+[?2004l[?2004h>     for sep in [',', ';', '|']:
+[?2004l[?2004h>         new_parts = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             new_parts.extend(p.split(sep))
+[?2004l[?2004h>         parts = new_parts
+[?2004l[?2004h>     return [p.strip() for p in parts if p.strip()]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load schema for defaults
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         schema = json.load(f)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     schema = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read data
+[?2004l[?2004h> departments_csv = read_csv_dicts(os.path.join(DATA_DIR, 'departments.csv'))
+[?2004l[?2004h> employees_csv = read_csv_dicts(os.path.join(DATA_DIR, 'employees.csv'))
+[?2004l[?2004h> projects_csv = read_csv_dicts(os.path.join(DATA_DIR, 'projects.csv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prepare lookups and transformation
+[?2004l[?2004h> employees_by_dept = {}
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_csv:
+[?2004l[?2004h>     dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+[?2004l[?2004h>     if not skills:
+[?2004l[?2004h>         skills = ['General']
+[?2004l[?2004h>     emp = {
+[?2004l[?2004h>         'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+[?2004l[?2004h>         'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+[?2004l[?2004h>         'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+[?2004l[?2004h>         'skills': skills,
+[?2004l[?2004h>         'years_of_service': to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp)
+[?2004l[?2004h>     employees_by_dept.setdefault(dept_id, []).append(emp)
+[?2004l[?2004h> 
+[?2004l[?2004h> projects_by_dept = {}
+[?2004l[?2004h> for p in projects_csv:
+[?2004l[?2004h>     dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     status_raw = p.get('status') or p.get('state') or 'Planning'
+[?2004l[?2004h>     status = status_raw.strip().title()
+[?2004l[?2004h>     if status not in ALLOWED_STATUSES:
+[?2004l[?2004h>         mapping = {
+[?2004l[?2004h>             'planned': 'Planning',
+[?2004l[?2004h>             'in progress': 'In Progress',
+[?2004l[?2004h>             'progress': 'In Progress',
+[?2004l[?2004h>             'testing': 'Testing',
+[?2004l[?2004h>             'complete': 'Completed',
+[?2004l[?2004h>             'completed': 'Completed',
+[?2004l[?2004h>             'on hold': 'On Hold',
+[?2004l[?2004h>             'hold': 'On Hold'
+[?2004l[?2004h>         }
+[?2004l[?2004h>         status = mapping.get(status_raw.strip().lower(), 'Planning')
+[?2004l[?2004h>     proj = {
+[?2004l[?2004h>         'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+[?2004l[?2004h>         'status': status,
+[?2004l[?2004h>         'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+[?2004l[?2004h>         'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+[?2004l[?2004h>     }
+[?2004l[?2004h>     proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+[?2004l[?2004h>     proj['_budget'] = proj_budget
+[?2004l[?2004h>     projects_by_dept.setdefault(dept_id, []).append(proj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> for d in departments_csv:
+[?2004l[?2004h>     dept_id = str(d.get('id') or d.get('department_id') or d.get('dept_id') or d.get('code') or '')
+[?2004l[?2004h>     dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or ''
+[?2004l[?2004h>     dept_budget = to_float(d.get('budget') or d.get('department_budget') or d.get('budget_total') or 0.0)
+[?2004l[?2004h>     if dept_budget == 0.0:
+[?2004l[?2004h>         proj_list = projects_by_dept.get(dept_id, [])
+[?2004l[?2004h>         dept_budget = sum(p.get('_budget', 0.0) for p in proj_list)
+[?2004l[?2004h>     dept = {
+[?2004l[?2004h>         'id': dept_id,
+[?2004l[?2004h>         'name': dept_name,
+[?2004l[?2004h>         'budget': dept_budget,
+[?2004l[?2004h>         'employees': employees_by_dept.get(dept_id, []),
+[?2004l[?2004h>         'projects': [{k: v for k, v in prj.items() if not k.startswith('_')} for prj in projects_by_dept.get(dept_id, [])]
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'generator': 'csv_to_json.py'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info
+[?2004l[?2004h> organization_info = {
+[?2004l[?2004h>     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004l[?2004h>     'founded': schema.get('organization', {}).get('founded', '2000-01-01'),
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Statistics
+[?2004l[?2004h> avg_budget = 0.0
+[?2004l[?2004h> if departments:
+[?2004l[?2004h>     avg_budget = sum(d['budget'] for d in departments) / len(departments)
+[?2004l[?2004h> 
+[?2004l[?2004h> total_employees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> skill_dist = {}
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for s in e.get('skills', []):
+[?2004l[?2004h>         skill_dist[s] = skill_dist.get(s, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> dept_sizes = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     dept_sizes[d['id']] = len(d.get('employees', []))
+[?2004l[?2004h> 
+[?2004l[?2004h> status_dist = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for p in d.get('projects', []):
+[?2004l[?2004h>         st = p.get('status') or 'Planning'
+[?2004l[?2004h>         status_dist[st] = status_dist.get(st, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> years_list = [e.get('years_of_service', 0) for e in all_employees]
+[?2004l[?2004h> avg_years = (sum(years_list) / len(years_list)) if years_list else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': avg_budget,
+[?2004l[?2004h>     'totalEmployees': total_employees,
+[?2004l[?2004h>     'skillDistribution': skill_dist,
+[?2004l[?2004h>     'departmentSizes': dept_sizes,
+[?2004l[?2004h>     'projectStatusDistribution': status_dist,
+[?2004l[?2004h>     'averageYearsOfService': avg_years
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> final_obj = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization_info,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(final_obj, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Wrote {}".format(OUTPUT_PATH))
+[?2004l[?2004h> PY
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> sed -n '1,200p' csv_to_json.py
+[?2004l[?2004h> rm -f csv_to_json.py
+[?2004l[?2004h> cat << 'PY' > csv_to_json.py
+[?2004l(dept_id, []).append(proj)
+
+[?2004h> import csv
+[?2004l[?2004h> import json
+[?2004l[?2004h> import os
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+[?2004l[?2004h> DATA_DIR = os.path.join(BASE_DIR, 'data')
+[?2004l[?2004h> SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.json')
+[?2004l[?2004h> OUTPUT_PATH = os.path.join(BASE_DIR, 'organization.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> ALLOWED_STATUSES = {"Planning", "In Progress", "Testing", "Completed", "On Hold"}
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv_dicts(path):
+[?2004l[?2004h>     with open(path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         rows = []
+[?2004l[?2004h>         for row in reader:
+[?2004l[?2004h>             clean = {}
+[?2004l[?2004h>             for k, v in row.items():
+[?2004l[?2004h>                 k2 = (k or '').strip()
+[?2004l[?2004h>                 if isinstance(v, str):
+[?2004l[?2004h>                     v2 = v.strip()
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v2 = v
+[?2004l[?2004h>                 clean[k2] = v2
+[?2004l[?2004h>             rows.append(clean)
+[?2004l[?2004h>         return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_float(value, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return float(str(value).replace(',', ''))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_int(value, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return int(float(str(value).replace(',', '')))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     parts = [s]
+[?2004l[?2004h>     for sep in [',', ';', '|']:
+[?2004l[?2004h>         new_parts = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             new_parts.extend(p.split(sep))
+[?2004l[?2004h>         parts = new_parts
+[?2004l[?2004h>     return [p.strip() for p in parts if p.strip()]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load schema for defaults
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         schema = json.load(f)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     schema = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read data
+[?2004l[?2004h> departments_csv = read_csv_dicts(os.path.join(DATA_DIR, 'departments.csv'))
+[?2004l[?2004h> employees_csv = read_csv_dicts(os.path.join(DATA_DIR, 'employees.csv'))
+[?2004l[?2004h> projects_csv = read_csv_dicts(os.path.join(DATA_DIR, 'projects.csv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prepare lookups and transformation
+[?2004l[?2004h> employees_by_dept = {}
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_csv:
+[?2004l[?2004h>     dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+[?2004l[?2004h>     if not skills:
+[?2004l[?2004h>         skills = ['General']
+[?2004l[?2004h>     years = to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+[?2004l[?2004h>     if years < 0:
+[?2004l[?2004h>         years = 0
+[?2004l[?2004h>     emp = {
+[?2004l[?2004h>         'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+[?2004l[?2004h>         'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+[?2004l[?2004h>         'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+[?2004l[?2004h>         'skills': skills,
+[?2004l[?2004h>         'years_of_service': years
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp)
+[?2004l[?2004h>     employees_by_dept.setdefault(dept_id, []).append(emp)
+[?2004l[?2004h> 
+[?2004l[?2004h> projects_by_dept = {}
+[?2004l[?2004h> for p in projects_csv:
+[?2004l[?2004h>     dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     status_raw = p.get('status') or p.get('state') or 'Planning'
+[?2004l[?2004h>     status = status_raw.strip().title()
+[?2004l[?2004h>     if status not in ALLOWED_STATUSES:
+[?2004l[?2004h>         mapping = {
+[?2004l[?2004h>             'planned': 'Planning',
+[?2004l[?2004h>             'in progress': 'In Progress',
+[?2004l[?2004h>             'progress': 'In Progress',
+[?2004l[?2004h>             'testing': 'Testing',
+[?2004l[?2004h>             'complete': 'Completed',
+[?2004l[?2004h>             'completed': 'Completed',
+[?2004l[?2004h>             'on hold': 'On Hold',
+[?2004l[?2004h>             'hold': 'On Hold'
+[?2004l[?2004h>         }
+[?2004l[?2004h>         status = mapping.get(status_raw.strip().lower(), 'Planning')
+[?2004l[?2004h>     proj = {
+[?2004l[?2004h>         'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+[?2004l[?2004h>         'status': status,
+[?2004l[?2004h>         'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+[?2004l[?2004h>         'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+[?2004l[?2004h>     }
+[?2004l[?2004h>     proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+[?2004l[?2004h>     proj['_budget'] = proj_budget
+[?2004l[?2004h>     projects_by_dept.setdefault(dept_id, []).append(proj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> for d in departments_csv:
+[?2004l[?2004h>     dept_id = str(d.get('id') or d.get('department_id') or d.get('dept_id') or d.get('code') or '')
+[?2004l[?2004h>     dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or ''
+[?2004l[?2004h>     dept_budget = to_float(d.get('budget') or d.get('department_budget') or d.get('budget_total') or 0.0)
+[?2004l[?2004h>     if dept_budget == 0.0:
+[?2004l[?2004h>         proj_list = projects_by_dept.get(dept_id, [])
+[?2004l[?2004h>         dept_budget = sum(p.get('_budget', 0.0) for p in proj_list)
+[?2004l[?2004h>     dept = {
+[?2004l[?2004h>         'id': dept_id,
+[?2004l[?2004h>         'name': dept_name,
+[?2004l[?2004h>         'budget': dept_budget,
+[?2004l[?2004h>         'employees': employees_by_dept.get(dept_id, []),
+[?2004l[?2004h>         'projects': [{k: v for k, v in prj.items() if not k.startswith('_')} for prj in projects_by_dept.get(dept_id, [])]
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'generator': 'csv_to_json.py'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info
+[?2004l[?2004h> organization_info = {
+[?2004l[?2004h>     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004l[?2004h>     'founded': schema.get('organization', {}).get('founded', '2000-01-01'),
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Statistics
+[?2004l[?2004h> avg_budget = 0.0
+[?2004l[?2004h> if departments:
+[?2004l[?2004h>     avg_budget = sum(d['budget'] for d in departments) / len(departments)
+[?2004l[?2004h> 
+[?2004l[?2004h> total_employees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> skill_dist = {}
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for s in e.get('skills', []):
+[?2004l[?2004h>         skill_dist[s] = skill_dist.get(s, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> dept_sizes = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     dept_sizes[d['id']] = len(d.get('employees', []))
+[?2004l[?2004h> 
+[?2004l[?2004h> status_dist = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for p in d.get('projects', []):
+[?2004l[?2004h>         st = p.get('status') or 'Planning'
+[?2004l[?2004h>         status_dist[st] = status_dist.get(st, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> years_list = [e.get('years_of_service', 0) for e in all_employees]
+[?2004l[?2004h> avg_years = (sum(years_list) / len(years_list)) if years_list else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': avg_budget,
+[?2004l[?2004h>     'totalEmployees': total_employees,
+[?2004l[?2004h>     'skillDistribution': skill_dist,
+[?2004l[?2004h>     'departmentSizes': dept_sizes,
+[?2004l[?2004h>     'projectStatusDistribution': status_dist,
+[?2004l[?2004h>     'averageYearsOfService': avg_years
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> final_obj = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization_info,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(final_obj, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Wrote {}".format(OUTPUT_PATH))
+[?2004l[?2004h> PY
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> sed -n '1,200p' csv_to_json.py
+[?2004l[?2004h> rm -f csv_to_json.py
+[?2004l[?2004h> cat << 'PY' > csv_to_json.py
+[?2004l(dept_id) if dept_id is not None else ''
+    status_raw = p.get('status') or p.get('state') or 'Planning'
+    status = status_raw.strip().title()
+    if status not in ALLOWED_STATUSES:
+        mapping = {
+            'planned': 'Planning',
+            'in progress': 'In Progress',
+            'progress': 'In Progress',
+            'testing': 'Testing',
+            'complete': 'Completed',
+            'completed': 'Completed',
+            'on hold': 'On Hold',
+            'hold': 'On Hold'
+        }
+        status = mapping.get(status_raw.strip().lower(), 'Planning')
+    proj = {
+        'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+        'status': status,
+        'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+        'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+    }
+    proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+    proj['_budget'] = proj_budget
+    projects_by_dept.setdefault(dept_id, []).append(proj)
+
+[?2004h> import csv
+[?2004l[?2004h> import json
+[?2004l[?2004h> import os
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+[?2004l[?2004h> DATA_DIR = os.path.join(BASE_DIR, 'data')
+[?2004l[?2004h> SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.json')
+[?2004l[?2004h> OUTPUT_PATH = os.path.join(BASE_DIR, 'organization.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> ALLOWED_STATUSES = {"Planning", "In Progress", "Testing", "Completed", "On Hold"}
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv_dicts(path):
+[?2004l[?2004h>     with open(path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         rows = []
+[?2004l[?2004h>         for row in reader:
+[?2004l[?2004h>             clean = {}
+[?2004l[?2004h>             for k, v in row.items():
+[?2004l[?2004h>                 k2 = (k or '').strip()
+[?2004l[?2004h>                 if isinstance(v, str):
+[?2004l[?2004h>                     v2 = v.strip()
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v2 = v
+[?2004l[?2004h>                 clean[k2] = v2
+[?2004l[?2004h>             rows.append(clean)
+[?2004l[?2004h>         return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_float(value, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return float(str(value).replace(',', ''))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_int(value, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return int(float(str(value).replace(',', '')))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     parts = [s]
+[?2004l[?2004h>     for sep in [',', ';', '|']:
+[?2004l[?2004h>         new_parts = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             new_parts.extend(p.split(sep))
+[?2004l[?2004h>         parts = new_parts
+[?2004l[?2004h>     return [p.strip() for p in parts if p.strip()]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load schema for defaults
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         schema = json.load(f)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     schema = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read data
+[?2004l[?2004h> departments_csv = read_csv_dicts(os.path.join(DATA_DIR, 'departments.csv'))
+[?2004l[?2004h> employees_csv = read_csv_dicts(os.path.join(DATA_DIR, 'employees.csv'))
+[?2004l[?2004h> projects_csv = read_csv_dicts(os.path.join(DATA_DIR, 'projects.csv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prepare lookups and transformation
+[?2004l[?2004h> employees_by_dept = {}
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_csv:
+[?2004l[?2004h>     dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+[?2004l[?2004h>     if not skills:
+[?2004l[?2004h>         skills = ['General']
+[?2004l[?2004h>     years = to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+[?2004l[?2004h>     if years < 0:
+[?2004l[?2004h>         years = 0
+[?2004l[?2004h>     emp = {
+[?2004l[?2004h>         'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+[?2004l[?2004h>         'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+[?2004l[?2004h>         'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+[?2004l[?2004h>         'skills': skills,
+[?2004l[?2004h>         'years_of_service': years
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp)
+[?2004l[?2004h>     employees_by_dept.setdefault(dept_id, []).append(emp)
+[?2004l[?2004h> 
+[?2004l[?2004h> projects_by_dept = {}
+[?2004l[?2004h> for p in projects_csv:
+[?2004l[?2004h>     dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     status_raw = p.get('status') or p.get('state') or 'Planning'
+[?2004l[?2004h>     status = status_raw.strip().title()
+[?2004l[?2004h>     if status not in ALLOWED_STATUSES:
+[?2004l[?2004h>         mapping = {
+[?2004l[?2004h>             'planned': 'Planning',
+[?2004l[?2004h>             'in progress': 'In Progress',
+[?2004l[?2004h>             'progress': 'In Progress',
+[?2004l[?2004h>             'testing': 'Testing',
+[?2004l[?2004h>             'complete': 'Completed',
+[?2004l[?2004h>             'completed': 'Completed',
+[?2004l[?2004h>             'on hold': 'On Hold',
+[?2004l[?2004h>             'hold': 'On Hold'
+[?2004l[?2004h>         }
+[?2004l[?2004h>         status = mapping.get(status_raw.strip().lower(), 'Planning')
+[?2004l[?2004h>     proj = {
+[?2004l[?2004h>         'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+[?2004l[?2004h>         'status': status,
+[?2004l[?2004h>         'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+[?2004l[?2004h>         'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+[?2004l[?2004h>     }
+[?2004l[?2004h>     proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+[?2004l[?2004h>     proj['_budget'] = proj_budget
+[?2004l[?2004h>     projects_by_dept.setdefault(dept_id, []).append(proj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> for d in departments_csv:
+[?2004l[?2004h>     dept_id = str(d.get('id') or d.get('department_id') or d.get('dept_id') or d.get('code') or '')
+[?2004l[?2004h>     dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or ''
+[?2004l[?2004h>     dept_budget = to_float(d.get('budget') or d.get('department_budget') or d.get('budget_total') or 0.0)
+[?2004l[?2004h>     if dept_budget == 0.0:
+[?2004l[?2004h>         proj_list = projects_by_dept.get(dept_id, [])
+[?2004l[?2004h>         dept_budget = sum(p.get('_budget', 0.0) for p in proj_list)
+[?2004l[?2004h>     dept = {
+[?2004l[?2004h>         'id': dept_id,
+[?2004l[?2004h>         'name': dept_name,
+[?2004l[?2004h>         'budget': dept_budget,
+[?2004l[?2004h>         'employees': employees_by_dept.get(dept_id, []),
+[?2004l[?2004h>         'projects': [{k: v for k, v in prj.items() if not k.startswith('_')} for prj in projects_by_dept.get(dept_id, [])]
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'generator': 'csv_to_json.py'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info
+[?2004l[?2004h> organization_info = {
+[?2004l[?2004h>     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004l[?2004h>     'founded': schema.get('organization', {}).get('founded', '2000-01-01'),
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Statistics
+[?2004l[?2004h> avg_budget = 0.0
+[?2004l[?2004h> if departments:
+[?2004l[?2004h>     avg_budget = sum(d['budget'] for d in departments) / len(departments)
+[?2004l[?2004h> 
+[?2004l[?2004h> total_employees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> skill_dist = {}
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for s in e.get('skills', []):
+[?2004l[?2004h>         skill_dist[s] = skill_dist.get(s, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> dept_sizes = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     dept_sizes[d['id']] = len(d.get('employees', []))
+[?2004l[?2004h> 
+[?2004l[?2004h> status_dist = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for p in d.get('projects', []):
+[?2004l[?2004h>         st = p.get('status') or 'Planning'
+[?2004l[?2004h>         status_dist[st] = status_dist.get(st, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> years_list = [e.get('years_of_service', 0) for e in all_employees]
+[?2004l[?2004h> avg_years = (sum(years_list) / len(years_list)) if years_list else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': avg_budget,
+[?2004l[?2004h>     'totalEmployees': total_employees,
+[?2004l[?2004h>     'skillDistribution': skill_dist,
+[?2004l[?2004h>     'departmentSizes': dept_sizes,
+[?2004l[?2004h>     'projectStatusDistribution': status_dist,
+[?2004l[?2004h>     'averageYearsOfService': avg_years
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> final_obj = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization_info,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(final_obj, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Wrote {}".format(OUTPUT_PATH))
+[?2004l[?2004h> PY
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> sed -n '1,200p' csv_to_json.py
+[?2004l[?2004h> rm -f csv_to_json.py
+[?2004l[?2004h> cat > csv_to_json.py << 'PY'
+[?2004l(dept_id, []).append(proj)
+
+[?2004h> import csv
+[?2004l[?2004h> import json
+[?2004l[?2004h> import os
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+[?2004l[?2004h> DATA_DIR = os.path.join(BASE_DIR, 'data')
+[?2004l[?2004h> SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.json')
+[?2004l[?2004h> OUTPUT_PATH = os.path.join(BASE_DIR, 'organization.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> ALLOWED_STATUSES = {"Planning", "In Progress", "Testing", "Completed", "On Hold"}
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv_dicts(path):
+[?2004l[?2004h>     with open(path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         rows = []
+[?2004l[?2004h>         for row in reader:
+[?2004l[?2004h>             clean = {}
+[?2004l[?2004h>             for k, v in row.items():
+[?2004l[?2004h>                 k2 = (k or '').strip()
+[?2004l[?2004h>                 if isinstance(v, str):
+[?2004l[?2004h>                     v2 = v.strip()
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v2 = v
+[?2004l[?2004h>                 clean[k2] = v2
+[?2004l[?2004h>             rows.append(clean)
+[?2004l[?2004h>         return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_float(value, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return float(str(value).replace(',', ''))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_int(value, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return int(float(str(value).replace(',', '')))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     parts = [s]
+[?2004l[?2004h>     for sep in [',', ';', '|']:
+[?2004l[?2004h>         new_parts = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             new_parts.extend(p.split(sep))
+[?2004l[?2004h>         parts = new_parts
+[?2004l[?2004h>     return [p.strip() for p in parts if p.strip()]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load schema for defaults
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         schema = json.load(f)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     schema = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read data
+[?2004l[?2004h> departments_csv = read_csv_dicts(os.path.join(DATA_DIR, 'departments.csv'))
+[?2004l[?2004h> employees_csv = read_csv_dicts(os.path.join(DATA_DIR, 'employees.csv'))
+[?2004l[?2004h> projects_csv = read_csv_dicts(os.path.join(DATA_DIR, 'projects.csv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prepare lookups and transformation
+[?2004l[?2004h> employees_by_dept = {}
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_csv:
+[?2004l[?2004h>     dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+[?2004l[?2004h>     if not skills:
+[?2004l[?2004h>         skills = ['General']
+[?2004l[?2004h>     years = to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+[?2004l[?2004h>     if years < 0:
+[?2004l[?2004h>         years = 0
+[?2004l[?2004h>     emp = {
+[?2004l[?2004h>         'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+[?2004l[?2004h>         'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+[?2004l[?2004h>         'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+[?2004l[?2004h>         'skills': skills,
+[?2004l[?2004h>         'years_of_service': years
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp)
+[?2004l[?2004h>     employees_by_dept.setdefault(dept_id, []).append(emp)
+[?2004l[?2004h> 
+[?2004l[?2004h> projects_by_dept = {}
+[?2004l[?2004h> for p in projects_csv:
+[?2004l[?2004h>     dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     status_raw = p.get('status') or p.get('state') or 'Planning'
+[?2004l[?2004h>     status = status_raw.strip().title()
+[?2004l[?2004h>     if status not in ALLOWED_STATUSES:
+[?2004l[?2004h>         mapping = {
+[?2004l[?2004h>             'planned': 'Planning',
+[?2004l[?2004h>             'in progress': 'In Progress',
+[?2004l[?2004h>             'progress': 'In Progress',
+[?2004l[?2004h>             'testing': 'Testing',
+[?2004l[?2004h>             'complete': 'Completed',
+[?2004l[?2004h>             'completed': 'Completed',
+[?2004l[?2004h>             'on hold': 'On Hold',
+[?2004l[?2004h>             'hold': 'On Hold'
+[?2004l[?2004h>         }
+[?2004l[?2004h>         status = mapping.get(status_raw.strip().lower(), 'Planning')
+[?2004l[?2004h>     proj = {
+[?2004l[?2004h>         'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+[?2004l[?2004h>         'status': status,
+[?2004l[?2004h>         'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+[?2004l[?2004h>         'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+[?2004l[?2004h>     }
+[?2004l[?2004h>     proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+[?2004l[?2004h>     proj['_budget'] = proj_budget
+[?2004l[?2004h>     projects_by_dept.setdefault(dept_id, []).append(proj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> for d in departments_csv:
+[?2004l[?2004h>     dept_id = str(d.get('id') or d.get('department_id') or d.get('dept_id') or d.get('code') or '')
+[?2004l[?2004h>     dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or ''
+[?2004l[?2004h>     dept_budget = to_float(d.get('budget') or d.get('department_budget') or d.get('budget_total') or 0.0)
+[?2004l[?2004h>     if dept_budget == 0.0:
+[?2004l[?2004h>         proj_list = projects_by_dept.get(dept_id, [])
+[?2004l[?2004h>         dept_budget = sum(p.get('_budget', 0.0) for p in proj_list)
+[?2004l[?2004h>     dept = {
+[?2004l[?2004h>         'id': dept_id,
+[?2004l[?2004h>         'name': dept_name,
+[?2004l[?2004h>         'budget': dept_budget,
+[?2004l[?2004h>         'employees': employees_by_dept.get(dept_id, []),
+[?2004l[?2004h>         'projects': [{k: v for k, v in prj.items() if not k.startswith('_')} for prj in projects_by_dept.get(dept_id, [])]
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'generator': 'csv_to_json.py'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info
+[?2004l[?2004h> organization_info = {
+[?2004l[?2004h>     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004l[?2004h>     'founded': schema.get('organization', {}).get('founded', '2000-01-01'),
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Statistics
+[?2004l[?2004h> avg_budget = 0.0
+[?2004l[?2004h> if departments:
+[?2004l[?2004h>     avg_budget = sum(d['budget'] for d in departments) / len(departments)
+[?2004l[?2004h> 
+[?2004l[?2004h> total_employees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> skill_dist = {}
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for s in e.get('skills', []):
+[?2004l[?2004h>         skill_dist[s] = skill_dist.get(s, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> dept_sizes = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     dept_sizes[d['id']] = len(d.get('employees', []))
+[?2004l[?2004h> 
+[?2004l[?2004h> status_dist = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for p in d.get('projects', []):
+[?2004l[?2004h>         st = p.get('status') or 'Planning'
+[?2004l[?2004h>         status_dist[st] = status_dist.get(st, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> years_list = [e.get('years_of_service', 0) for e in all_employees]
+[?2004l[?2004h> avg_years = (sum(years_list) / len(years_list)) if years_list else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': avg_budget,
+[?2004l[?2004h>     'totalEmployees': total_employees,
+[?2004l[?2004h>     'skillDistribution': skill_dist,
+[?2004l[?2004h>     'departmentSizes': dept_sizes,
+[?2004l[?2004h>     'projectStatusDistribution': status_dist,
+[?2004l[?2004h>     'averageYearsOfService': avg_years
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> final_obj = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization_info,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(final_obj, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Wrote {}".format(OUTPUT_PATH))
+[?2004l[?2004h> PY
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> sed -n '1,200p' csv_to_json.py
+[?2004l[?2004h> rm -f csv_to_json.py
+[?2004l[?2004h> cat << 'PY' > csv_to_json.py
+[?2004l or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+    dept_id = str(dept_id) if dept_id is not None else ''
+    skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+    if not skills:
+        skills = ['General']
+    years = to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+    if years < 0:
+        years = 0
+    emp = {
+        'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+        'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+        'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+        'skills': skills,
+        'years_of_service': years
+    }
+    all_employees.append(emp)
+    employees_by_dept.setdefault(dept_id, []).append(emp)
+
+projects_by_dept = {}
+for p in projects_csv:
+    dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+    dept_id = str(dept_id) if dept_id is not None else ''
+    status_raw = p.get('status') or p.get('state') or 'Planning'
+    status = status_raw.strip().title()
+    if status not in ALLOWED_STATUSES:
+        mapping = {
+            'planned': 'Planning',
+            'in progress': 'In Progress',
+            'progress': 'In Progress',
+            'testing': 'Testing',
+            'complete': 'Completed',
+            'completed': 'Completed',
+            'on hold': 'On Hold',
+            'hold': 'On Hold'
+        }
+        status = mapping.get(status_raw.strip().lower(), 'Planning')
+    proj = {
+        'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+        'status': status,
+        'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+        'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+    }
+    proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+    proj['_budget'] = proj_budget
+    projects_by_dept.setdefault(dept_id, []).append(proj)
+
+[?2004h> import csv
+[?2004l[?2004h> import json
+[?2004l[?2004h> import os
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+[?2004l[?2004h> DATA_DIR = os.path.join(BASE_DIR, 'data')
+[?2004l[?2004h> SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.json')
+[?2004l[?2004h> OUTPUT_PATH = os.path.join(BASE_DIR, 'organization.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> ALLOWED_STATUSES = {"Planning", "In Progress", "Testing", "Completed", "On Hold"}
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv_dicts(path):
+[?2004l[?2004h>     with open(path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         rows = []
+[?2004l[?2004h>         for row in reader:
+[?2004l[?2004h>             clean = {}
+[?2004l[?2004h>             for k, v in row.items():
+[?2004l[?2004h>                 k2 = (k or '').strip()
+[?2004l[?2004h>                 if isinstance(v, str):
+[?2004l[?2004h>                     v2 = v.strip()
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v2 = v
+[?2004l[?2004h>                 clean[k2] = v2
+[?2004l[?2004h>             rows.append(clean)
+[?2004l[?2004h>         return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_float(value, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return float(str(value).replace(',', ''))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_int(value, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return int(float(str(value).replace(',', '')))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     parts = [s]
+[?2004l[?2004h>     for sep in [',', ';', '|']:
+[?2004l[?2004h>         new_parts = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             new_parts.extend(p.split(sep))
+[?2004l[?2004h>         parts = new_parts
+[?2004l[?2004h>     return [p.strip() for p in parts if p.strip()]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load schema for defaults
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         schema = json.load(f)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     schema = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read data
+[?2004l[?2004h> departments_csv = read_csv_dicts(os.path.join(DATA_DIR, 'departments.csv'))
+[?2004l[?2004h> employees_csv = read_csv_dicts(os.path.join(DATA_DIR, 'employees.csv'))
+[?2004l[?2004h> projects_csv = read_csv_dicts(os.path.join(DATA_DIR, 'projects.csv'))
+[?2004l[?2004h> 
+[?2004la[?2004h> # Prepare lookups and transformation
+[?2004l[?2004h> employees_by_dept = {}
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_csv:
+[?2004l[?2004h>     dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+[?2004l[?2004h>     if not skills:
+[?2004l[?2004h>         skills = ['General']
+[?2004l[?2004h>     years = to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+[?2004l[?2004h>     if years < 0:
+[?2004l[?2004h>         years = 0
+[?2004l[?2004h>     emp = {
+[?2004l[?2004h>         'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+[?2004l[?2004h>         'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+[?2004l[?2004h>         'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+[?2004l[?2004h>         'skills': skills,
+[?2004l[?2004h>         'years_of_service': years
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp)
+[?2004l[?2004h>     employees_by_dept.setdefault(dept_id, []).append(emp)
+[?2004l[?2004h> 
+[?2004l[?2004h> projects_by_dept = {}
+[?2004l[?2004h> for p in projects_csv:
+[?2004l[?2004h>     dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     status_raw = p.get('status') or p.get('state') or 'Planning'
+[?2004l[?2004h>     status = status_raw.strip().title()
+[?2004l[?2004h>     if status not in ALLOWED_STATUSES:
+[?2004l[?2004h>         mapping = {
+[?2004l[?2004h>             'planned': 'Planning',
+[?2004l[?2004h>             'in progress': 'In Progress',
+[?2004l[?2004h>             'progress': 'In Progress',
+[?2004l[?2004h>             'testing': 'Testing',
+[?2004l[?2004h>             'complete': 'Completed',
+[?2004l[?2004h>             'completed': 'Completed',
+[?2004l[?2004h>             'on hold': 'On Hold',
+[?2004l[?2004h>             'hold': 'On Hold'
+[?2004l[?2004h>         }
+[?2004l[?2004h>         status = mapping.get(status_raw.strip().lower(), 'Planning')
+[?2004l[?2004h>     proj = {
+[?2004l[?2004h>         'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+[?2004l[?2004h>         'status': status,
+[?2004l[?2004h>         'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+[?2004l[?2004h>         'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+[?2004l[?2004h>     }
+[?2004l[?2004h>     proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+[?2004l[?2004h>     proj['_budget'] = proj_budget
+[?2004l[?2004h>     projects_by_dept.setdefault(dept_id, []).append(proj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> for d in departments_csv:
+[?2004l[?2004h>     dept_id = str(d.get('id') or d.get('department_id') or d.get('dept_id') or d.get('code') or '')
+[?2004l[?2004h>     dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or ''
+[?2004l[?2004h>     dept_budget = to_float(d.get('budget') or d.get('department_budget') or d.get('budget_total') or 0.0)
+[?2004l[?2004h>     if dept_budget == 0.0:
+[?2004l[?2004h>         proj_list = projects_by_dept.get(dept_id, [])
+[?2004l[?2004h>         dept_budget = sum(p.get('_budget', 0.0) for p in proj_list)
+[?2004l[?2004h>     dept = {
+[?2004l[?2004h>         'id': dept_id,
+[?2004l[?2004h>         'name': dept_name,
+[?2004l[?2004h>         'budget': dept_budget,
+[?2004l[?2004h>         'employees': employees_by_dept.get(dept_id, []),
+[?2004l[?2004h>         'projects': [{k: v for k, v in prj.items() if not k.startswith('_')} for prj in projects_by_dept.get(dept_id, [])]
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'generator': 'csv_to_json.py'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info
+[?2004l[?2004h> organization_info = {
+[?2004l[?2004h>     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004l[?2004h>     'founded': schema.get('organization', {}).get('founded', '2000-01-01'),
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Statistics
+[?2004l[?2004h> avg_budget = 0.0
+[?2004l[?2004h> if departments:
+[?2004l[?2004h>     avg_budget = sum(d['budget'] for d in departments) / len(departments)
+[?2004l[?2004h> 
+[?2004l[?2004h> total_employees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> skill_dist = {}
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for s in e.get('skills', []):
+[?2004l[?2004h>         skill_dist[s] = skill_dist.get(s, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> dept_sizes = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     dept_sizes[d['id']] = len(d.get('employees', []))
+[?2004l[?2004h> 
+[?2004l[?2004h> status_dist = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for p in d.get('projects', []):
+[?2004l[?2004h>         st = p.get('status') or 'Planning'
+[?2004l[?2004h>         status_dist[st] = status_dist.get(st, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> years_list = [e.get('years_of_service', 0) for e in all_employees]
+[?2004l[?2004h> avg_years = (sum(years_list) / len(years_list)) if years_list else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': avg_budget,
+[?2004l[?2004h>     'totalEmployees': total_employees,
+[?2004l[?2004h>     'skillDistribution': skill_dist,
+[?2004l[?2004h>     'departmentSizes': dept_sizes,
+[?2004l[?2004h>     'projectStatusDistribution': status_dist,
+[?2004l[?2004h>     'averageYearsOfService': avg_years
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> final_obj = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization_info,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(final_obj, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Wrote {}".format(OUTPUT_PATH))
+[?2004l[?2004h> PY
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> rm -f csv_to_json.py
+[?2004l[?2004h> cat > csv_to_json.py << 'PY'
+[?2004l[?2004h> import csv
+[?2004l[?2004h> import json
+[?2004l[?2004h> import os
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+[?2004l[?2004h> DATA_DIR = os.path.join(BASE_DIR, 'data')
+[?2004l[?2004h> SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.json')
+[?2004l[?2004h> OUTPUT_PATH = os.path.join(BASE_DIR, 'organization.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> ALLOWED_STATUSES = {"Planning", "In Progress", "Testing", "Completed", "On Hold"}
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv_dicts(path):
+[?2004l[?2004h>     with open(path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         rows = []
+[?2004l[?2004h>         for row in reader:
+[?2004l[?2004h>             clean = {}
+[?2004l[?2004h>             for k, v in row.items():
+[?2004l[?2004h>                 k2 = (k or '').strip()
+[?2004l[?2004h>                 if isinstance(v, str):
+[?2004l[?2004h>                     v2 = v.strip()
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v2 = v
+[?2004l[?2004h>                 clean[k2] = v2
+[?2004l[?2004h>             rows.append(clean)
+[?2004l[?2004h>         return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_float(value, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return float(str(value).replace(',', ''))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_int(value, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return int(float(str(value).replace(',', '')))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     parts = [s]
+[?2004l[?2004h>     for sep in [',', ';', '|']:
+[?2004l[?2004h>         new_parts = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             new_parts.extend(p.split(sep))
+[?2004l[?2004h>         parts = new_parts
+[?2004l[?2004h>     return [p.strip() for p in parts if p.strip()]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load schema for defaults
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         schema = json.load(f)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     schema = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read input CSV data
+[?2004l[?2004h> departments_csv = read_csv_dicts(os.path.join(DATA_DIR, 'departments.csv'))
+[?2004l[?2004h> employees_csv = read_csv_dicts(os.path.join(DATA_DIR, 'employees.csv'))
+[?2004l[?2004h> projects_csv = read_csv_dicts(os.path.join(DATA_DIR, 'projects.csv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prepare lookups and transformation
+[?2004l[?2004h> employees_by_dept = {}
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_csv:
+[?2004l[?2004h>     dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+[?2004l[?2004h>     if not skills:
+[?2004l[?2004h>         skills = ['General']
+[?2004l[?2004h>     years = to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+[?2004l[?2004h>     if years < 0:
+[?2004l[?2004h>         years = 0
+[?2004l[?2004h>     emp = {
+[?2004l[?2004h>         'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+[?2004l[?2004h>         'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+[?2004l[?2004h>         'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+[?2004l[?2004h>         'skills': skills,
+[?2004l[?2004h>         'years_of_service': years
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp)
+[?2004l[?2004h>     employees_by_dept.setdefault(dept_id, []).append(emp)
+[?2004l[?2004h> 
+[?2004l[?2004h> projects_by_dept = {}
+[?2004l[?2004h> for p in projects_csv:
+[?2004l[?2004h>     dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     status_raw = p.get('status') or p.get('state') or 'Planning'
+[?2004l[?2004h>     status = status_raw.strip().title()
+[?2004l[?2004h>     if status not in ALLOWED_STATUSES:
+[?2004l[?2004h>         mapping = {
+[?2004l[?2004h>             'planned': 'Planning',
+[?2004l[?2004h>             'in progress': 'In Progress',
+[?2004l[?2004h>             'progress': 'In Progress',
+[?2004l[?2004h>             'testing': 'Testing',
+[?2004l[?2004h>             'complete': 'Completed',
+[?2004l[?2004h>             'completed': 'Completed',
+[?2004l[?2004h>             'on hold': 'On Hold',
+[?2004l[?2004h>             'hold': 'On Hold'
+[?2004l[?2004h>         }
+[?2004l[?2004h>         status = mapping.get((p.get('status') or p.get('state') or '').strip().lower(), 'Planning')
+[?2004l[?2004h>     proj = {
+[?2004l[?2004h>         'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+[?2004l[?2004h>         'status': status,
+[?2004l[?2004h>         'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+[?2004l[?2004h>         'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+[?2004l[?2004h>     }
+[?2004l[?2004h>     proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+[?2004l[?2004h>     proj['_budget'] = proj_budget
+[?2004l[?2004h>     projects_by_dept.setdefault(dept_id, []).append(proj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments array
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> for d in departments_csv:
+[?2004l[?2004h>     dept_id = str(d.get('id') or d.get('department_id') or d.get('dept_id') or d.get('code') or '')
+[?2004l[?2004h>     dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or ''
+[?2004l[?2004h>     dept_budget = to_float(d.get('budget') or d.get('department_budget') or d.get('budget_total') or 0.0)
+[?2004l[?2004h>     if dept_budget == 0.0:
+[?2004l[?2004h>         proj_list = projects_by_dept.get(dept_id, [])
+[?2004l[?2004h>         dept_budget = sum(p.get('_budget', 0.0) for p in proj_list)
+[?2004l[?2004h>     dept_obj = {
+[?2004l[?2004h>         'id': dept_id,
+[?2004l[?2004h>         'name': dept_name,
+[?2004l[?2004h>         'budget': dept_budget,
+[?2004l[?2004h>         'employees': employees_by_dept.get(dept_id, []),
+[?2004l[?2004h>         'projects': [{k: v for k, v in prj.items() if not k.startswith('_')} for prj in projects_by_dept.get(dept_id, [])]
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept_obj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'generator': 'csv_to_json.py'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info
+[?2004l[?2004h> organization_info = {
+[?2004l[?2004h>     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004l[?2004h>     'founded': schema.get('organization', {}).get('founded', '2000-01-01'),
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Statistics
+[?2004l[?2004h> avg_budget = sum(d['budget'] for d in departments) / len(departments) if departments else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> total_employees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> skill_dist = {}
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for s in e.get('skills', []):
+[?2004l[?2004h>         skill_dist[s] = skill_dist.get(s, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> dept_sizes = {d['id']: len(d.get('employees', [])) for d in departments}
+[?2004l[?2004h> 
+[?2004l[?2004h> status_dist = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for p in d.get('projects', []):
+[?2004l[?2004h>         st = p.get('status') or 'Planning'
+[?2004l[?2004h>         status_dist[st] = status_dist.get(st, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> years_list = [e.get('years_of_service', 0) for e in all_employees]
+[?2004l[?2004h> avg_years = (sum(years_list) / len(years_list)) if years_list else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': avg_budget,
+[?2004l[?2004h>     'totalEmployees': total_employees,
+[?2004l[?2004h>     'skillDistribution': skill_dist,
+[?2004l[?2004h>     'departmentSizes': dept_sizes,
+[?2004l[?2004h>     'projectStatusDistribution': status_dist,
+[?2004l[?2004h>     'averageYearsOfService': avg_years
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> final_obj = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization_info,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(final_obj, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('Wrote ' + OUTPUT_PATH)
+[?2004l[?2004h> PY
+[?2004l[?2004h> sed -n '1,80p' csv_to_json.py
+[?2004l[?2004h> sed -n '81,200p' csv_to_json.py
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> sed -n '1,120p' csv_to_json.py
+[?2004l[?2004h> sed -n '121,300p' csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> sed -n '1,120p' csv_to_json.py
+[?2004l[?2004h> sed -n '121,300p' csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> rm -f csv_to_json.py
+[?2004l[?2004h> cat << 'PY' > csv_to_json.py
+[?2004lt_id = str(dept_id) if dept_id is not None else ''
+    status_raw = p.get('status') or p.get('state') or 'Planning'
+    status = status_raw.strip().title()
+    if status not in ALLOWED_STATUSES:
+        mapping = {
+            'planned': 'Planning',
+            'in progress': 'In Progress',
+            'progress': 'In Progress',
+            'testing': 'Testing',
+            'complete': 'Completed',
+            'completed': 'Completed',
+            'on hold': 'On Hold',
+            'hold': 'On Hold'
+        }
+        status = mapping.get((p.get('status') or p.get('state') or '').strip().lower(), 'Planning')
+    proj = {
+        'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+        'status': status,
+        'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+        'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+    }
+    proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+    proj['_budget'] = proj_budget
+    projects_by_de[?2004h> import csv
+[?2004l[?2004h> import json
+[?2004l[?2004h> import os
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+[?2004l[?2004h> DATA_DIR = os.path.join(BASE_DIR, 'data')
+[?2004l[?2004h> SCHEMA_PATH = os.path.join(BASE_DIR, 'schema.json')
+[?2004l[?2004h> OUTPUT_PATH = os.path.join(BASE_DIR, 'organization.json')
+[?2004l[?2004h> 
+[?2004l[?2004h> ALLOWED_STATUSES = {"Planning", "In Progress", "Testing", "Completed", "On Hold"}
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_csv_dicts(path):
+[?2004l[?2004h>     with open(path, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         reader = csv.DictReader(f)
+[?2004l[?2004h>         rows = []
+[?2004l[?2004h>         for row in reader:
+[?2004l[?2004h>             clean = {}
+[?2004l[?2004h>             for k, v in row.items():
+[?2004l[?2004h>                 k2 = (k or '').strip()
+[?2004l[?2004h>                 if isinstance(v, str):
+[?2004l[?2004h>                     v2 = v.strip()
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     v2 = v
+[?2004l[?2004h>                 clean[k2] = v2
+[?2004l[?2004h>             rows.append(clean)
+[?2004l[?2004h>         return rows
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_float(value, default=0.0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return float(str(value).replace(',', ''))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def to_int(value, default=0):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         if value is None or value == '':
+[?2004l[?2004h>             return default
+[?2004l[?2004h>         return int(float(str(value).replace(',', '')))
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         return default
+[?2004l[?2004h> 
+[?2004l[?2004h> def split_list(s):
+[?2004l[?2004h>     if not s:
+[?2004l[?2004h>         return []
+[?2004l[?2004h>     parts = [s]
+[?2004l[?2004h>     for sep in [',', ';', '|']:
+[?2004l[?2004h>         new_parts = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             new_parts.extend(p.split(sep))
+[?2004l[?2004h>         parts = new_parts
+[?2004l[?2004h>     return [p.strip() for p in parts if p.strip()]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load schema for defaults
+[?2004l[?2004h> try:
+[?2004l[?2004h>     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+[?2004l[?2004h>         schema = json.load(f)
+[?2004l[?2004h> except Exception:
+[?2004l[?2004h>     schema = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Read input CSV data
+[?2004l[?2004h> departments_csv = read_csv_dicts(os.path.join(DATA_DIR, 'departments.csv'))
+[?2004l[?2004h> employees_csv = read_csv_dicts(os.path.join(DATA_DIR, 'employees.csv'))
+[?2004l[?2004h> projects_csv = read_csv_dicts(os.path.join(DATA_DIR, 'projects.csv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prepare lookups and transformation
+[?2004l[?2004h> employees_by_dept = {}
+[?2004l[?2004h> all_employees = []
+[?2004l[?2004h> for e in employees_csv:
+[?2004l[?2004h>     dept_id = e.get('department_id') or e.get('dept_id') or e.get('department') or e.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     skills = split_list(e.get('skills') or e.get('skillset') or e.get('skills_csv') or '')
+[?2004l[?2004h>     if not skills:
+[?2004l[?2004h>         skills = ['General']
+[?2004l[?2004h>     years = to_int(e.get('years_of_service') or e.get('years') or e.get('tenure') or e.get('experience_years') or 0)
+[?2004l[?2004h>     if years < 0:
+[?2004l[?2004h>         years = 0
+[?2004l[?2004h>     emp = {
+[?2004l[?2004h>         'id': str(e.get('id') or e.get('employee_id') or e.get('emp_id') or e.get('employee') or ''),
+[?2004l[?2004h>         'name': e.get('name') or e.get('employee_name') or e.get('full_name') or '',
+[?2004l[?2004h>         'position': e.get('position') or e.get('title') or e.get('role') or 'Employee',
+[?2004l[?2004h>         'skills': skills,
+[?2004l[?2004h>         'years_of_service': years
+[?2004l[?2004h>     }
+[?2004l[?2004h>     all_employees.append(emp)
+[?2004l[?2004h>     employees_by_dept.setdefault(dept_id, []).append(emp)
+[?2004l[?2004h> 
+[?2004l[?2004h> projects_by_dept = {}
+[?2004l[?2004h> for p in projects_csv:
+[?2004l[?2004h>     dept_id = p.get('department_id') or p.get('dept_id') or p.get('department') or p.get('dept') or ''
+[?2004l[?2004h>     dept_id = str(dept_id) if dept_id is not None else ''
+[?2004l[?2004h>     status_raw = p.get('status') or p.get('state') or 'Planning'
+[?2004l[?2004h>     status = status_raw.strip().title()
+[?2004l[?2004h>     if status not in ALLOWED_STATUSES:
+[?2004l[?2004h>         mapping = {
+[?2004l[?2004h>             'planned': 'Planning',
+[?2004l[?2004h>             'in progress': 'In Progress',
+[?2004l[?2004h>             'progress': 'In Progress',
+[?2004l[?2004h>             'testing': 'Testing',
+[?2004l[?2004h>             'complete': 'Completed',
+[?2004l[?2004h>             'completed': 'Completed',
+[?2004l[?2004h>             'on hold': 'On Hold',
+[?2004l[?2004h>             'hold': 'On Hold'
+[?2004l[?2004h>         }
+[?2004l[?2004h>         status = mapping.get((p.get('status') or p.get('state') or '').strip().lower(), 'Planning')
+[?2004l[?2004h>     proj = {
+[?2004l[?2004h>         'name': p.get('name') or p.get('project_name') or p.get('title') or '',
+[?2004l[?2004h>         'status': status,
+[?2004l[?2004h>         'members': split_list(p.get('members') or p.get('member_names') or p.get('team') or ''),
+[?2004l[?2004h>         'deadline': p.get('deadline') or p.get('due_date') or p.get('end_date') or ''
+[?2004l[?2004h>     }
+[?2004l[?2004h>     proj_budget = to_float(p.get('budget') or p.get('project_budget') or 0.0)
+[?2004l[?2004h>     proj['_budget'] = proj_budget
+[?2004l[?2004h>     projects_by_dept.setdefault(dept_id, []).append(proj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Build departments array
+[?2004l[?2004h> departments = []
+[?2004l[?2004h> for d in departments_csv:
+[?2004l[?2004h>     dept_id = str(d.get('id') or d.get('department_id') or d.get('dept_id') or d.get('code') or '')
+[?2004l[?2004h>     dept_name = d.get('name') or d.get('department_name') or d.get('dept_name') or ''
+[?2004l[?2004h>     dept_budget = to_float(d.get('budget') or d.get('department_budget') or d.get('budget_total') or 0.0)
+[?2004l[?2004h>     if dept_budget < 0:
+[?2004l[?2004h>         dept_budget = 0.0
+[?2004l[?2004h>     if dept_budget == 0.0:
+[?2004l[?2004h>         proj_list = projects_by_dept.get(dept_id, [])
+[?2004l[?2004h>         dept_budget = sum(p.get('_budget', 0.0) for p in proj_list)
+[?2004l[?2004h>     dept_obj = {
+[?2004l[?2004h>         'id': dept_id,
+[?2004l[?2004h>         'name': dept_name,
+[?2004l[?2004h>         'budget': dept_budget,
+[?2004l[?2004h>         'employees': employees_by_dept.get(dept_id, []),
+[?2004l[?2004h>         'projects': [{k: v for k, v in prj.items() if not k.startswith('_')} for prj in projects_by_dept.get(dept_id, [])]
+[?2004l[?2004h>     }
+[?2004l[?2004h>     departments.append(dept_obj)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Metadata
+[?2004l[?2004h> metadata = {
+[?2004l[?2004h>     'version': '1.0.0',
+[?2004l[?2004h>     'timestamp': datetime.utcnow().isoformat() + 'Z',
+[?2004l[?2004h>     'generator': 'csv_to_json.py'
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Organization info
+[?2004l[?2004h> organization_info = {
+[?2004l[?2004h>     'name': schema.get('organization', {}).get('name', 'Organization'),
+[?2004l[?2004h>     'founded': schema.get('organization', {}).get('founded', '2000-01-01'),
+[?2004l[?2004h>     'departments': departments
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Statistics
+[?2004l[?2004h> avg_budget = sum(d['budget'] for d in departments) / len(departments) if departments else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> total_employees = len(all_employees)
+[?2004l[?2004h> 
+[?2004l[?2004h> skill_dist = {}
+[?2004l[?2004h> for e in all_employees:
+[?2004l[?2004h>     for s in e.get('skills', []):
+[?2004l[?2004h>         skill_dist[s] = skill_dist.get(s, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> dept_sizes = {d['id']: len(d.get('employees', [])) for d in departments}
+[?2004l[?2004h> 
+[?2004l[?2004h> status_dist = {}
+[?2004l[?2004h> for d in departments:
+[?2004l[?2004h>     for p in d.get('projects', []):
+[?2004l[?2004h>         st = p.get('status') or 'Planning'
+[?2004l[?2004h>         status_dist[st] = status_dist.get(st, 0) + 1
+[?2004l[?2004h> 
+[?2004l[?2004h> years_list = [e.get('years_of_service', 0) for e in all_employees]
+[?2004l[?2004h> avg_years = (sum(years_list) / len(years_list)) if years_list else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h> statistics = {
+[?2004l[?2004h>     'averageDepartmentBudget': avg_budget,
+[?2004l[?2004h>     'totalEmployees': total_employees,
+[?2004l[?2004h>     'skillDistribution': skill_dist,
+[?2004l[?2004h>     'departmentSizes': dept_sizes,
+[?2004l[?2004h>     'projectStatusDistribution': status_dist,
+[?2004l[?2004h>     'averageYearsOfService': avg_years
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> final_obj = {
+[?2004l[?2004h>     'metadata': metadata,
+[?2004l[?2004h>     'organization': organization_info,
+[?2004l[?2004h>     'statistics': statistics
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(OUTPUT_PATH, 'w', encoding='utf-8') as f:
+[?2004l[?2004h>     json.dump(final_obj, f, indent=2, ensure_ascii=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('Wrote ' + OUTPUT_PATH)
+[?2004l[?2004h> PY
+[?2004l[?2004h> sed -n '1,120p' csv_to_json.py
+[?2004l[?2004h> sed -n '121,300p' csv_to_json.py
+[?2004l[?2004h> chmod +x csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> sed -n '1,120p' csv_to_json.py
+[?2004l[?2004h> sed -n '121,300p' csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> ls -la
+[?2004l[?2004h> ls -la data
+[?2004l[?2004h> head -n 20 data/departments.csv
+[?2004l[?2004h> head -n 20 data/employees.csv
+[?2004l[?2004h> head -n 20 data/projects.csv
+[?2004l[?2004h> sed -n '1,120p' csv_to_json.py
+[?2004l[?2004h> sed -n '121,300p' csv_to_json.py
+[?2004l[?2004h> python3 csv_to_json.py
+[?2004l[?2004h> ls -la organization.json || ls -la
+[?2004l[?2004h> sed -n '1,200p' organization.json
+[?2004l[?2004h> [?2004l
+bash: unexpected EOF while looking for matching `"'
+[?2004h> 

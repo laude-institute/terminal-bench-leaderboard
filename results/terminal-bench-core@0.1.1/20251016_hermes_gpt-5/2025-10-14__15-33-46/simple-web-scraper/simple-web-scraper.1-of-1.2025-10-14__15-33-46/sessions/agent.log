@@ -1,0 +1,149 @@
+[?2004hroot@f656e2570110:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@f656e2570110:/app# clear
+[?2004l[H[J[3J[?2004hroot@f656e2570110:/app# ls -la
+[?2004ltotal 8
+drwxr-xr-x 2 root root 4096 Mar 28  2025 .
+drwxr-xr-x 1 root root 4096 Oct 14 17:12 ..
+[?2004hroot@f656e2570110:/app# curl -sS http://server:8000 | head -n 30
+[?2004l<!DOCTYPE html><html><head><title>Book Store</title></head><body><h1>Simple Book Store</h1><div class='books-container'>
+            <div class="book">
+                <div class="book-title">The Great Gatsby</div>
+                <div class="book-author">by F. Scott Fitzgerald</div>
+                <div class="book-details">
+                    <span class="book-year">Published: 1925</span>
+                    <span class="book-rating">Rating: 4.2/5</span>
+                    <span class="book-price">$12.99</span>
+                </div>
+            </div>
+            
+            <div class="book">
+                <div class="book-title">To Kill a Mockingbird</div>
+                <div class="book-author">by Harper Lee</div>
+                <div class="book-details">
+                    <span class="book-year">Published: 1960</span>
+                    <span class="book-rating">Rating: 4.8/5</span>
+                    <span class="book-price">$14.99</span>
+                </div>
+            </div>
+            
+            <div class="book">
+                <div class="book-title">1984</div>
+                <div class="book-author">by George Orwell</div>
+                <div class="book-details">
+                    <span class="book-year">Published: 1949</span>
+                    <span class="book-rating">Rating: 4.6/5</span>
+                    <span class="book-price">$11.99</span>
+                </div>
+            </div>
+[?2004hroot@f656e2570110:/app# cat > scraper.py << 'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import requests
+[?2004l[?2004h> from bs4 import BeautifulSoup
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> import re
+[?2004l[?2004h> 
+[?2004l[?2004h> def parse_book(div):
+[?2004l[?2004h>     def get_text(selector):
+[?2004l[?2004h>         el = div.select_one(selector)
+[?2004l[?2004h>         return el.get_text(strip=True) if el else None
+[?2004l[?2004h> 
+[?2004l[?2004h>     title = get_text('.book-title')
+[?2004l[?2004h>     author = get_text('.book-author')
+[?2004l[?2004h>     if author and author.lower().startswith('by '):
+[?2004l[?2004h>         author = author[3:].strip()
+[?2004l[?2004h> 
+[?2004l[?2004h>     year_text = get_text('.book-details .book-year') or get_text('.book-year')
+[?2004l[?2004h>     rating_text = get_text('.book-details .book-rating') or get_text('.book-rating')
+[?2004l[?2004h>     price_text = get_text('.book-details .book-price') or get_text('.book-price')
+[?2004l[?2004h> 
+[?2004l[?2004h>     year = None
+[?2004l[?2004h>     if year_text:
+[?2004l[?2004h>         m = re.search(r'(\d{4})', year_text)
+[?2004l[?2004h>         if m:
+[?2004l[?2004h>             year = int(m.group(1))
+[?2004l[?2004h> 
+[?2004l[?2004h>     rating = None
+[?2004l[?2004h>     if rating_text:
+[?2004l[?2004h>         m = re.search(r'([\d.]+)', rating_text)
+[?2004l[?2004h>         if m:
+[?2004l[?2004h>             rating = float(m.group(1))
+[?2004l[?2004h> 
+[?2004l[?2004h>     price = None
+[?2004l[?2004h>     if price_text:
+[?2004l[?2004h>         m = re.search(r'([\d.]+)', price_text.replace(',', ''))
+[?2004l[?2004h>         if m:
+[?2004l[?2004h>             price = float(m.group(1))
+[?2004l[?2004h> 
+[?2004l[?2004h>     return {
+[?2004l[?2004h>         "title": title,
+[?2004l[?2004h>         "author": author,
+[?2004l[?2004h>         "year": year,
+[?2004l[?2004h>         "rating": rating,
+[?2004l[?2004h>         "price": price
+[?2004l[?2004h>     }
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     url = "http://server:8000"
+[?2004l[?2004h>     resp = requests.get(url, timeout=10)
+[?2004l[?2004h>     resp.raise_for_status()
+[?2004l[?2004h>     soup = BeautifulSoup(resp.text, "html.parser")
+[?2004l[?2004h> 
+[?2004l[?2004h>     books = []
+[?2004l[?2004h>     for div in soup.select('div.book'):
+[?2004l[?2004h>         data = parse_book(div)
+[?2004l[?2004h>         if data.get("title"):
+[?2004l[?2004h>             books.append(data)
+[?2004l[?2004h> 
+[?2004l[?2004h>     df = pd.DataFrame(books, columns=["title", "author", "year", "rating", "price"])
+[?2004l[?2004h>     df.to_csv("books.csv", index=False)
+[?2004l[?2004h> 
+[?2004l[?2004h>     total = len(df)
+[?2004l[?2004h>     avg_price = float(df["price"].dropna().mean()) if total > 0 else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h>     highest = None
+[?2004l[?2004h>     if not df.empty and df["rating"].dropna().size > 0:
+[?2004l[?2004h>         ratings = pd.to_numeric(df["rating"], errors="coerce")
+[?2004l[?2004h>         idx = ratings.idxmax()
+[?2004l[?2004h>         highest = df.loc[idx]
+[?2004l[?2004h> 
+[?2004l[?2004h>     lines = []
+[?2004l[?2004h>     lines.append(f"Total books scraped: {total}")
+[?2004l[?2004h>     if total > 0 and not pd.isna(avg_price):
+[?2004l[?2004h>         lines.append(f"Average book price: ${avg_price:.2f}")
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         lines.append("Average book price: N/A")
+[?2004l[?2004h>     if highest is not None and not pd.isna(highest["rating"]):
+[?2004l[?2004h>         lines.append(f"Highest rated book: {highest['title']} ({highest['rating']}/5)")
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         lines.append("Highest rated book: N/A")
+[?2004l[?2004h> 
+[?2004l[?2004h>     with open("report.txt", "w") as f:
+[?2004l[?2004h>         f.write("\n".join(lines))
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == "__main__":
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@f656e2570110:/app# python3 scraper.py
+[?2004l[?2004hroot@f656e2570110:/app# ls -la
+[?2004ltotal 20
+drwxr-xr-x 1 root root 4096 Oct 14 17:12 .
+drwxr-xr-x 1 root root 4096 Oct 14 17:12 ..
+-rw-r--r-- 1 root root  345 Oct 14 17:12 books.csv
+-rw-r--r-- 1 root root   99 Oct 14 17:12 report.txt
+-rw-r--r-- 1 root root 2500 Oct 14 17:12 scraper.py
+[?2004hroot@f656e2570110:/app# head -n 5 books.csv
+[?2004ltitle,author,year,rating,price
+The Great Gatsby,F. Scott Fitzgerald,1925,4.2,12.99
+To Kill a Mockingbird,Harper Lee,1960,4.8,14.99
+1984,George Orwell,1949,4.6,11.99
+Pride and Prejudice,Jane Austen,1813,4.5,9.99
+[?2004hroot@f656e2570110:/app# cat report.txt
+[?2004lTotal books scraped: 7
+Average book price: $13.85
+Highest rated book: To Kill a Mockingbird (4.8/5)[?2004hroot@f656e2570110:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@f656e2570110:/app# 

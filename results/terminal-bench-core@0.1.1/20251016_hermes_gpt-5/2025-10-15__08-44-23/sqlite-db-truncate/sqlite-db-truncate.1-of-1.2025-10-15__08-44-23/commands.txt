@@ -1,0 +1,41 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la /app\n'
+'file /app/trunc.db\n'
+'sqlite3 /app/trunc.db "PRAGMA integrity_check;"\n'
+'sqlite3 /app/trunc.db ".recover" > /app/recovered.sql\n'
+'head -n 50 /app/recovered.sql\n'
+'sqlite3 /app/recovered.db < /app/recovered.sql\n'
+'sqlite3 /app/recovered.db ".tables"\n'
+'sqlite3 /app/recovered.db "select name, sql from sqlite_master where type=\'table\';"\n'
+'for t in $(sqlite3 /app/recovered.db "select name from sqlite_master where type=\'table\';"); do echo "TABLE: $t"; sqlite3 /app/recovered.db "pragma table_info(\'"$t"\');"; done\n'
+'TABLE_WITH_WORD_VALUE=$(for t in $(sqlite3 /app/recovered.db "select name from sqlite_master where type=\'table\';"); do cols=$(sqlite3 /app/recovered.db "pragma table_info(\'"$t"\');" | awk -F\'|\' \'{print $2}\' | paste -sd \',\' -); if echo "$cols" | grep -q "\\<word\\>" && echo "$cols" | grep -q "\\<value\\>"; then echo "$t"; fi; done | head -n1); echo "$TABLE_WITH_WORD_VALUE"\n'
+'if [ -n "$TABLE_WITH_WORD_VALUE" ]; then printf ".mode json\\nselect word, value from %s;\\n" "$TABLE_WITH_WORD_VALUE" | sqlite3 /app/recovered.db > /app/recover.json; else echo "No table with word and value found"; fi\n'
+'ls -la /app/recover.json\n'
+'head -n 20 /app/recover.json\n'
+'apt-get update\n'
+'apt-get install -y sqlite3\n'
+'sqlite3 /app/trunc.db ".recover" > /app/recovered.sql\n'
+'if [ ! -s /app/recovered.sql ]; then sqlite3 /app/trunc.db ".dump" > /app/recovered.sql; fi\n'
+'sqlite3 /app/recovered.db < /app/recovered.sql\n'
+'sqlite3 /app/recovered.db ".tables"\n'
+'TABLE_WITH_WORD_VALUE=$(for t in $(sqlite3 /app/recovered.db "select name from sqlite_master where type=\'table\' and name not like \'sqlite_%\';"); do cols=$(sqlite3 /app/recovered.db "pragma table_info(\'$t\');" | awk -F\'|\' \'{print $2}\' | paste -sd \',\' -); if echo "$cols" | grep -qw word && echo "$cols" | grep -qw value; then echo "$t"; fi; done | head -n1); echo "$TABLE_WITH_WORD_VALUE"\n'
+'if [ -n "$TABLE_WITH_WORD_VALUE" ]; then sqlite3 -cmd ".headers off" -cmd ".mode list" /app/recovered.db "select coalesce(json_group_array(json_object(\'word\', [word], \'value\', [value])), \'[]\') from [$TABLE_WITH_WORD_VALUE] where [word] is not null and [value] is not null;" > /app/recover.json; fi\n'
+'if [ ! -s /app/recover.json ]; then cat > /app/auto_recover.sh << \'EOF\'\n#!/usr/bin/env bash\nset -e\ndb="/app/recovered.db"\nout="/app/recover.json"\ntables=$(sqlite3 "$db" "select name from sqlite_master where type=\'table\' and name not like \'sqlite_%\';")\nfor t in $tables; do\n  info=$(sqlite3 "$db" "pragma table_info(\'$t\');")\n  textcol=$(printf "%s\\n" "$info" | awk -F\'|\' \'tolower($3) ~ /(char|clob|text|varchar)/ {print $2; exit}\')\n  numcol=$(printf "%s\\n" "$info" | awk -F\'|\' \'tolower($3) ~ /(int|real|numeric|decimal|float|double)/ {print $2; exit}\')\n  if [ -n "$textcol" ] && [ -n "$numcol" ]; then\n    sqlite3 -cmd ".headers off" -cmd ".mode list" "$db" "select coalesce(json_group_array(json_object(\'word\', [$textcol], \'value\', [$numcol])), \'[]\') from [$t] where [$textcol] is not null and [$numcol] is not null;" > "$out"\n    if [ -s "$out" ]; then\n      exit 0\n    fi\n  fi\ndone\nexit 1\nEOF\nfi\n'
+'if [ -f /app/auto_recover.sh ]; then chmod +x /app/auto_recover.sh && /app/auto_recover.sh; fi\n'
+'ls -la /app/recover.json\n'
+'head -n 20 /app/recover.json\n'
+'hexdump -C /app/trunc.db | head -n 50\n'
+"strings -a /app/trunc.db | sed -n '1,200p'\n"
+"strings -a /app/trunc.db | grep -ni -E 'testword|\\bword\\b|\\bvalue\\b|CREATE|INSERT' | head -n 50\n"
+'command -v python3 >/dev/null 2>&1 || apt-get install -y python3-minimal\n'
+'cat > /app/heur_recover.py << \'PY\'\n#!/usr/bin/env python3\nimport re, json, sys\npath = \'/app/trunc.db\'\nout = \'/app/recover.json\'\ntry:\n    data = open(path, \'rb\').read()\nexcept Exception as e:\n    sys.exit(1)\n# Find words matching \'testword\' followed by alphanumerics/underscore\nword_pat = re.compile(rb\'testword[0-9A-Za-z_]+\')\n# For each match, search forward within a window for ASCII integer\npairs = {}\nfor m in word_pat.finditer(data):\n    wbytes = m.group(0)\n    w = wbytes.decode(\'ascii\', errors=\'ignore\')\n    # Search next 64 bytes for an integer (allow optional minus sign)\n    start = m.end()\n    window = data[start:start+64]\n    num_m = re.search(rb\'(-?\\d{1,10})\', window)\n    if num_m:\n        try:\n            val = int(num_m.group(1).decode(\'ascii\'))\n        except Exception:\n            continue\n        if w not in pairs:\n            pairs[w] = val\n# Fallback: if nothing found, try to find any words and preceding numbers within a small backward window\nif not pairs:\n    for m in word_pat.finditer(data):\n        wbytes = m.group(0)\n        w = wbytes.decode(\'ascii\', errors=\'ignore\')\n        start = max(0, m.start()-64)\n        window = data[start:m.start()]\n        nums = list(re.finditer(rb\'(-?\\d{1,10})\', window))\n        if nums:\n            num_m = nums[-1]\n            try:\n                val = int(num_m.group(1).decode(\'ascii\'))\n            except Exception:\n                continue\n            if w not in pairs:\n                pairs[w] = val\narr = [{"word": k, "value": v} for k, v in pairs.items()]\nwith open(out, \'w\') as f:\n    json.dump(arr, f)\nprint(out)\nPY\n'
+'chmod +x /app/heur_recover.py\n'
+'python3 /app/heur_recover.py || true\n'
+'ls -la /app/recover.json\n'
+'head -n 50 /app/recover.json\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

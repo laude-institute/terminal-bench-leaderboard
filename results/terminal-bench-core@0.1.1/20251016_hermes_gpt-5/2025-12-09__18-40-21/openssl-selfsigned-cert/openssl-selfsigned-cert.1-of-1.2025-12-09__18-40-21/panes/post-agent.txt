@@ -1,0 +1,84 @@
+root@529b1f57e64c:/app# mkdir -p /app/ssl
+root@529b1f57e64c:/app# openssl genrsa -out /app/ssl/server.key 2048
+root@529b1f57e64c:/app# chmod 600 /app/ssl/server.key
+root@529b1f57e64c:/app# openssl req -new -x509 -sha256 -days 365 -key /app/ssl/server.key -out /app/ssl/server.crt -subj "/O=DevOps Team/CN=dev-internal.company
+.local"
+root@529b1f57e64c:/app# cat /app/ssl/server.key /app/ssl/server.crt > /app/ssl/server.pem
+root@529b1f57e64c:/app# openssl x509 -in /app/ssl/server.crt -noout -subject -dates -fingerprint -sha256 > /app/ssl/verification.txt
+root@529b1f57e64c:/app# cat > /app/check_cert.py << 'PY'
+> #!/usr/bin/env python3
+> import ssl
+> import subprocess
+> import os
+> import sys
+> import datetime
+>
+> def main():
+>     cert_path = "/app/ssl/server.crt"
+>     key_path = "/app/ssl/server.key"
+>     pem_path = "/app/ssl/server.pem"
+>
+>     # Ensure files exist
+>     for p in [cert_path, key_path, pem_path]:
+>         if not os.path.exists(p):
+>             print(f"Missing required file: {p}")
+>             sys.exit(1)
+>
+>     # Try to load certificate and key
+>     try:
+>         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+>         ctx.load_cert_chain(certfile=cert_path, keyfile=key_path)
+>     except Exception as e:
+>         print(f"Failed to load certificate: {e}")
+>         sys.exit(1)
+>
+>     # Get subject and end date via openssl
+>     try:
+>         subj_output = subprocess.check_output(["openssl", "x509", "-in", cert_path, "-noout", "-subject"], text=True).strip()
+>         enddate_output = subprocess.check_output(["openssl", "x509", "-in", cert_path, "-noout", "-enddate"], text=True).strip()
+>
+>         # Parse CN from subject
+>         subj_text = subj_output
+>         if subj_text.startswith("subject="):
+>             subj_text = subj_text[len("subject="):].strip()
+>         cn = None
+>         if "CN=" in subj_text or "CN =" in subj_text:
+>             temp = subj_text.replace("/", ",")
+>             for part in temp.split(","):
+>                 part = part.strip()
+>                 if part.startswith("CN="):
+>                     cn = part.split("=", 1)[1].strip()
+>                     break
+>                 if part.startswith("CN ="):
+>                     cn = part.split("=", 1)[1].strip()
+>                     break
+>
+>         # Parse expiration date
+>         # enddate_output like: "notAfter=Nov 12 12:34:56 2025 GMT"
+>         try:
+>             not_after = enddate_output.split("=", 1)[1]
+>             dt = datetime.datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
+>             exp_date = dt.strftime("%Y-%m-%d")
+>         except Exception:
+>             # Fallback: try without timezone
+>             not_after = enddate_output.split("=", 1)[1]
+>             dt = datetime.datetime.strptime(not_after, "%b %d %H:%M:%S %Y")
+>             exp_date = dt.strftime("%Y-%m-%d")
+>
+>         print(f"Common Name: {cn}")
+>         print(f"Expiration Date: {exp_date}")
+>     except Exception as e:
+>         print(f"Failed to parse certificate details: {e}")
+>         sys.exit(1)
+>
+>     print("Certificate verification successful")
+>
+> if __name__ == "__main__":
+>     main()
+> PY
+root@529b1f57e64c:/app# chmod +x /app/check_cert.py
+root@529b1f57e64c:/app# python3 /app/check_cert.py
+Common Name: dev-internal.company.local
+Expiration Date: 2026-12-10
+Certificate verification successful
+root@529b1f57e64c:/app#

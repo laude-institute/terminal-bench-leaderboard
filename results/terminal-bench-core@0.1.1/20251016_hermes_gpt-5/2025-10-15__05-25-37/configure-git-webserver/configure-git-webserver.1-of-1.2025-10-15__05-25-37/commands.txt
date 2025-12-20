@@ -1,0 +1,62 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'apt-get update\n'
+'apt-get install -y git openssh-server nginx openssl ca-certificates\n'
+'useradd -m -s /bin/bash user\n'
+"echo 'user:password' | chpasswd\n"
+'mkdir -p /git/server\n'
+'git init --bare /git/server\n'
+'chown -R user:user /git/server\n'
+'mkdir -p /srv/webroot\n'
+'chown -R user:user /srv/webroot\n'
+'chmod 755 /srv/webroot\n'
+'printf \'#!/bin/sh\nset -e\nBRANCH=webserver\nGIT_WORK_TREE=/srv/webroot\nwhile read oldrev newrev ref\n do\n  if [ "$ref" = "refs/heads/$BRANCH" ]; then\n    mkdir -p "$GIT_WORK_TREE"\n    git --work-tree="$GIT_WORK_TREE" checkout -f "$BRANCH"\n  fi\n done\n\' > /git/server/hooks/post-receive\n'
+'chmod +x /git/server/hooks/post-receive\n'
+'mkdir -p /etc/nginx/tls\n'
+'openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/nginx/tls/self.key -out /etc/nginx/tls/self.crt -days 365 -subj "/CN=server"\n'
+"printf 'server {\n    listen 8080 ssl;\n    server_name server;\n    ssl_certificate /etc/nginx/tls/self.crt;\n    ssl_certificate_key /etc/nginx/tls/self.key;\n    root /srv/webroot;\n    index index.html;\n    location / {\n        try_files $uri $uri/ =404;\n    }\n}\n' > /etc/nginx/sites-available/webserver\n"
+'ln -sf /etc/nginx/sites-available/webserver /etc/nginx/sites-enabled/webserver\n'
+'nginx -t\n'
+'service nginx restart\n'
+'mkdir -p /var/run/sshd\n'
+'service ssh start\n'
+'/usr/sbin/sshd\n'
+"echo '127.0.0.1 server' >> /etc/hosts\n"
+'su - user -c \'mkdir -p ~/client && cd ~/client && git init && printf "hello world\\n" > hello.html && git add hello.html && git commit -m "add hello" && git branch -M webserver && git remote add origin /git/server && git push -u origin webserver\'\n'
+'curl -k https://server:8080/hello.html\n'
+''
+'id -u user >/dev/null 2>&1 || useradd -m -s /bin/bash user\n'
+"echo 'user:password' | chpasswd\n"
+'test -d /git/server || (mkdir -p /git/server && git init --bare /git/server)\n'
+'chown -R user:user /git/server\n'
+'mkdir -p /srv/webroot\n'
+'chown -R user:user /srv/webroot\n'
+'chmod 755 /srv/webroot\n'
+'printf \'#!/bin/sh\nset -e\nBRANCH=webserver\nGIT_DIR=/git/server\nGIT_WORK_TREE=/srv/webroot\nwhile read oldrev newrev ref\n do\n  if [ "$ref" = "refs/heads/$BRANCH" ]; then\n    mkdir -p "$GIT_WORK_TREE"\n    git --git-dir="$GIT_DIR" --work-tree="$GIT_WORK_TREE" checkout -f "$BRANCH"\n  fi\n done\n\' > /git/server/hooks/post-receive\n'
+'chmod +x /git/server/hooks/post-receive\n'
+'mkdir -p /etc/nginx/tls\n'
+'openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/nginx/tls/self.key -out /etc/nginx/tls/self.crt -days 365 -subj "/CN=server"\n'
+'rm -f /etc/nginx/sites-enabled/default\n'
+"printf 'server {\n    listen 8080 ssl;\n    server_name server;\n    ssl_certificate /etc/nginx/tls/self.crt;\n    ssl_certificate_key /etc/nginx/tls/self.key;\n    root /srv/webroot;\n    index index.html;\n    location / {\n        try_files $uri $uri/ =404;\n    }\n}\n' > /etc/nginx/sites-available/webserver\n"
+'ln -sf /etc/nginx/sites-available/webserver /etc/nginx/sites-enabled/webserver\n'
+'nginx -t\n'
+'service nginx restart\n'
+'mkdir -p /var/run/sshd\n'
+'/usr/sbin/sshd || service ssh start\n'
+"grep -qE '^127\\.0\\.0\\.1\\s+server' /etc/hosts || echo '127.0.0.1 server' >> /etc/hosts\n"
+'su - user -c \'mkdir -p ~/.ssh && chmod 700 ~/.ssh && { test -f ~/.ssh/id_rsa || ssh-keygen -t rsa -b 2048 -N "" -f ~/.ssh/id_rsa; } && cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys\'\n'
+"GIT_SSH_COMMAND='ssh -i /home/user/.ssh/id_rsa -o StrictHostKeyChecking=no' git clone user@server:/git/server /tmp/client\n"
+"cd /tmp/client && printf 'hello world\n' > hello.html && git add hello.html && git commit -m 'add hello' && git branch -M webserver && git push origin webserver\n"
+'ls -l /srv/webroot\n'
+'curl -k https://server:8080/hello.html\n'
+'apt-get install -y curl\n'
+'git -C /tmp/client config user.name "User"\n'
+'git -C /tmp/client config user.email "user@example.com"\n'
+"cd /tmp/client && printf 'hello world\n' > hello.html && printf 'hello world\n' > index.html && git add hello.html index.html && git commit -m 'add hello' && git branch -M webserver && GIT_SSH_COMMAND='ssh -i /home/user/.ssh/id_rsa -o StrictHostKeyChecking=no' git push origin webserver\n"
+'ls -l /srv/webroot\n'
+'curl -k https://server:8080/hello.html\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

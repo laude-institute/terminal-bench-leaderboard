@@ -1,0 +1,35 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'ls -lh alpine.iso || ls -lh *.iso || true\n'
+'qemu-system-x86_64 --version\n'
+'sh -lc \'if command -v ss >/dev/null 2>&1; then p=$(ss -ltnp 2>/dev/null | awk "/:6665/ {print \\$NF}" | sed -n "s/.*pid=\\([0-9]*\\),.*/\\1/p"); [ -n "$p" ] && kill -9 $p || true; fi\'\n'
+'qemu-system-x86_64 -m 1024 -cdrom alpine.iso -boot d -display none -serial telnet:127.0.0.1:6665,server,nowait -daemonize -pidfile /tmp/qemu-alpine.pid -name alpine-telnet\n'
+'bash -lc \'for i in $(seq 1 180); do out=$(timeout 3 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665; sleep 0.2; dd bs=1 count=8192 status=none <&3 2>/dev/null" | tr -d "\\r"); if echo "$out" | grep -qi "login:"; then echo READY; exit 0; fi; sleep 1; done; echo TIMEOUT; exit 1\'\n'
+"sh -lc 'if [ -f /tmp/qemu-alpine.pid ]; then kill -9 $(cat /tmp/qemu-alpine.pid) 2>/dev/null || true; rm -f /tmp/qemu-alpine.pid; fi'\n"
+'sh -lc \'pids=$(ss -ltnp 2>/dev/null | awk "/:6665 /{print \\$NF}" | sed -n "s/.*pid=\\([0-9]*\\),.*/\\1/p" | sort -u); [ -n "$pids" ] && kill -9 $pids || true\'\n'
+'mkdir -p /mnt/iso\n'
+"sh -lc 'mountpoint -q /mnt/iso || mount -o loop,ro alpine.iso /mnt/iso'\n"
+'ls -la /mnt/iso/boot || true\n'
+'bash -lc \'K=""; I=""; for base in virt lts; do if [ -f /mnt/iso/boot/vmlinuz-$base ] && [ -f /mnt/iso/boot/initramfs-$base ]; then K=/mnt/iso/boot/vmlinuz-$base; I=/mnt/iso/boot/initramfs-$base; break; fi; done; if [ -z "$K" ]; then K=$(ls /mnt/iso/boot/vmlinuz* 2>/dev/null | head -n1); I=$(ls /mnt/iso/boot/initramfs* 2>/dev/null | head -n1); fi; echo -n "$K" >/tmp/alpine-kernel; echo -n "$I" >/tmp/alpine-initrd; printf "Using kernel: %s\\nUsing initrd: %s\\n" "$K" "$I"\'\n'
+'bash -lc \'K=$(cat /tmp/alpine-kernel); I=$(cat /tmp/alpine-initrd); qemu-system-x86_64 -m 1024 -name alpine-telnet -pidfile /tmp/qemu-alpine.pid -daemonize -display none -serial telnet:127.0.0.1:6665,server,nowait -drive file=alpine-disk.qcow2,if=virtio,format=qcow2 -drive file=alpine.iso,media=cdrom,if=ide,readonly=on -kernel "$K" -initrd "$I" -append "console=ttyS0,115200 modules=loop,squashfs,sd-mod,usb-storage quiet alpine_dev=cdrom:iso9660"\'\n'
+'bash -lc \'for i in $(seq 1 45); do out=$(timeout 2 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665; sleep 0.2; dd bs=1 count=4096 status=none <&3 2>/dev/null" | tr -d "\\r"); if echo "$out" | grep -Eqi "(^| )login:"; then echo READY; exit 0; fi; sleep 1; done; echo WAITING\'\n'
+'bash -lc \'for i in $(seq 1 45); do out=$(timeout 2 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665; sleep 0.2; dd bs=1 count=4096 status=none <&3 2>/dev/null" | tr -d "\\r"); if echo "$out" | grep -Eqi "(^| )login:"; then echo READY; exit 0; fi; sleep 1; done; echo WAITING\'\n'
+'bash -lc \'for i in $(seq 1 45); do out=$(timeout 2 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665; sleep 0.2; dd bs=1 count=4096 status=none <&3 2>/dev/null" | tr -d "\\r"); if echo "$out" | grep -Eqi "(^| )login:"; then echo READY; exit 0; fi; sleep 1; done; echo WAITING\'\n'
+'sh -lc \'pids=$(ss -ltnp 2>/dev/null | awk "/:6665 /{print \\$NF}" | sed -n "s/.*pid=\\([0-9]*\\),.*/\\1/p" | sort -u); [ -n "$pids" ] && kill -9 $pids || true\'\n'
+'qemu-system-x86_64 -m 1024 -name alpine-telnet -pidfile /tmp/qemu-alpine.pid -daemonize -display none -serial telnet:127.0.0.1:6665,server,nowait -drive file=alpine-disk.qcow2,if=virtio,format=qcow2 -cdrom alpine.iso -boot d\n'
+'bash -lc \'for i in $(seq 1 60); do out=$(timeout 3 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \\"\\\\r\\\\n\\" >&3; sleep 0.5; dd bs=1 count=8192 status=none <&3 2>/dev/null | tr -d $\'\\r\\x00\'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; exit 0; fi; sleep 1; done; echo WAITING\'\n'
+'bash -lc \'for i in $(seq 1 60); do out=$(timeout 3 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \\"\\\\r\\\\n\\" >&3; sleep 0.5; dd bs=1 count=8192 status=none <&3 2>/dev/null | tr -d $\'\\r\\x00\'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; exit 0; fi; sleep 1; done; echo WAITING\'\n'
+'bash -lc \'for i in $(seq 1 60); do out=$(timeout 3 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \\"\\\\r\\\\n\\" >&3; sleep 0.5; dd bs=1 count=8192 status=none <&3 2>/dev/null | tr -d $\'\\r\\x00\'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; exit 0; fi; sleep 1; done; echo TIMEOUT; exit 1\'\n'
+'sh -lc \'if [ -f /tmp/qemu-alpine.pid ] && ps -p $(cat /tmp/qemu-alpine.pid) >/dev/null 2>&1; then echo QEMU_RUNNING; else echo QEMU_NOT_RUNNING; fi; ss -ltnp 2>/dev/null | grep -E ":6665\\b" || true\'\n'
+"sh -lc '[ -f /tmp/qemu-alpine.pid ] && ps -p $(cat /tmp/qemu-alpine.pid) >/dev/null 2>&1 || qemu-system-x86_64 -m 1024 -name alpine-telnet -pidfile /tmp/qemu-alpine.pid -daemonize -display none -serial telnet:127.0.0.1:6665,server,nowait -drive file=alpine-disk.qcow2,if=virtio,format=qcow2 -cdrom alpine.iso -boot d'\n"
+'bash -lc \'for i in $(seq 1 60); do out=$(timeout 5 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \\"\\\\r\\\\n\\" >&3; sleep 1; dd bs=1 count=8192 status=none <&3 2>/dev/null | tr -d $\'\\r\\x00\'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; exit 0; fi; sleep 2; done; echo WAITING\'\n'
+'bash -lc \'for i in $(seq 1 60); do out=$(timeout 5 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \\"\\\\r\\\\n\\" >&3; sleep 1; dd bs=1 count=8192 status=none <&3 2>/dev/null | tr -d $\'\\r\\x00\'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; exit 0; fi; sleep 2; done; echo WAITING\'\n'
+'bash -lc \'for i in $(seq 1 60); do out=$(timeout 5 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \\"\\\\r\\\\n\\" >&3; sleep 1; dd bs=1 count=8192 status=none <&3 2>/dev/null | tr -d $\'\\r\\x00\'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; exit 0; fi; sleep 2; done; echo WAITING\'\n'
+'bash -lc \'for i in $(seq 1 60); do out=$(timeout 5 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \\"\\\\r\\\\n\\" >&3; sleep 1; dd bs=1 count=8192 status=none <&3 2>/dev/null | tr -d $\'\\r\\x00\'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; exit 0; fi; sleep 2; done; echo WAITING\'\n'
+'bash -lc \'for i in $(seq 1 60); do out=$(timeout 5 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \\"\\\\r\\\\n\\" >&3; sleep 1; dd bs=1 count=8192 status=none <&3 2>/dev/null | tr -d $\'\\r\\x00\'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; exit 0; fi; sleep 2; done; echo TIMEOUT; exit 1\'\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

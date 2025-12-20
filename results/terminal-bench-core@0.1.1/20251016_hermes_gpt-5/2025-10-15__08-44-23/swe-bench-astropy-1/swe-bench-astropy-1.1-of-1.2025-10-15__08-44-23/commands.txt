@@ -1,0 +1,85 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'git status\n'
+'grep -Rsn "def separability_matrix" -n .\n'
+'grep -Rsn "separability_matrix" astropy | head -n 20\n'
+"python3 - << 'PY'\nimport sys\nimport os\nsys.path.insert(0, os.getcwd())\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+"sed -n '1,200p' astropy/modeling/separable.py\n"
+"sed -n '200,400p' astropy/modeling/separable.py\n"
+"sed -n '400,800p' astropy/modeling/separable.py\n"
+"python3 - << 'PY'\nimport sys, os\nsys.path.insert(0, os.getcwd())\nfrom astropy.modeling import compound\nprint('CompoundModel has attrs:', [a for a in dir(compound.CompoundModel) if 'op' in a or 'operator' in a])\nPY\n"
+'grep -Rsn "class CompoundModel" astropy/modeling\n'
+"sed -n '1,200p' astropy/modeling/compound.py\n"
+"sed -n '200,400p' astropy/modeling/compound.py\n"
+"python3 - << 'PY'\nimport sys, os\nsys.path.insert(0, os.getcwd())\nfrom astropy.modeling import models as m\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm n_inputs, n_outputs:', cm.n_inputs, cm.n_outputs)\npm = m.Pix2Sky_TAN() & cm\nprint('pm n_inputs, n_outputs:', pm.n_inputs, pm.n_outputs)\nprint('type left/right:', type(pm.left), type(pm.right))\nPY\n"
+'printf "%s\\n" "# Patch separability_matrix to handle \'&\' as block-diagonal for nested CompoundModels" > /tmp/patch_note.txt\n'
+"python3 - << 'PY'\nimport sys, os, inspect\nsys.path.insert(0, os.getcwd())\nimport astropy.modeling.separable as sep\nprint(inspect.getsource(sep.separability_matrix))\nPY\n"
+"python3 - << 'PY'\nimport sys, os\nsys.path.insert(0, os.getcwd())\nfrom astropy.modeling import separable as sep\nfrom astropy.modeling import compound\n# Determine internal helpers to combine matrices if present\nprint('separable module attrs:', dir(sep))\nPY\n"
+'python3 - << \'PY\'\n# Apply a patch: for \'&\' CompoundModels, combine child matrices as block-diagonal.\nimport sys, os\nsys.path.insert(0, os.getcwd())\nfrom pathlib import Path\np = Path(\'astropy/modeling/separable.py\')\nsrc = p.read_text()\n# Very basic patch: wrap existing handling of CompoundModel with \'&\'\n# We\'ll add a helper function _block_diag to combine matrices and modify separability_matrix accordingly.\nif \'_block_diag\' not in src:\n    src = src.replace(\'\\nimport numpy as np\\n\', \'\\nimport numpy as np\\n\\n\\ndef _block_diag(a, b):\\n    """Return block-diagonal combination of boolean matrices a and b."""\\n    a = np.asarray(a, dtype=bool)\\n    b = np.asarray(b, dtype=bool)\\n    out = np.zeros((a.shape[0]+b.shape[0], a.shape[1]+b.shape[1]), dtype=bool)\\n    out[:a.shape[0], :a.shape[1]] = a\\n    out[a.shape[0]:, a.shape[1]:] = b\\n    return out\\n\')\n# Now patch separability_matrix: detect CompoundModel with operator \'&\' and combine child matrices.\n# We\'ll try to identify a code pattern where CompoundModels are processed; insert special-case for \'&\'.\nif \'CompoundModel\' in src:\n    # naive insertion: before generic CompoundModel handling, add a branch for \'&\'\n    new_src = src\n    inject = "\\n    # Special-case: parallel composition \'&\' should be block-diagonal combinable even when nested\\n    try:\\n        from .compound import CompoundModel\\n    except Exception:\\n        CompoundModel = None\\n    if CompoundModel is not None and isinstance(model, CompoundModel) and getattr(model, \'op\', None) == \'&\':\\n        left_mat = separability_matrix(model.left)\\n        right_mat = separability_matrix(model.right)\\n        return _block_diag(left_mat, right_mat)\\n"\n    # Insert after function def line\n    new_src = new_src.replace(\'def separability_matrix(model):\\n\', \'def separability_matrix(model):\\n\' + inject)\n    src = new_src\np.write_text(src)\nprint(\'Patch applied to\', p)\nPY\n'
+"python3 - << 'PY'\nimport sys, os\nsys.path.insert(0, os.getcwd())\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+"git diff -- astropy/modeling/separable.py | sed -n '1,200p'\n"
+'pytest -q -k separable -q\n'
+"sed -n '1,140p' astropy/modeling/separable.py\n"
+'python3 - << \'PY\'\nimport sys, os\nsys.path.insert(0, os.getcwd())\nfrom pathlib import Path\np = Path(\'astropy/modeling/separable.py\')\nsrc = p.read_text()\n# Insert a special-case early return for \'&\' CompoundModel using the correct function signature\ninject = "\\n    # Special-case: parallel composition \'&\' combines child separability as block-diagonal, even when nested\\n    if isinstance(transform, CompoundModel) and getattr(transform, \'op\', None) == \'&\':\\n        left_mat = separability_matrix(transform.left)\\n        right_mat = separability_matrix(transform.right)\\n        return _block_diag(left_mat, right_mat)\\n"\nif \'def separability_matrix(transform):\\n\' in src and inject not in src:\n    src = src.replace(\'def separability_matrix(transform):\\n\', \'def separability_matrix(transform):\\n\' + inject)\n    p.write_text(src)\n    print(\'Patched separability_matrix with & handling\')\nelse:\n    print(\'Patch already present or signature not found\')\nPY\n'
+"git diff -- astropy/modeling/separable.py | sed -n '1,160p'\n"
+'python3 -m pip install -q packaging pytest\n'
+'python3 -c "import numpy as np; print(\'numpy\', np.__version__)"\n'
+"python3 - << 'PY'\nimport sys, os\nsys.path.insert(0, os.getcwd())\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'pytest -q -k separable\n'
+'python3 -m pip install -q numpy pyerfa packaging pytest hypothesis\n'
+"python3 - << 'PY'\nimport sys, os\nsys.path.insert(0, os.getcwd())\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'python3 setup.py build_ext --inplace\n'
+"python3 - << 'PY'\nimport sys, os\nsys.path.insert(0, os.getcwd())\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'python3 -m pip install -q -e .\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'pytest -q -k separable\n'
+'python3 -m pip install -q --upgrade pip\n'
+'python3 -m pip install -q "setuptools<58" wheel extension-helpers cython numpy pyerfa\n'
+'python3 -m pip install .\n'
+'cd /tmp\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+"python3 - << 'PY'\nimport importlib, setuptools\nprint('setuptools version:', setuptools.__version__)\ntry:\n    import importlib\n    importlib.import_module('setuptools.dep_util')\n    print('setuptools.dep_util available')\nexcept Exception as e:\n    print('setuptools.dep_util missing:', e)\nPY\n"
+'python3 setup.py build_ext --inplace\n'
+'python3 -m pip install --no-build-isolation -e .\n'
+'cd /tmp\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'apt-get update\n'
+'apt-get install -y build-essential python3-dev\n'
+'cd /app/astropy\n'
+'python3 setup.py build_ext --inplace\n'
+"python3 - << 'PY'\nimport sys, os\nsys.path.insert(0, os.getcwd())\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'python3 -m pip install --no-build-isolation .\n'
+'cd /tmp\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'cd /app/astropy\n'
+'python3 setup.py build_ext --inplace\n'
+"python3 - << 'PY'\nimport sys, os\nsys.path.insert(0, os.getcwd())\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'python3 -m pip install --no-build-isolation .\n'
+'cd /tmp\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'cd /app/astropy\n'
+'python3 -m pip list | grep -i astropy\n'
+'python3 -m pip install --no-build-isolation .\n'
+'cd /tmp\n'
+"python3 - << 'PY'\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'cd /app/astropy\n'
+'python3 setup.py build_ext --inplace\n'
+"python3 - << 'PY'\nimport sys, os\nsys.path.insert(0, os.getcwd())\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'cd /app/astropy\n'
+'python3 -m pip install -q "numpy==1.26.4"\n'
+'find astropy -name "*.so" -type f -delete\n'
+'rm -rf build\n'
+'python3 setup.py build_ext --inplace\n'
+"python3 - << 'PY'\nimport sys, os\nsys.path.insert(0, os.getcwd())\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+''
+'cd /app/astropy\n'
+"python3 - << 'PY'\nimport sys, os\nsys.path.insert(0, os.getcwd())\nfrom astropy.modeling import models as m\nfrom astropy.modeling.separable import separability_matrix\ncm = m.Linear1D(10) & m.Linear1D(5)\nprint('cm:', separability_matrix(cm))\nprint('flat:', separability_matrix(m.Pix2Sky_TAN() & m.Linear1D(10) & m.Linear1D(5)))\nprint('nested:', separability_matrix(m.Pix2Sky_TAN() & cm))\nPY\n"
+'git status\n'
+'git add astropy/modeling/separable.py\n'
+'git commit -m "modeling: Fix separability_matrix for nested \'&\' CompoundModels by combining child matrices block-diagonally"\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

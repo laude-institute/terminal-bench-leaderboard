@@ -1,0 +1,165 @@
+root@af59401f4ab0:/app# ls -la
+total 96
+drwxr-xr-x 1 root root  4096 Oct  8 15:44 .
+drwxr-xr-x 1 root root  4096 Oct 15 07:39 ..
+-rw-rw-r-- 1 root root 88805 Oct  8 15:44 graphene.dat
+root@af59401f4ab0:/app# head -n 30 graphene.dat
+47183,554644    19261,547207
+46588,360019    19266,089699
+46008,191298    19077,996963
+45442,488736    19173,287322
+44890,718036    19501,518253
+44352,368927    19506,586203
+43826,959593    19752,431144
+43314,029137    19812,863021
+42813,138290    19678,348151
+42323,866373    19764,871128
+41845,813826    19360,099292
+41378,600916    19413,554878
+40921,863181    19626,191780
+40475,250679    19704,066336
+40038,430487    19495,727898
+39611,084116    19672,573559
+39192,908278    19538,763458
+38783,609488    19344,943112
+38382,908122    19510,307527
+37990,536178    19552,152695
+37606,236678    19568,884582
+37229,764497    19605,714542
+36860,880256    19652,302102
+36499,358232    19518,303269
+36144,980263    19684,212843
+35797,536721    19599,237174
+35456,826102    19666,264313
+35122,653398    19895,771042
+34794,833482    19781,231391
+34473,186962    19931,483503
+root@af59401f4ab0:/app# python3 -m ensurepip --upgrade
+Looking in links: /tmp/tmps90x_22v
+Requirement already satisfied: pip in /usr/local/lib/python3.13/site-packages (24.3.1)
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your syst
+em unusable.It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you ar
+e doing and want to suppress this warning.
+root@af59401f4ab0:/app# python3 -m pip install --no-cache-dir numpy scipy
+Collecting numpy
+  Downloading numpy-2.3.3-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
+Collecting scipy
+  Downloading scipy-1.16.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (62 kB)
+Downloading numpy-2.3.3-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.6/16.6 MB 5.6 MB/s eta 0:00:00
+Downloading scipy-1.16.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (35.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.7/35.7 MB 10.1 MB/s eta 0:00:00
+Installing collected packages: numpy, scipy
+Successfully installed numpy-2.3.3 scipy-1.16.2
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your syst
+em unusable.It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you ar
+e doing and want to suppress this warning.
+
+[notice] A new release of pip is available: 24.3.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+root@af59401f4ab0:/app# cat > raman_fit.py << 'PY'
+> #!/usr/bin/env python3
+> import re
+> import json
+> import os
+> import numpy as np
+> from scipy.optimize import curve_fit
+>
+> def parse_data(path):
+>     xs = []
+>     ys = []
+>     with open(path, 'r', errors='ignore') as f:
+>         for line in f:
+>             s = line.strip()
+>             if not s:
+>                 continue
+>             # Normalize separators
+>             s_clean = s.replace(';', ' ').replace('\t', ' ').replace(',', ' ')
+>             tokens = re.findall(r'[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?', s_clean)
+>             if len(tokens) >= 2:
+>                 try:
+>                     x = float(tokens[0])
+>                     y = float(tokens[1])
+>                     xs.append(x)
+>                     ys.append(y)
+>                 except ValueError:
+>                     continue
+>     x = np.array(xs, dtype=float)
+>     y = np.array(ys, dtype=float)
+>     if x.size > 0:
+>         idx = np.argsort(x)
+>         x = x[idx]
+>         y = y[idx]
+>     return x, y
+>
+> def lorentzian(x, x0, gamma, amplitude, offset):
+>     return offset + amplitude * (0.5 * gamma) ** 2 / (((x - x0) ** 2) + (0.5 * gamma) ** 2)
+>
+> def fit_peak(x, y, center, window):
+>     mask = (x >= center - window) & (x <= center + window)
+>     xw = x[mask]
+>     yw = y[mask]
+>     if xw.size < 5:
+>         xw = x
+>         yw = y
+>     offset0 = float(np.median(yw))
+>     amp0 = float(max(1e-6, yw.max() - offset0))
+>     gamma0 = 20.0 if center < 2000 else 40.0
+>     x0_0 = float(xw[np.argmax(yw)])
+>     p0 = [x0_0, gamma0, amp0, offset0]
+>     lower = [center - window, 1e-6, 0.0, min(yw.min(), offset0 - abs(amp0))]
+>     upper = [center + window, 500.0, max(abs(yw.max() - offset0) * 10.0, 1e6), max(yw.max(), offset0 + abs(amp0))]
+>     try:
+>         popt, _ = curve_fit(lorentzian, xw, yw, p0=p0, bounds=(lower, upper), maxfev=20000)
+>     except Exception:
+>         try:
+>             popt, _ = curve_fit(lorentzian, xw, yw, p0=p0, maxfev=20000)
+>         except Exception:
+>             popt = p0
+>     popt[1] = abs(popt[1])
+>     return {
+>         "x0": float(popt[0]),
+>         "gamma": float(popt[1]),
+>         "amplitude": float(popt[2]),
+>         "offset": float(popt[3])
+>     }
+>
+> def main():
+>     candidates = ["graphene.dat", "data/graphene.dat", "/app/graphene.dat"]
+>     path = None
+>     for p in candidates:
+>         if os.path.exists(p):
+>             path = p
+>             break
+>     if path is None:
+>         raise FileNotFoundError("graphene.dat not found")
+>     x, y = parse_data(path)
+>     if x.size == 0 or y.size == 0:
+>         raise ValueError("No numeric data parsed from graphene.dat")
+>     results = {}
+>     results["G"] = fit_peak(x, y, center=1580.0, window=150.0)
+>     results["2D"] = fit_peak(x, y, center=2700.0, window=200.0)
+>     with open("results.json", "w") as f:
+>         json.dump(results, f, indent=2)
+>     print("Wrote results.json")
+>
+> if __name__ == "__main__":
+>     main()
+> PY
+root@af59401f4ab0:/app# python3 raman_fit.py
+Wrote results.json
+root@af59401f4ab0:/app# cat results.json
+{
+  "G": {
+    "x0": 1667.8828480985094,
+    "gamma": 6.387672225559926,
+    "amplitude": 54185.70885091004,
+    "offset": 483084.17459223577
+  },
+  "2D": {
+    "x0": 2839.972978521821,
+    "gamma": 1.6758193653568576,
+    "amplitude": 162789.18269453515,
+    "offset": 524347.9968718088
+  }
+}root@af59401f4ab0:/app#

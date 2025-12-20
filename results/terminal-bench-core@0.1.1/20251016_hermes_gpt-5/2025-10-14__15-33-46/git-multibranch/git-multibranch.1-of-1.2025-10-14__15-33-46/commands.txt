@@ -1,0 +1,39 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'apt-get update -y\n'
+'DEBIAN_FRONTEND=noninteractive apt-get install -y openssh-server git nginx openssl curl\n'
+'mkdir -p /var/run/sshd\n'
+'useradd -m -s /bin/bash git || true\n'
+"printf 'git:password\n' | chpasswd\n"
+'mkdir -p /git && chown -R git:git /git\n'
+"sed -i 's/^#\\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config\n"
+"sed -i 's/^#\\?PermitRootLogin .*/PermitRootLogin no/' /etc/ssh/sshd_config\n"
+"sed -i 's/^#\\?ChallengeResponseAuthentication .*/ChallengeResponseAuthentication no/' /etc/ssh/sshd_config\n"
+'service ssh restart\n'
+'sudo -u git git init --bare /git/project\n'
+'printf \'#!/bin/bash\nset -euo pipefail\nREPO_DIR="/git/project"\n\ndeploy_branch() {\n  branch="$1"\n  dest="$2"\n  mkdir -p "$dest"\n  find "$dest" -mindepth 1 -maxdepth 1 -exec rm -rf {} +\n  git --git-dir="$REPO_DIR" archive "$branch" | tar -x -C "$dest"\n}\n\nwhile read -r oldrev newrev refname; do\n  case "$refname" in\n    refs/heads/main)\n      deploy_branch "main" "/var/www/html"\n      ;;\n    refs/heads/dev)\n      deploy_branch "dev" "/var/www/html/dev"\n      ;;\n  esac\ndone\n\' > /git/project/hooks/post-receive\n'
+'chown git:git /git/project/hooks/post-receive && chmod +x /git/project/hooks/post-receive\n'
+'mkdir -p /var/www/html/dev && chown -R git:git /var/www/html\n'
+'openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/ssl/private/selfsigned.key -out /etc/ssl/certs/selfsigned.crt -subj "/CN=localhost" -days 365\n'
+"printf 'server {\n    listen 8443 ssl;\n    server_name localhost;\n    ssl_certificate /etc/ssl/certs/selfsigned.crt;\n    ssl_certificate_key /etc/ssl/private/selfsigned.key;\n\n    root /var/www/html;\n    index index.html;\n\n    location / {\n        try_files $uri $uri/ =404;\n    }\n}\n' > /etc/nginx/sites-available/default\n"
+'nginx -t\n'
+'service nginx restart\n'
+'su - git -c \'mkdir -p ~/work && cd ~/work && git init && printf "<html><body>Main branch</body></html>\\n" > index.html && git add index.html && git commit -m "init main" && git branch -M main && git remote add origin /git/project && git push -u origin main\'\n'
+'su - git -c \'cd ~/work && git checkout -b dev && printf "<html><body>Dev branch</body></html>\\n" > index.html && git add index.html && git commit -m "init dev" && git push -u origin dev\'\n'
+'curl -k https://localhost:8443/index.html\n'
+'curl -k https://localhost:8443/dev/index.html\n'
+'git init --bare /git/project\n'
+'chown -R git:git /git/project\n'
+'printf \'#!/bin/bash\nset -euo pipefail\nREPO_DIR="/git/project"\n\ndeploy_branch() {\n  branch="$1"\n  dest="$2"\n  mkdir -p "$dest"\n  find "$dest" -mindepth 1 -maxdepth 1 -exec rm -rf {} +\n  git --git-dir="$REPO_DIR" archive "$branch" | tar -x -C "$dest"\n}\n\nwhile read -r oldrev newrev refname; do\n  case "$refname" in\n    refs/heads/main)\n      deploy_branch "main" "/var/www/html"\n      ;;\n    refs/heads/dev)\n      deploy_branch "dev" "/var/www/html/dev"\n      ;;\n  esac\ndone\n\' > /git/project/hooks/post-receive\n'
+'chown git:git /git/project/hooks/post-receive && chmod +x /git/project/hooks/post-receive\n'
+'apt-get install -y sshpass\n'
+'su - git -c \'git config --global user.email "git@localhost" && git config --global user.name "Git User"\'\n'
+'su - git -c \'mkdir -p ~/work && cd ~/work && git init && printf "<html><body>Main branch</body></html>\\n" > index.html && git add index.html && git commit -m "init main" && git branch -M main && git remote add origin git@localhost:/git/project && GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no" sshpass -p password git push -u origin main\'\n'
+'su - git -c \'cd ~/work && git checkout -b dev && printf "<html><body>Dev branch</body></html>\\n" > index.html && git add index.html && git commit -m "init dev" && GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no" sshpass -p password git push -u origin dev\'\n'
+'curl -k https://localhost:8443/index.html\n'
+'curl -k https://localhost:8443/dev/index.html\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

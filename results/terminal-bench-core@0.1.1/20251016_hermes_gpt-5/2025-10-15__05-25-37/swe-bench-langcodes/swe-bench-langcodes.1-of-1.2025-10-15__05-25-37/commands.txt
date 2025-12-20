@@ -1,0 +1,25 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'grep -n "class Language" -n langcodes/__init__.py\n'
+'grep -n "def __hash__" langcodes/__init__.py\n'
+"sed -n '1,2200p' langcodes/__init__.py | sed -n '1450,1550p'\n"
+"python3 - << 'PY'\nfrom langcodes import Language\nprint('id same:', id(Language.get('en')) == id(Language.get('en')))\nprint('hash same:', hash(Language.get('en')) == hash(Language.get('en')))\nimport pickle, tempfile, os\nfd, path = tempfile.mkstemp()\nos.close(fd)\nwith open(path, 'wb') as f:\n    pickle.dump(Language.get('en'), f)\nwith open(path, 'rb') as f:\n    obj = pickle.load(f)\nprint('id equal after pickle:', id(obj) == id(Language.get('en')))\nprint('hash equal after pickle:', hash(obj) == hash(Language.get('en')))\nos.unlink(path)\nPY\n"
+'applypatch() {\n  python3 - << \'PY\'\nimport re\nfrom pathlib import Path\np = Path(\'langcodes/__init__.py\')\ns = p.read_text()\n# Find the __hash__ method and replace its body with return hash(self._str_tag)\npattern = r"(\\n\\s*def __hash__\\(self\\)\\s*->?\\s*int\\s*:\\n)([\\s\\S]*?)(\\n\\s*def )"\nif re.search(pattern, s):\n    s2 = re.sub(pattern, lambda m: f"{m.group(1)}        return hash(self._str_tag)\\n\\n{m.group(3)}", s)\n    if s2 != s:\n        p.write_text(s2)\n        print(\'Patched __hash__ to use self._str_tag\')\n    else:\n        print(\'No change made (replacement produced identical content)\')\nelse:\n    # Fallback: replace a single-line implementation if present\n    s2 = re.sub(r"def __hash__\\(self\\)[^\\n]*\\n[ \\t]*return[^\n]*\\n", "def __hash__(self) -> int:\\n        return hash(self._str_tag)\\n", s)\n    if s2 != s:\n        p.write_text(s2)\n        print(\'Patched __hash__ via fallback\')\n    else:\n        print(\'Could not locate __hash__ method to patch\')\nPY\n}\napplypatch\n'
+'git status\n'
+'git diff -- langcodes/__init__.py\n'
+"python3 - << 'PY'\nfrom langcodes import Language\nprint('After patch:')\nprint('id same:', id(Language.get('en')) == id(Language.get('en')))\nprint('hash same:', hash(Language.get('en')) == hash(Language.get('en')))\nimport pickle, tempfile, os\nfd, path = tempfile.mkstemp()\nos.close(fd)\nwith open(path, 'wb') as f:\n    pickle.dump(Language.get('en'), f)\nwith open(path, 'rb') as f:\n    obj = pickle.load(f)\nprint('id equal after pickle:', id(obj) == id(Language.get('en')))\nprint('hash equal after pickle:', hash(obj) == hash(Language.get('en')))\nos.unlink(path)\nPY\n"
+'pytest -q\n'
+'grep -n "return hash(id(self))" langcodes/__init__.py\n'
+"sed -i 's/return hash(id(self))/return hash(self._str_tag)/' langcodes/__init__.py\n"
+'git diff -- langcodes/__init__.py\n'
+"python3 - << 'PY'\nfrom langcodes import Language\nprint('id same:', id(Language.get('en')) == id(Language.get('en')))\nprint('hash same:', hash(Language.get('en')) == hash(Language.get('en')))\nimport pickle, tempfile, os\nfd, path = tempfile.mkstemp()\nos.close(fd)\nwith open(path, 'wb') as f:\n    pickle.dump(Language.get('en'), f)\nwith open(path, 'rb') as f:\n    obj = pickle.load(f)\nprint('id equal after pickle:', id(obj) == id(Language.get('en')))\nprint('hash equal after pickle:', hash(obj) == hash(Language.get('en')))\nos.unlink(path)\nPY\n"
+'git add langcodes/__init__.py && git commit -m "Fix Language.__hash__ to hash by _str_tag for consistency with __eq__ and across pickling"\n'
+'git config user.name "Repo Bot"\n'
+'git config user.email "repo-bot@example.com"\n'
+'git add langcodes/__init__.py && git commit -m "Fix Language.__hash__ to hash by _str_tag for consistency with __eq__ and across pickling"\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

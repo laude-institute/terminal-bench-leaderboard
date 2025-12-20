@@ -1,0 +1,18 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+"sed -n '1,5p' daily_temp_sf_high.csv\n"
+"sed -n '1,5p' daily_temp_sf_low.csv\n"
+'awk -F\',\' \'FNR==1{# detect header: if any non-numeric in entire line, mark header for this file\n  header=0;\n  for(i=1;i<=NF;i++){ if($i!~/^-?[0-9]+(\\.[0-9]+)?$/){ header=1; break } }\n}\n{\n  # Extract temperature field: if multiple fields, assume temperature is the last numeric field\n  temp="";\n  for(i=NF;i>=1;i--){ if($i~/^-?[0-9]+(\\.[0-9]+)?$/){ temp=$i; break } }\n  if(FNR==1 && header==1){ next } # skip header line for each file\n  if(temp!=""){ print temp } }\n\' daily_temp_sf_high.csv > .high_vals.tmp\n'
+'awk -F\',\' \'FNR==1{ header=0; for(i=1;i<=NF;i++){ if($i!~/^-?[0-9]+(\\.[0-9]+)?$/){ header=1; break } } }\n{\n  temp="";\n  for(i=NF;i>=1;i--){ if($i~/^-?[0-9]+(\\.[0-9]+)?$/){ temp=$i; break } }\n  if(FNR==1 && header==1){ next }\n  if(temp!=""){ print temp } }\n\' daily_temp_sf_low.csv > .low_vals.tmp\n'
+'paste .high_vals.tmp .low_vals.tmp | awk \'{sum+=($1-$2); n++} END{ if(n>0){ printf("%0.6f\\n", sum/n) } }\' > avg_temp.txt\n'
+'cat avg_temp.txt\n'
+'awk -F\',\' \'NR>1{print $1","$2}\' daily_temp_sf_high.csv > .high_map.csv\n'
+'awk -F\',\' \'NR>1{ d=$1; split(d,p,/[ ]/); d=p[1]; gsub("/","-", d); split(d,a,"-"); if (length(a[1])==4) nd=d; else nd=sprintf("%04d-%02d-%02d", a[3], a[1], a[2]); print nd","$2 }\' daily_temp_sf_low.csv > .low_map.csv\n'
+'awk -F\',\' \'FNR==NR{h[$1]=$2; next} {l[$1]=$2} END{n=0; s=0; for (d in h) if (d in l) {s+=h[d]-l[d]; n++} if (n>0) printf("%0.6f\\n", s/n)}\' .high_map.csv .low_map.csv > avg_temp.txt\n'
+'cat avg_temp.txt\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

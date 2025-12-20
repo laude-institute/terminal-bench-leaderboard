@@ -1,0 +1,69 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'apt-get update\n'
+'apt-get install -y git openssh-server openssh-client nginx ca-certificates openssl\n'
+'printf "\\n127.0.0.1 server\\n" >> /etc/hosts\n'
+'mkdir -p /var/run/sshd && ssh-keygen -A\n'
+'/usr/sbin/sshd\n'
+'useradd -m -s /bin/bash user\n'
+'mkdir -p /home/user/.ssh && chmod 700 /home/user/.ssh && chown -R user:user /home/user/.ssh\n'
+'su - user -c \'ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa\'\n'
+"su - user -c 'cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'\n"
+'ssh-keyscan -H server >> /home/user/.ssh/known_hosts && chown user:user /home/user/.ssh/known_hosts && chmod 644 /home/user/.ssh/known_hosts\n'
+'mkdir -p /git && git init --bare /git/server\n'
+'chown -R user:user /git/server\n'
+'mkdir -p /var/www/web && chown -R user:user /var/www/web && chmod 755 /var/www/web\n'
+'printf \'#!/bin/sh\\nset -e\\nwhile read oldrev newrev ref; do\\n    if [ "$ref" = "refs/heads/webserver" ]; then\\n        GIT_DIR="/git/server"\\n        WORK_TREE="/var/www/web"\\n        /usr/bin/git --git-dir="$GIT_DIR" --work-tree="$WORK_TREE" clean -fdx\\n        /usr/bin/git --git-dir="$GIT_DIR" --work-tree="$WORK_TREE" checkout -f webserver --\\n    fi\\ndone\\n\' > /git/server/hooks/post-receive && chmod +x /git/server/hooks/post-receive && chown user:user /git/server/hooks/post-receive\n'
+'mkdir -p /etc/ssl/local\n'
+'openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/ssl/local/rootCA.key -days 3650 -out /etc/ssl/local/rootCA.crt -subj "/C=US/ST=NA/L=Local/O=Dev/OU=Dev/CN=Local Dev Root CA"\n'
+'cp /etc/ssl/local/rootCA.crt /usr/local/share/ca-certificates/rootCA.crt && update-ca-certificates\n'
+'openssl genrsa -out /etc/ssl/local/server.key 2048\n'
+'openssl req -new -key /etc/ssl/local/server.key -out /etc/ssl/local/server.csr -subj "/C=US/ST=NA/L=Local/O=Dev/OU=Dev/CN=server"\n'
+"printf 'subjectAltName=DNS:server,IP:127.0.0.1\\n' > /etc/ssl/local/san.cnf\n"
+'openssl x509 -req -in /etc/ssl/local/server.csr -CA /etc/ssl/local/rootCA.crt -CAkey /etc/ssl/local/rootCA.key -CAcreateserial -out /etc/ssl/local/server.crt -days 825 -sha256 -extfile /etc/ssl/local/san.cnf\n'
+'chmod 600 /etc/ssl/local/server.key\n'
+"printf 'server {\\n    listen 8080 ssl;\\n    server_name server;\\n    ssl_certificate /etc/ssl/local/server.crt;\\n    ssl_certificate_key /etc/ssl/local/server.key;\\n    root /var/www/web;\\n    index index.html;\\n    location / {\\n        try_files $uri =404;\\n    }\\n}\\n' > /etc/nginx/sites-available/default\n"
+'nginx\n'
+'su - user -c \'git clone user@server:/git/server ~/repo && cd ~/repo && git config user.email user@example.com && git config user.name user && printf "hello world\\n" > hello.html && git add hello.html && git commit -m "add hello" && git branch -M webserver && git push origin webserver\'\n'
+'curl -sS https://server:8080/hello.html\n'
+'nginx -t\n'
+'pgrep -a nginx || true\n'
+'ss -tlnp | grep 8080 || true\n'
+'pgrep -a sshd || true\n'
+"ss -tlnp | grep ':22' || true\n"
+'/usr/sbin/sshd || true\n'
+'nginx -s reload || nginx\n'
+"su - user -c 'ssh-keyscan -H server >> ~/.ssh/known_hosts'\n"
+'su - user -c \'rm -rf ~/repo && git clone user@server:/git/server ~/repo && cd ~/repo && git config user.email user@example.com && git config user.name user && printf "hello world\\n" > hello.html && git add hello.html && git commit -m "add hello" && git branch -M webserver && git push origin webserver\'\n'
+"ls -l /var/www/web && printf '---- file content ----\\n' && cat /var/www/web/hello.html || true\n"
+'curl -sS https://server:8080/hello.html\n'
+'apt-get install -y curl\n'
+'printf "\\n127.0.0.1 server\\n" >> /etc/hosts\n'
+'useradd -m -s /bin/bash user\n'
+'mkdir -p /home/user/.ssh && chmod 700 /home/user/.ssh && chown -R user:user /home/user/.ssh\n'
+'su - user -c \'ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519\'\n'
+"su - user -c 'cat ~/.ssh/id_ed25519.pub >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'\n"
+'mkdir -p /git && git init --bare /git/server\n'
+'chown -R user:user /git/server\n'
+'mkdir -p /var/www/web && chown -R user:user /var/www/web && chmod 755 /var/www/web\n'
+'printf \'#!/bin/sh\\nset -e\\nwhile read oldrev newrev ref; do\\n    if [ "$ref" = "refs/heads/webserver" ]; then\\n        GIT_DIR="/git/server"\\n        WORK_TREE="/var/www/web"\\n        /usr/bin/git --git-dir="$GIT_DIR" --work-tree="$WORK_TREE" clean -fdx\\n        /usr/bin/git --git-dir="$GIT_DIR" --work-tree="$WORK_TREE" checkout -f webserver --\\n    fi\\ndone\\n\' > /git/server/hooks/post-receive && chmod +x /git/server/hooks/post-receive && chown user:user /git/server/hooks/post-receive\n'
+'mkdir -p /etc/ssl/local\n'
+'openssl req -x509 -nodes -newkey rsa:2048 -keyout /etc/ssl/local/rootCA.key -days 3650 -out /etc/ssl/local/rootCA.crt -subj "/C=US/ST=NA/L=Local/O=Dev/OU=Dev/CN=Local Dev Root CA"\n'
+'cp /etc/ssl/local/rootCA.crt /usr/local/share/ca-certificates/rootCA.crt && update-ca-certificates\n'
+'openssl genrsa -out /etc/ssl/local/server.key 2048\n'
+'openssl req -new -key /etc/ssl/local/server.key -out /etc/ssl/local/server.csr -subj "/C=US/ST=NA/L=Local/O=Dev/OU=Dev/CN=server"\n'
+"printf 'subjectAltName=DNS:server,IP:127.0.0.1\\n' > /etc/ssl/local/san.cnf\n"
+'openssl x509 -req -in /etc/ssl/local/server.csr -CA /etc/ssl/local/rootCA.crt -CAkey /etc/ssl/local/rootCA.key -CAcreateserial -out /etc/ssl/local/server.crt -days 825 -sha256 -extfile /etc/ssl/local/san.cnf\n'
+'chmod 600 /etc/ssl/local/server.key\n'
+"printf 'server {\\n    listen 8080 ssl;\\n    server_name server;\\n    ssl_certificate /etc/ssl/local/server.crt;\\n    ssl_certificate_key /etc/ssl/local/server.key;\\n    root /var/www/web;\\n    index index.html;\\n    location / {\\n        try_files $uri =404;\\n    }\\n}\\n' > /etc/nginx/sites-available/default\n"
+'mkdir -p /run/sshd && /usr/sbin/sshd\n'
+'nginx\n'
+"su - user -c 'ssh-keyscan -H server >> ~/.ssh/known_hosts'\n"
+'su - user -c \'rm -rf ~/repo && git clone user@server:/git/server ~/repo && cd ~/repo && git config user.email user@example.com && git config user.name user && printf "hello world\\n" > hello.html && git add hello.html && git commit -m "add hello" && git branch -M webserver && git push origin webserver\'\n'
+"ls -l /var/www/web && printf '---- file content ----\\n' && cat /var/www/web/hello.html\n"
+'curl -sS https://server:8080/hello.html\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

@@ -1,0 +1,598 @@
+[?2004hroot@ed357b46a55a:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@ed357b46a55a:/app# clear
+[?2004l[H[J[3J[?2004hroot@ed357b46a55a:/app# ls -la
+[?2004ltotal 96
+drwxr-xr-x 1 root root  4096 Oct  8 15:44 .
+drwxr-xr-x 1 root root  4096 Oct 15 10:40 ..
+-rw-rw-r-- 1 root root 88805 Oct  8 15:44 graphene.dat
+[?2004hroot@ed357b46a55a:/app# find . -maxdepth 2 -type f -iregex '.*\.(txt|csv|dat)$' -printf '%p\n' 2>/dev/null | sed 's#^\./##'
+[?2004l[?2004hroot@ed357b46a55a:/app# head -n 20 *.txt 2>/dev/null || true
+[?2004l[?2004hroot@ed357b46a55a:/app# head -n 20 *.csv 2>/dev/null || true
+[?2004l[?2004hroot@ed357b46a55a:/app# head -n 20 *.dat 2>/dev/null || true
+[?2004l47183,554644	19261,547207
+46588,360019	19266,089699
+46008,191298	19077,996963
+45442,488736	19173,287322
+44890,718036	19501,518253
+44352,368927	19506,586203
+43826,959593	19752,431144
+43314,029137	19812,863021
+42813,138290	19678,348151
+42323,866373	19764,871128
+41845,813826	19360,099292
+41378,600916	19413,554878
+40921,863181	19626,191780
+40475,250679	19704,066336
+40038,430487	19495,727898
+39611,084116	19672,573559
+39192,908278	19538,763458
+38783,609488	19344,943112
+38382,908122	19510,307527
+37990,536178	19552,152695
+[?2004hroot@ed357b46a55a:/app# python3 - << 'PY'
+[?2004l[?2004h> import os, sys, json, re
+[?2004l= sse + penalty
+            if score < bes[?2004h> import numpy as np
+[?2004l[?2004h> 
+[?2004l[?2004h> def detect_file():
+[?2004l[?2004h>     candidates = []
+[?2004l[?2004h>     for root, dirs, files in os.walk('.'):
+[?2004l[?2004h>         # only consider shallow level to avoid noise
+[?2004l[?2004h>         depth = root.count(os.sep) - os.getcwd().count(os.sep)
+[?2004l[?2004h>         if depth > 1:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         for f in files:
+[?2004l[?2004h>             if re.search(r'\.(txt|csv|dat)$', f, re.I):
+[?2004l[?2004h>                 candidates.append(os.path.join(root, f))
+[?2004l[?2004h>     # Prefer files in current dir
+[?2004l[?2004h>     candidates.sort(key=lambda p: (0 if os.path.dirname(p) in ('.','') else 1, len(p)))
+[?2004l[?2004h>     return candidates[0] if candidates else None
+[?2004l[?2004h> 
+[?2004l[?2004h> fn = detect_file()
+[?2004l[?2004h> if not fn:
+[?2004l[?2004h>     print('No data file found', file=sys.stderr)
+[?2004l[?2004h>     sys.exit(1)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Try to load flexibly
+[?2004l[?2004h> raw = None
+[?2004l[?2004h> # Try loadtxt without specifying delimiter, skipping lines with non-numeric
+[?2004l[?2004h> def try_load(path):
+[?2004l[?2004h>     # Read lines, filter comment-like
+[?2004l[?2004h>     with open(path, 'r', errors='ignore') as fh:
+[?2004l[?2004h>         lines = fh.readlines()
+[?2004l[?2004h>     data_lines = []
+[?2004l[?2004h>     for ln in lines:
+[?2004l[?2004h>         s = ln.strip()
+[?2004l[?2004h>         if not s:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if s.startswith('#'):
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         # keep lines with at least two numbers
+[?2004l[?2004h>         toks = re.split(r'[\s,;]+', s)
+[?2004l[?2004h>         num_cnt = 0
+[?2004l[?2004h>         for t in toks:
+[?2004l[?2004h>             try:
+[?2004l[?2004h>                 float(t)
+[?2004l[?2004h>                 num_cnt += 1
+[?2004l[?2004h>             except Exception:
+[?2004l[?2004h>                 pass
+[?2004l[?2004h>         if num_cnt >= 2:
+[?2004l[?2004h>             data_lines.append(s)
+[?2004l[?2004h>     if not data_lines:
+[?2004l[?2004h>         return None
+[?2004l[?2004h>     # split numeric columns
+[?2004l[?2004h>     cols = []
+[?2004l[?2004h>     xs, ys = [], []
+[?2004l[?2004h>     for s in data_lines:
+[?2004l[?2004h>         toks = re.split(r'[\s,;]+', s)
+[?2004l[?2004h>         nums = []
+[?2004l[?2004h>         for t in toks:
+[?2004l[?2004h>             try:
+[?2004l[?2004h>                 nums.append(float(t))
+[?2004l[?2004h>             except Exception:
+[?2004l[?2004h>                 pass
+[?2004l[?2004h>         if len(nums) >= 2:
+[?2004l[?2004h>             xs.append(nums[0])
+[?2004l[?2004h>             ys.append(nums[1])
+[?2004l[?2004h>     if not xs:
+[?2004l[?2004h>         return None
+[?2004l[?2004h>     arr = np.column_stack([xs, ys])
+[?2004l[?2004h>     return arr
+[?2004l[?2004h> 
+[?2004l[?2004h> raw = try_load(fn)
+[?2004l[?2004h> if raw is None or raw.shape[0] < 10:
+[?2004l[?2004h>     print('Failed to parse data from', fn, file=sys.stderr)
+[?2004l[?2004h>     sys.exit(1)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Sort by x
+[?2004l[?2004h> raw = raw[np.argsort(raw[:,0])]
+[?2004l[?2004h> x_all = raw[:,0].astype(float)
+[?2004l[?2004h> y_all = raw[:,1].astype(float)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Define Lorentzian basis f (height-normalized form)
+[?2004l[?2004h> def lorentz_basis(x, x0, gamma):
+[?2004l[?2004h>     return 1.0 / (1.0 + ((x - x0)/gamma)**2)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Solve amplitude and offset by linear least squares for fixed x0, gamma
+[?2004l[?2004h> def solve_ampl_offset(x, y, x0, gamma):
+[?2004l[?2004h>     f = lorentz_basis(x, x0, gamma)
+[?2004l[?2004h>     A = np.column_stack([f, np.ones_like(f)])
+[?2004l[?2004h>     # least squares
+[?2004l[?2004h>     coeff, *_ = np.linalg.lstsq(A, y, rcond=None)
+[?2004l[?2004h>     amplitude, offset = coeff[0], coeff[1]
+[?2004l[?2004h>     y_fit = amplitude * f + offset
+[?2004l[?2004h>     sse = float(np.sum((y - y_fit)**2))
+[?2004l[?2004h>     return amplitude, offset, sse
+[?2004l[?2004h> 
+[?2004l[?2004h> # Generic grid-search with refinement
+[?2004l[?2004h> def fit_region(x, y, x0_range, gamma_range, coarse_steps=(200, 100), fine_steps=(100, 60)):
+[?2004l[?2004h>     x0_min, x0_max = x0_range
+[?2004l[?2004h>     g_min, g_max = gamma_range
+[?2004l[?2004h>     # Coarse grid
+[?2004l[?2004h>     x0_grid = np.linspace(x0_min, x0_max, coarse_steps[0])
+[?2004l[?2004h>     g_grid = np.linspace(max(1e-6, g_min), g_max, coarse_steps[1])
+[?2004l[?2004h>     best = None
+[?2004l[?2004h>     for x0 in x0_grid:
+[?2004l[?2004h>         # quick bounds check to keep gamma meaningful
+[?2004l[?2004h>         for g in g_grid:
+[?2004l[?2004h>             amp, off, sse = solve_ampl_offset(x, y, x0, g)
+[?2004l[?2004h>             # prefer positive amplitude; penalize negatives
+[?2004l[?2004h>             penalty = 0.0
+[?2004l[?2004h>             if amp < 0:
+[?2004l[?2004h>                 penalty = (1.0 + (-amp)) * 1e6
+[?2004l[?2004h>             score = sse + penalty
+[?2004l[?2004h>             if (best is None) or (score < best[0]):
+[?2004l[?2004h>                 best = [score, x0, g, amp, off]
+[?2004l[?2004h>     # Refine around best
+[?2004l[?2004h>     _, bx0, bg, _, _ = best
+[?2004l[?2004h>     x0_half_span = max((x0_max - x0_min) / 20.0, 1.0)
+[?2004l[?2004h>     g_half_span = max((g_max - g_min) / 20.0, (g_max - g_min)/50.0)
+[?2004l[?2004h>     x0_grid = np.linspace(max(x0_min, bx0 - x0_half_span), min(x0_max, bx0 + x0_half_span), fine_steps[0])
+[?2004l[?2004h>     g_grid = np.linspace(max(1e-6, bg - g_half_span), bg + g_half_span, fine_steps[1])
+[?2004l[?2004h>     for x0 in x0_grid:
+[?2004l[?2004h>         for g in g_grid:
+[?2004l[?2004h>             amp, off, sse = solve_ampl_offset(x, y, x0, g)
+[?2004l[?2004h>             penalty = 0.0
+[?2004l[?2004h>             if amp < 0:
+[?2004l[?2004h>                 penalty = (1.0 + (-amp)) * 1e6
+[?2004l[?2004h>             score = sse + penalty
+[?2004l[?2004h>             if score < best[0]:
+[?2004l[?2004h>                 best = [score, x0, g, amp, off]
+[?2004l[?2004h>     return {
+[?2004l[?2004h>         'x0': float(best[1]),
+[?2004l[?2004h>         'gamma': float(abs(best[2])),
+[?2004l[?2004h>         'amplitude': float(best[3]),
+[?2004l[?2004h>         'offset': float(best[4])
+[?2004l[?2004h>     }
+[?2004l[?2004h> 
+[?2004l[?2004h> # Determine sensible windows around expected peaks using data bounds
+[?2004l[?2004h> xmin, xmax = float(np.min(x_all)), float(np.max(x_all))
+[?2004l[?2004h> 
+[?2004l[?2004h> def region_slice(x, xmin_w, xmax_w):
+[?2004l[?2004h>     m = (x >= xmin_w) & (x <= xmax_w)
+[?2004l[?2004h>     return m
+[?2004l[?2004h> 
+[?2004l[?2004h> # Define target windows, clipped to data range
+[?2004l[?2004h> G_win = (max(1500.0, xmin), min(1700.0, xmax))
+[?2004l[?2004h> D2_win = (max(2600.0, xmin), min(2800.0, xmax))
+[?2004l[?2004h> 
+[?2004l[?2004h> # If windows too small or empty, infer peaks via rough maxima near expected positions
+[?2004l[?2004h> def ensure_window(x, y, guess_center, width):
+[?2004l[?2004h>     lo = max(float(guess_center - width), xmin)
+[?2004l[?2004h>     hi = min(float(guess_center + width), xmax)
+[?2004l[?2004h>     if hi <= lo:
+[?2004l[?2004h>         # fallback to global window
+[?2004l[?2004h>         lo, hi = xmin, xmax
+[?2004l[?2004h>     return (lo, hi)
+[?2004l[?2004h> 
+[?2004l[?2004h> # If windows have < 20 points, broaden
+[?2004l[?2004h> for name, win in [('G', G_win), ('2D', D2_win)]:
+[?2004l[?2004h>     m = region_slice(x_all, win[0], win[1])
+[?2004l[?2004h>     if np.sum(m) < 20:
+[?2004l[?2004h>         if name == 'G':
+[?2004l[?2004h>             G_win = ensure_window(x_all, y_all, 1580.0, 150.0)
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             D2_win = ensure_window(x_all, y_all, 2700.0, 200.0)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Extract regions
+[?2004l[?2004h> mG = region_slice(x_all, G_win[0], G_win[1])
+[?2004l[?2004h> m2D = region_slice(x_all, D2_win[0], D2_win[1])
+[?2004l[?2004h> if np.sum(mG) < 10 or np.sum(m2D) < 10:
+[?2004l[?2004h>     print('Insufficient data in windows. Data range:', xmin, xmax, file=sys.stderr)
+[?2004l[?2004h>     sys.exit(1)
+[?2004l[?2004h> 
+[?2004l[?2004h> xG, yG = x_all[mG], y_all[mG]
+[?2004l[?2004h> x2D, y2D = x_all[m2D], y_all[m2D]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Initial x0 ranges around local maxima for tighter search
+[?2004l[?2004h> def initial_x0_range(x, y, lo, hi, pad):
+[?2004l[?2004h>     idx = np.argmax(y)
+[?2004l[?2004h>     cx = x[idx]
+[?2004l[?2004h>     rlo = max(lo, cx - pad)
+[?2004l[?2004h>     rhi = min(hi, cx + pad)
+[?2004l[?2004h>     if rhi <= rlo:
+[?2004l[?2004h>         rlo, rhi = lo, hi
+[?2004l[?2004h>     return (rlo, rhi)
+[?2004l[?2004h> 
+[?2004l[?2004h> G_x0_range = initial_x0_range(xG, yG, G_win[0], G_win[1], pad=30.0)
+[?2004l[?2004h> D2_x0_range = initial_x0_range(x2D, y2D, D2_win[0], D2_win[1], pad=60.0)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Gamma ranges (HWHM) typical for Raman graphene
+[?2004l[?2004h> G_gamma_range = (3.0, 60.0)
+[?2004l[?2004h> D2_gamma_range = (5.0, 120.0)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Fit
+[?2004l[?2004h> G_params = fit_region(xG, yG, G_x0_range, G_gamma_range, coarse_steps=(120, 80), fine_steps=(120, 80))
+[?2004l[?2004h> D2_params = fit_region(x2D, y2D, D2_x0_range, D2_gamma_range, coarse_steps=(120, 80), fine_steps=(120, 80))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Write results.json
+[?2004l[?2004h> res = {
+[?2004l[?2004h>     'G': {
+[?2004l[?2004h>         'x0': G_params['x0'],
+[?2004l[?2004h>         'gamma': G_params['gamma'],
+[?2004l[?2004h>         'amplitude': G_params['amplitude'],
+[?2004l[?2004h>         'offset': G_params['offset']
+[?2004l[?2004h>     },
+[?2004l[?2004h>     '2D': {
+[?2004l[?2004h>         'x0': D2_params['x0'],
+[?2004l[?2004h>         'gamma': D2_params['gamma'],
+[?2004l[?2004h>         'amplitude': D2_params['amplitude'],
+[?2004l[?2004h>         'offset': D2_params['offset']
+[?2004l[?2004h>     }
+[?2004l[?2004h> }
+[?2004l[?2004h> with open('results.json', 'w') as fh:
+[?2004l[?2004h>     json.dump(res, fh, indent=2)
+[?2004l[?2004h> print('results.json written for file:', fn)
+[?2004l[?2004h> PY
+[?2004lTraceback (most recent call last):
+  File [35m"<stdin>"[0m, line [35m2[0m, in [35m<module>[0m
+[1;35mModuleNotFoundError[0m: [35mNo module named 'numpy'[0m
+[?2004hroot@ed357b46a55a:/app# cat results.json
+[?2004lcat: results.json: No such file or directory
+[?2004hroot@ed357b46a55a:/app# tail -n 20 graphene.dat
+[?2004l1653,704408	5869,936650
+1653,440936	5773,130495
+1653,177619	5895,449413
+1652,914454	6214,277617
+1652,651439	6034,852890
+1652,388578	6285,424832
+1652,125866	6004,103504
+1651,863309	6150,102627
+1651,600904	6161,653672
+1651,338647	6193,454093
+1651,076544	6302,950951
+1650,814593	6154,492341
+1650,552790	6150,191176
+1650,291141	6157,269473
+1650,029641	6090,511415
+1649,768294	6062,725860
+1649,507095	6005,066261
+1649,246046	6009,427936
+1648,985151	5911,446799
+1648,724404	5950,923261
+[?2004hroot@ed357b46a55a:/app# python3 - << 'PY'
+[?2004lj = 0 if i0 > N//2 else N-1
+    selected.append(j)
+elif len(selected) == 0:
+    selected = [N//3, 2*N//3]
+
+# Prepare fit helpers
+
+def lorentz_basis(x, x0, g):
+    t = (x - x0) / g
+    return 1.0 / (1.0 + t*t)
+
+# Solve amplitude and offset using sums
+
+def solve_ampl_offset_sums(x_arr, y_arr, x0, g):
+    Sf2 = 0.0
+    Sf1 = 0.0
+    S1  = 0.0
+    Syf = 0.0
+    Sy  = 0.0
+    Syy = 0.0
+    for x, y in zip(x_arr, y_arr):
+        f = lorentz_basis(x, x0, g)
+        Sf2 += f*f
+        Sf1 += f
+        S1  += 1.0
+        Syf += y*f
+        Sy  += y
+        Syy += y*y
+    # Normal equations matrix
+    a11, a12 = Sf2, Sf1
+    a21, a22 = Sf1, S1
+    det = a11*a22 - a12*a21
+    if abs(det) < 1e-18:
+        return None
+    inv11 =  a22/det
+    inv12 = -a12/det
+    inv21 = -a21/det
+    inv22 =  a11/det
+    # [a, b] = invA * [Syf, Sy]
+    a = inv11*Syf + inv12*Sy
+    b = inv21*Syf + inv22*Sy
+    # Minimal SSE = Syy - [a,b] dot [Syf, Sy]
+    sse = Syy - (a*Syf + b*Sy)
+    return a, b, sse
+
+# Fit a region with grid search and refinement
+
+def fit_region(center_idx):
+    cx = xs[center_idx]
+    w = max(0.12*x_range, 20.0*step)
+    lo = max(x_min, cx - w/2)
+    hi = min(x_max, cx + w/2)
+    # Extract region indices
+    lo_i = 0
+    while lo_i < N and xs[lo_i] < lo:
+        lo_i += 1
+    hi_i = lo_i
+    while hi_i < N and xs[hi_i] <= hi:
+        hi_i += 1
+    x_reg = xs[lo_i:hi_i]
+    y_reg = ys[lo_i:hi_i]
+    M = len(x_reg)
+    if M < 10:
+        # expand if too small
+        x_reg = xs
+        y_reg = ys
+        M = len(x_reg)
+    # Downsample to at most 300 points
+    if M > 300:
+        stride = M // 300
+        x_reg = x_reg[::stride]
+        y_reg = y_reg[::stride]
+        M = len(x_reg)
+    # Initial grids
+    x0_min = max(x_min, cx - w/10)
+    x0_max = min(x_max, cx + w/10)
+    # Gamma based on local window
+    g_min = max(step*2.0, w/80.0)
+    g_max = max(g_min*1.2, w/6.0)
+    # Coarse grid
+    x0_count, g_count = 50, 30
+    best = None
+    for i in range(x0_count):
+        x0 = x0_min + (x0_max - x0_min) * (i / (x0_count - 1))
+        for j [?2004h> import json, math
+[?2004l[?2004h> 
+[?2004l[?2004h> fn = 'graphene.dat'
+[?2004l[?2004h> xs, ys = [], []
+[?2004l[?2004h> with open(fn, 'r', errors='ignore') as fh:
+[?2004l[?2004h>     for line in fh:
+[?2004l[?2004h>         s = line.strip()
+[?2004l[?2004h>         if not s or s.startswith('#'): continue
+[?2004l[?2004h>         s = s.replace(',', '.')
+[?2004l[?2004h>         # Split on whitespace or semicolon
+[?2004l[?2004h>         parts = [p for p in s.replace(';', ' ').split() if p]
+[?2004l[?2004h>         nums = []
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             try:
+[?2004l[?2004h>                 nums.append(float(p))
+[?2004l[?2004h>             except Exception:
+[?2004l[?2004h>                 pass
+[?2004l[?2004h>         if len(nums) >= 2:
+[?2004l[?2004h>             xs.append(nums[0])
+[?2004l[?2004h>             ys.append(nums[1])
+[?2004l[?2004h> if len(xs) < 10:
+[?2004l[?2004h>     raise SystemExit('Not enough data parsed from graphene.dat')
+[?2004l[?2004h> # Sort by x
+[?2004l[?2004h> pairs = sorted(zip(xs, ys), key=lambda t: t[0])
+[?2004l[?2004h> xs = [p[0] for p in pairs]
+[?2004l[?2004h> ys = [p[1] for p in pairs]
+[?2004l[?2004h> N = len(xs)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Basic stats
+[?2004l[?2004h> x_min, x_max = xs[0], xs[-1]
+[?2004l[?2004h> x_range = x_max - x_min if x_max > x_min else 1.0
+[?2004l[?2004h> 
+[?2004l[?2004h> # Compute approximate step
+[?2004l[?2004h> if N > 1:
+[?2004l[?2004h>     deltas = [abs(xs[i+1]-xs[i]) for i in range(min(N-1, 1000))]
+[?2004l[?2004h>     step = sum(deltas)/len(deltas) if deltas else x_range/max(1,N)
+[?2004l[?2004h> else:
+[?2004l[?2004h>     step = x_range
+[?2004l[?2004h> 
+[?2004l[?2004h> # Smooth y (moving average window size 5)
+[?2004l[?2004h> if N >= 5:
+[?2004l[?2004h>     k = 2
+[?2004l[?2004h>     ysm = ys[:]
+[?2004l[?2004h>     for i in range(2, N-2):
+[?2004l[?2004h>         ysm[i] = (ys[i-2]+ys[i-1]+ys[i]+ys[i+1]+ys[i+2])/5.0
+[?2004l[?2004h> else:
+[?2004l[?2004h>     ysm = ys[:]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Find local maxima
+[?2004l[?2004h> peaks = []
+[?2004l[?2004h> for i in range(1, N-1):
+[?2004l[?2004h>     if ysm[i] > ysm[i-1] and ysm[i] > ysm[i+1]:
+[?2004l[?2004h>         peaks.append((ysm[i], i))
+[?2004l[?2004h> # If no peaks found, use global maxima and mid
+[?2004l[?2004h> if not peaks:
+[?2004l[?2004h>     idx_max = max(range(N), key=lambda i: ys[i])
+[?2004l[?2004h>     peaks = [(ys[idx_max], idx_max)]
+[?2004l[?2004h> # Pick top two separated by at least 0.05*x_range
+[?2004l[?2004h> peaks.sort(reverse=True)
+[?2004l[?2004h> selected = []
+[?2004l[?2004h> min_sep = 0.05 * x_range
+[?2004l[?2004h> for val, idx in peaks:
+[?2004l[?2004h>     xi = xs[idx]
+[?2004l[?2004h>     if not selected:
+[?2004l[?2004h>         selected.append(idx)
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         too_close = any(abs(xi - xs[j]) < min_sep for j in selected)
+[?2004l[?2004h>         if not too_close:
+[?2004l[?2004h>             selected.append(idx)
+[?2004l[?2004h>             if len(selected) == 2:
+[?2004l[?2004h>                 break
+[?2004l[?2004h> if len(selected) == 1:
+[?2004l[?2004h>     # pick a second index far from the first
+[?2004l[?2004h>     i0 = selected[0]
+[?2004l[?2004h>     j = 0 if i0 > N//2 else N-1
+[?2004l[?2004h>     selected.append(j)
+[?2004l[?2004h> elif len(selected) == 0:
+[?2004l[?2004h>     selected = [N//3, 2*N//3]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Prepare fit helpers
+[?2004l[?2004h> 
+[?2004l[?2004h> def lorentz_basis(x, x0, g):
+[?2004l[?2004h>     t = (x - x0) / g
+[?2004l[?2004h>     return 1.0 / (1.0 + t*t)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Solve amplitude and offset using sums
+[?2004l[?2004h> 
+[?2004l[?2004h> def solve_ampl_offset_sums(x_arr, y_arr, x0, g):
+[?2004l[?2004h>     Sf2 = 0.0
+[?2004l[?2004h>     Sf1 = 0.0
+[?2004l[?2004h>     S1  = 0.0
+[?2004l[?2004h>     Syf = 0.0
+[?2004l[?2004h>     Sy  = 0.0
+[?2004l[?2004h>     Syy = 0.0
+[?2004l[?2004h>     for x, y in zip(x_arr, y_arr):
+[?2004l[?2004h>         f = lorentz_basis(x, x0, g)
+[?2004l[?2004h>         Sf2 += f*f
+[?2004l[?2004h>         Sf1 += f
+[?2004l[?2004h>         S1  += 1.0
+[?2004l[?2004h>         Syf += y*f
+[?2004l[?2004h>         Sy  += y
+[?2004l[?2004h>         Syy += y*y
+[?2004l[?2004h>     # Normal equations matrix
+[?2004l[?2004h>     a11, a12 = Sf2, Sf1
+[?2004l[?2004h>     a21, a22 = Sf1, S1
+[?2004l[?2004h>     det = a11*a22 - a12*a21
+[?2004l[?2004h>     if abs(det) < 1e-18:
+[?2004l[?2004h>         return None
+[?2004l[?2004h>     inv11 =  a22/det
+[?2004l[?2004h>     inv12 = -a12/det
+[?2004l[?2004h>     inv21 = -a21/det
+[?2004l[?2004h>     inv22 =  a11/det
+[?2004l[?2004h>     # [a, b] = invA * [Syf, Sy]
+[?2004l[?2004h>     a = inv11*Syf + inv12*Sy
+[?2004l[?2004h>     b = inv21*Syf + inv22*Sy
+[?2004l[?2004h>     # Minimal SSE = Syy - [a,b] dot [Syf, Sy]
+[?2004l[?2004h>     sse = Syy - (a*Syf + b*Sy)
+[?2004l[?2004h>     return a, b, sse
+[?2004l[?2004h> 
+[?2004l[?2004h> # Fit a region with grid search and refinement
+[?2004l[?2004h> 
+[?2004l[?2004h> def fit_region(center_idx):
+[?2004l[?2004h>     cx = xs[center_idx]
+[?2004l[?2004h>     w = max(0.12*x_range, 20.0*step)
+[?2004l[?2004h>     lo = max(x_min, cx - w/2)
+[?2004l[?2004h>     hi = min(x_max, cx + w/2)
+[?2004l[?2004h>     # Extract region indices
+[?2004l[?2004h>     lo_i = 0
+[?2004l[?2004h>     while lo_i < N and xs[lo_i] < lo:
+[?2004l[?2004h>         lo_i += 1
+[?2004l[?2004h>     hi_i = lo_i
+[?2004l[?2004h>     while hi_i < N and xs[hi_i] <= hi:
+[?2004l[?2004h>         hi_i += 1
+[?2004l[?2004h>     x_reg = xs[lo_i:hi_i]
+[?2004l[?2004h>     y_reg = ys[lo_i:hi_i]
+[?2004l[?2004h>     M = len(x_reg)
+[?2004l[?2004h>     if M < 10:
+[?2004l[?2004h>         # expand if too small
+[?2004l[?2004h>         x_reg = xs
+[?2004l[?2004h>         y_reg = ys
+[?2004l[?2004h>         M = len(x_reg)
+[?2004l[?2004h>     # Downsample to at most 300 points
+[?2004l[?2004h>     if M > 300:
+[?2004l[?2004h>         stride = M // 300
+[?2004l[?2004h>         x_reg = x_reg[::stride]
+[?2004l[?2004h>         y_reg = y_reg[::stride]
+[?2004l[?2004h>         M = len(x_reg)
+[?2004l[?2004h>     # Initial grids
+[?2004l[?2004h>     x0_min = max(x_min, cx - w/10)
+[?2004l[?2004h>     x0_max = min(x_max, cx + w/10)
+[?2004l[?2004h>     # Gamma based on local window
+[?2004l[?2004h>     g_min = max(step*2.0, w/80.0)
+[?2004l[?2004h>     g_max = max(g_min*1.2, w/6.0)
+[?2004l[?2004h>     # Coarse grid
+[?2004l[?2004h>     x0_count, g_count = 50, 30
+[?2004l[?2004h>     best = None
+[?2004l[?2004h>     for i in range(x0_count):
+[?2004l[?2004h>         x0 = x0_min + (x0_max - x0_min) * (i / (x0_count - 1))
+[?2004l[?2004h>         for j in range(g_count):
+[?2004l[?2004h>             g = g_min + (g_max - g_min) * (j / (g_count - 1))
+[?2004l[?2004h>             res = solve_ampl_offset_sums(x_reg, y_reg, x0, g)
+[?2004l[?2004h>             if res is None:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             a, b, sse = res
+[?2004l[?2004h>             if (best is None) or (sse < best[0]):
+[?2004l[?2004h>                 best = [sse, x0, g, a, b]
+[?2004l[?2004h>     if best is None:
+[?2004l[?2004h>         # Fallback trivial
+[?2004l[?2004h>         return {'x0': cx, 'gamma': g_min, 'amplitude': 0.0, 'offset': sum(y_reg)/len(y_reg)}
+[?2004l[?2004h>     _, bx0, bg, ba, bb = best
+[?2004l[?2004h>     # Refinement around best
+[?2004l[?2004h>     x0_span = max((x0_max - x0_min)/10.0, step*5.0)
+[?2004l[?2004h>     g_span = max((g_max - g_min)/6.0, g_min*0.5)
+[?2004l[?2004h>     x0_lo = max(x_min, bx0 - x0_span)
+[?2004l[?2004h>     x0_hi = min(x_max, bx0 + x0_span)
+[?2004l[?2004h>     g_lo = max(step*1.0, bg - g_span)
+[?2004l[?2004h>     g_hi = bg + g_span
+[?2004l[?2004h>     x0_count2, g_count2 = 60, 40
+[?2004l[?2004h>     for i in range(x0_count2):
+[?2004l[?2004h>         x0 = x0_lo + (x0_hi - x0_lo) * (i / (x0_count2 - 1))
+[?2004l[?2004h>         for j in range(g_count2):
+[?2004l[?2004h>             g = g_lo + (g_hi - g_lo) * (j / (g_count2 - 1))
+[?2004l[?2004h>             res = solve_ampl_offset_sums(x_reg, y_reg, x0, g)
+[?2004l[?2004h>             if res is None:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             a, b, sse = res
+[?2004l[?2004h>             if sse < best[0]:
+[?2004l[?2004h>                 best = [sse, x0, g, a, b]
+[?2004l[?2004h>     _, bx0, bg, ba, bb = best
+[?2004l[?2004h>     return {'x0': float(bx0), 'gamma': float(abs(bg)), 'amplitude': float(ba), 'offset': float(bb)}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Fit two regions
+[?2004l[?2004h> idx1, idx2 = selected[0], selected[1]
+[?2004l[?2004h> p1 = fit_region(idx1)
+[?2004l[?2004h> p2 = fit_region(idx2)
+[?2004l[?2004h> # Assign G and 2D by x0 ordering (lower x0 is G)
+[?2004l[?2004h> if p1['x0'] <= p2['x0']:
+[?2004l[?2004h>     G_params, D2_params = p1, p2
+[?2004l[?2004h> else:
+[?2004l[?2004h>     G_params, D2_params = p2, p1
+[?2004l[?2004h> 
+[?2004l[?2004h> res = {
+[?2004l[?2004h>     'G': {
+[?2004l[?2004h>         'x0': G_params['x0'],
+[?2004l[?2004h>         'gamma': G_params['gamma'],
+[?2004l[?2004h>         'amplitude': G_params['amplitude'],
+[?2004l[?2004h>         'offset': G_params['offset']
+[?2004l[?2004h>     },
+[?2004l[?2004h>     '2D': {
+[?2004l[?2004h>         'x0': D2_params['x0'],
+[?2004l[?2004h>         'gamma': D2_params['gamma'],
+[?2004l[?2004h>         'amplitude': D2_params['amplitude'],
+[?2004l[?2004h>         'offset': D2_params['offset']
+[?2004l[?2004h>     }
+[?2004l[?2004h> }
+[?2004l[?2004h> with open('results.json', 'w') as f:
+[?2004l[?2004h>     json.dump(res, f, indent=2)
+[?2004l[?2004h> print('results.json written')
+[?2004l[?2004h> PY
+[?2004lresults.json written
+[?2004hroot@ed357b46a55a:/app# cat results.json
+[?2004l{
+  "G": {
+    "x0": 19196.315940164503,
+    "gamma": 398.63106800512827,
+    "amplitude": 73658.65742132445,
+    "offset": 12295.934713543465
+  },
+  "2D": {
+    "x0": 33362.0021745065,
+    "gamma": 1051.0956647066666,
+    "amplitude": 2713.5261208015872,
+    "offset": 18600.86480211561
+  }
+}[?2004hroot@ed357b46a55a:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@ed357b46a55a:/app# 

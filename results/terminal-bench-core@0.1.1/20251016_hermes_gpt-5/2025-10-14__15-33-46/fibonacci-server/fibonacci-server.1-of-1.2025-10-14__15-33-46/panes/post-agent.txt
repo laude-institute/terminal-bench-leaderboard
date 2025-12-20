@@ -1,0 +1,82 @@
+root@3c297238605d:/app# cat > server.py << 'PY'
+> from http.server import BaseHTTPRequestHandler, HTTPServer
+> import json
+> from urllib.parse import urlparse, parse_qs
+>
+>
+> def fib(n: int) -> int:
+>     a, b = 0, 1
+>     for _ in range(n):
+>         a, b = b, a + b
+>     return a
+>
+>
+> class FibHandler(BaseHTTPRequestHandler):
+>     def do_GET(self):
+>         parsed = urlparse(self.path)
+>         if parsed.path != '/fib':
+>             self.send_response(404)
+>             body = json.dumps({'error': 'Not Found'})
+>             self.send_header('Content-Type', 'application/json')
+>             self.send_header('Content-Length', str(len(body.encode())))
+>             self.end_headers()
+>             self.wfile.write(body.encode())
+>             return
+>
+>         qs = parse_qs(parsed.query)
+>         if 'n' not in qs:
+>             self.send_response(400)
+>             body = json.dumps({'error': 'Missing query parameter n'})
+>             self.send_header('Content-Type', 'application/json')
+>             self.send_header('Content-Length', str(len(body.encode())))
+>             self.end_headers()
+>             self.wfile.write(body.encode())
+>             return
+>
+>         raw_n = qs['n'][0]
+>         try:
+>             n = int(raw_n)
+>             if n < 0:
+>                 raise ValueError('n must be non-negative')
+>         except Exception:
+>             self.send_response(400)
+>             body = json.dumps({'error': 'Invalid n; must be a non-negative integer'})
+>             self.send_header('Content-Type', 'application/json')
+>             self.send_header('Content-Length', str(len(body.encode())))
+>             self.end_headers()
+>             self.wfile.write(body.encode())
+>             return
+>
+>         result = fib(n)
+>         body = json.dumps({'result': result})
+>         self.send_response(200)
+>         self.send_header('Content-Type', 'application/json')
+>         self.send_header('Content-Length', str(len(body.encode())))
+>         self.end_headers()
+>         self.wfile.write(body.encode())
+>
+>     def log_message(self, format, *args):
+>         # Suppress default logging to stderr
+>         return
+>
+>
+> def main():
+>     server = HTTPServer(('0.0.0.0', 3000), FibHandler)
+>     server.serve_forever()
+>
+>
+> if __name__ == '__main__':
+>     main()
+> PY
+root@3c297238605d:/app# chmod +x server.py
+root@3c297238605d:/app# python3 server.py > server.log 2>&1 &
+[1] 117
+root@3c297238605d:/app# sleep 0.5
+curl -s http://localhost:3000/fib?n=10
+root@3c297238605d:/app# curl -s http://localhost:3000/fib?n=10
+bash: curl: command not found
+root@3c297238605d:/app# curl -s -i http://localhost:3000/fib
+bash: curl: command not found
+root@3c297238605d:/app# curl -s -i http://localhost:3000/fib?n=abc
+bash: curl: command not found
+root@3c297238605d:/app#

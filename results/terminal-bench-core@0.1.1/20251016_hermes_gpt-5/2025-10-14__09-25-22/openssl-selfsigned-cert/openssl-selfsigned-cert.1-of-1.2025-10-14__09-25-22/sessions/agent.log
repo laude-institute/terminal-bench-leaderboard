@@ -1,0 +1,98 @@
+[?2004hroot@3f661c3b3e7a:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@3f661c3b3e7a:/app# clear
+[?2004l[H[J[3J[?2004hroot@3f661c3b3e7a:/app# mkdir -p /app/ssl
+[?2004l[?2004hroot@3f661c3b3e7a:/app# openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -keyout /app/ssl/server.key -out /app/ssl/server.crt -nodes -subj "/O=DevOps Team/CN=dev-internal.company.local"
+[?2004l...+......+.........+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*......+..+...............+...+...+.......+..+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*...+...+.....+......+....+.....+.......+.........+..+...+.........................+..+.......+..+..........+.....+....+.........+........+..................+.+......+.....+...+.+...+...+............+...+...+.....+......+.............+..+...+.............+.....+.......+...+..+............+...+...+...+.+........+...+..........+.....+.......+.....+..........+...........+.+..............+..........+...........+...+............+...+...+....+......+...+............+..+...+....+.........+.....+....+.....+...+.........+...+.......+......+..+.............+..+..........+......+.........+..+....+..+.........+...+.+.....+..........+..+...+.+.....+................+...+..+...+.+...+..+...+......+......+......+............+...+.......+......+..+....+........+.......+.....+.+...+..............+.+..+.......+...+..+.......+.....+......+.............+......+...+..+...+..........+......+..+...+......+...............+.+........+.+...+........+...+.+...+........+...+....+......+..+....+..............+....+.....+............+...+............+......+.........+..........+.........+..+...+....+......+......+...+.....+..........+............+......+........+.+......+.....+...+.......+..+................+..............+...+.........+...................+..+...+......+................+.....+....+.....+.............+...+.....+............+...+.......+..+.........+.+......+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+...........+....+..+......+.........+...+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*..+......+...+.....+......+..........+...+...+...+.....+.........+.+...........+...+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*.........+.+..+....+......+.....+..................+..........+..+.......+...............+...+...+.....+......+..........+.....+.+...+.........+...+.....+..........+........+............+............+.+......+...+......+......+...+..+...............+.........+....+..+.+........+.+...+........+.......+...+..+.+..+....+...+..+.........+..........+.....+.........+.+....................+......+.+..+..................+.........+...+.+.....................+...........+...+....+..................+...+...........+..........+...+........+.......+..+....+..............+.............+..+.+...........+...+..................+...+.+......+..+...+.........+.+............+............+.........+..+...+....+...+.....+...+.+..............+.........+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-----
+[?2004hroot@3f661c3b3e7a:/app# chmod 600 /app/ssl/server.key
+[?2004l[?2004hroot@3f661c3b3e7a:/app# cat /app/ssl/server.key /app/ssl/server.crt > /app/ssl/server.pem
+[?2004l[?2004hroot@3f661c3b3e7a:/app# chmod 600 /app/ssl/server.pem
+[?2004l[?2004hroot@3f661c3b3e7a:/app# printf "Subject:\n%s\n\nValidity:\n%s\n\nSHA-256 Fingerprint:\n%s\n" "$(openssl x509 -in /app/ssl/server.crt -noout -subject)" "$(openssl x509 -in /app/ssl/server.crt -noout -dates)" "$(openssl x509 -in /app/ssl/server.crt -noout -fingerprint -sha256)" > /app/ssl/verification.txt
+[?2004l[?2004hroot@3f661c3b3e7a:/app# cat > /app/check_cert.py << 'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import os
+[?2004l[?2004h> import ssl
+[?2004l[?2004h> import subprocess
+[?2004l[?2004h> from datetime import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> CERT_PATH = "/app/ssl/server.crt"
+[?2004l[?2004h> KEY_PATH = "/app/ssl/server.key"
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     if not (os.path.exists(CERT_PATH) and os.path.exists(KEY_PATH)):
+[?2004l[?2004h>         print("Certificate or key file missing")
+[?2004l[?2004h>         raise SystemExit(1)
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Try loading cert chain to ensure it can be loaded
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+[?2004l[?2004h>         ctx.load_cert_chain(certfile=CERT_PATH, keyfile=KEY_PATH)
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         print(f"Failed to load certificate: {e}")
+[?2004l[?2004h>         raise SystemExit(1)
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Get subject and enddate using openssl
+[?2004l[?2004h>     subj_proc = subprocess.run(
+[?2004l[?2004h>         ["openssl", "x509", "-in", CERT_PATH, "-noout", "-subject", "-nameopt", "RFC2253"],
+[?2004l[?2004h>         capture_output=True, text=True
+[?2004l[?2004h>     )
+[?2004l[?2004h>     end_proc = subprocess.run(
+[?2004l[?2004h>         ["openssl", "x509", "-in", CERT_PATH, "-noout", "-enddate"],
+[?2004l[?2004h>         capture_output=True, text=True
+[?2004l[?2004h>     )
+[?2004l[?2004h> 
+[?2004l[?2004h>     if subj_proc.returncode != 0 or end_proc.returncode != 0:
+[?2004l[?2004h>         print("Failed to retrieve certificate details via openssl")
+[?2004l[?2004h>         raise SystemExit(1)
+[?2004l[?2004h> 
+[?2004l[?2004h>     subject_line = subj_proc.stdout.strip()
+[?2004l[?2004h>     end_line = end_proc.stdout.strip()
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Parse CN
+[?2004l[?2004h>     subject = subject_line.split("subject=", 1)[-1]
+[?2004l[?2004h>     cn = None
+[?2004l[?2004h>     for part in subject.split(","):
+[?2004l[?2004h>         part = part.strip()
+[?2004l[?2004h>         if part.startswith("CN="):
+[?2004l[?2004h>             cn = part.split("=", 1)[1].strip()
+[?2004l[?2004h>             break
+[?2004l[?2004h> 
+[?2004l[?2004h>     if not cn:
+[?2004l[?2004h>         print("Common Name not found in subject")
+[?2004l[?2004h>         raise SystemExit(1)
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Parse notAfter date
+[?2004l[?2004h>     if end_line.startswith("notAfter="):
+[?2004l[?2004h>         end_val = end_line.split("=", 1)[1].strip()
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         end_val = end_line.strip()
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Normalize spaces for single-digit days
+[?2004l[?2004h>     while "  " in end_val:
+[?2004l[?2004h>         end_val = end_val.replace("  ", " ")
+[?2004l[?2004h> 
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         dt = datetime.strptime(end_val, "%b %d %H:%M:%S %Y %Z")
+[?2004l[?2004h>     except ValueError:
+[?2004l[?2004h>         # Fallback ignoring timezone token
+[?2004l[?2004h>         dt = datetime.strptime(" ".join(end_val.split()[:-1]), "%b %d %H:%M:%S %Y")
+[?2004l[?2004h> 
+[?2004l[?2004h>     print(f"Common Name: {cn}")
+[?2004l[?2004h>     print(f"Expiration Date: {dt.strftime('%Y-%m-%d')}")
+[?2004l[?2004h>     print("Certificate verification successful")
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == "__main__":
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@3f661c3b3e7a:/app# python3 /app/check_cert.py
+[?2004lCommon Name: dev-internal.company.local
+Expiration Date: 2026-10-14
+Certificate verification successful
+[?2004hroot@3f661c3b3e7a:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@3f661c3b3e7a:/app# 

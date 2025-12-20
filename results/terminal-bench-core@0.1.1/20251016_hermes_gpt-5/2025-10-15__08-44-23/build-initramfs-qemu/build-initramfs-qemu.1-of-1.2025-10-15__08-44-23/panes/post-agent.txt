@@ -1,0 +1,51 @@
+root@ecfe5b00d5ba:/app# ls -la
+total 140684
+drwxr-xr-x 1 root root      4096 Oct 15 10:59 .
+drwxr-xr-x 1 root root      4096 Oct 15 11:21 ..
+drwxrwxr-x 1 root root      4096 Oct 15 11:02 linux-6.9
+-rw-r--r-- 1 root root 144034416 May 13  2024 linux-6.9.tar.xz
+root@ecfe5b00d5ba:/app# mkdir -p /app/ramfs
+root@ecfe5b00d5ba:/app# apt-get update
+Hit:1 http://security.ubuntu.com/ubuntu noble-security InRelease
+Hit:2 http://archive.ubuntu.com/ubuntu noble InRelease
+Hit:3 http://archive.ubuntu.com/ubuntu noble-updates InRelease
+Hit:4 http://archive.ubuntu.com/ubuntu noble-backports InRelease
+Reading package lists... Done
+root@ecfe5b00d5ba:/app# apt-get install -y busybox-static cpio
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+cpio is already the newest version (2.15+dfsg-1ubuntu2).
+The following NEW packages will be installed:
+  busybox-static
+0 upgraded, 1 newly installed, 0 to remove and 17 not upgraded.
+Need to get 1009 kB of archives.
+After this operation, 2174 kB of additional disk space will be used.
+Get:1 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 busybox-static amd64 1:1.36.1-6ubuntu3.1 [1009 kB]
+Fetched 1009 kB in 1s (1175 kB/s)
+debconf: delaying package configuration, since apt-utils is not installed
+Selecting previously unselected package busybox-static.
+(Reading database ... 35592 files and directories currently installed.)
+Preparing to unpack .../busybox-static_1%3a1.36.1-6ubuntu3.1_amd64.deb ...
+Unpacking busybox-static (1:1.36.1-6ubuntu3.1) ...
+Setting up busybox-static (1:1.36.1-6ubuntu3.1) ...
+root@ecfe5b00d5ba:/app# mkdir -p /app/ramfs/rootfs/bin /app/ramfs/rootfs/sbin /app/ramfs/rootfs/etc /app/ramfs/rootfs/proc /app/ramfs/rootfs/sys /app/ramfs/root
+fs/dev /app/ramfs/rootfs/root /app/ramfs/rootfs/tmp /app/ramfs/rootfs/usr/bin /app/ramfs/rootfs/usr/sbin
+root@ecfe5b00d5ba:/app# cp /bin/busybox /app/ramfs/rootfs/bin/busybox
+root@ecfe5b00d5ba:/app# ln -sf busybox /app/ramfs/rootfs/bin/sh
+root@ecfe5b00d5ba:/app# ln -sf busybox /app/ramfs/rootfs/bin/mount
+root@ecfe5b00d5ba:/app# ln -sf /bin/busybox /app/ramfs/rootfs/sbin/getty
+root@ecfe5b00d5ba:/app# ln -sf /bin/busybox /app/ramfs/rootfs/bin/login
+root@ecfe5b00d5ba:/app# printf '#!/bin/sh\n# Minimal init for serial console login\nmount -t proc proc /proc\nmount -t sysfs sysfs /sys\nmount -t devtmpfs devtm
+pfs /dev\n# Start getty on serial console (ttyS0)\nexec /sbin/getty -L ttyS0 115200 vt100\n' > /app/ramfs/rootfs/init
+root@ecfe5b00d5ba:/app# chmod +x /app/ramfs/rootfs/init
+root@ecfe5b00d5ba:/app# printf 'root:x:0:0:root:/root:/bin/sh\n' > /app/ramfs/rootfs/etc/passwd
+root@ecfe5b00d5ba:/app# printf 'root::0:0:99999:7:::\n' > /app/ramfs/rootfs/etc/shadow
+root@ecfe5b00d5ba:/app# chmod 600 /app/ramfs/rootfs/etc/shadow
+root@ecfe5b00d5ba:/app# printf 'root:x:0:\n' > /app/ramfs/rootfs/etc/group
+root@ecfe5b00d5ba:/app# cd /app/ramfs/rootfs
+root@ecfe5b00d5ba:/app/ramfs/rootfs# find . | cpio -H newc -o | gzip -c > /app/ramfs/initramfs.cpio.gz
+4156 blocks
+root@ecfe5b00d5ba:/app/ramfs/rootfs# ls -lh /app/ramfs/initramfs.cpio.gz
+-rw-r--r-- 1 root root 1.1M Oct 15 11:23 /app/ramfs/initramfs.cpio.gz
+root@ecfe5b00d5ba:/app/ramfs/rootfs#

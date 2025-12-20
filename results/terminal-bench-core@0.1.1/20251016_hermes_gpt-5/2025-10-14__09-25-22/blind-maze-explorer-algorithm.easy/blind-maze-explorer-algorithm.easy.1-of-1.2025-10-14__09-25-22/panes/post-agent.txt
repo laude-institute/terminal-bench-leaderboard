@@ -1,0 +1,276 @@
+root@541df6c65d14:/app# ls -la
+total 20
+drwxr-xr-x 1 root root 4096 Oct  8 17:10 .
+drwxr-xr-x 1 root root 4096 Oct 14 10:13 ..
+-rw-rw-r-- 1 root root   20 Oct  8 15:44 maze_1.txt
+-rwxrwxr-x 1 root root  249 Oct  8 15:44 maze_game.sh
+drwxr-xr-x 2 root root 4096 Oct  8 15:44 tests
+root@541df6c65d14:/app# mkdir -p /app/output
+root@541df6c65d14:/app# cat > /app/dfs_maze_solver.py << 'PY'
+> #!/usr/bin/env python3
+> import sys, subprocess, os
+> from collections import defaultdict
+>
+> DIRS = {
+>     'N': (-1, 0),
+>     'E': (0, 1),
+>     'S': (1, 0),
+>     'W': (0, -1),
+> }
+> INV = {
+>     'N': 'S',
+>     'E': 'W',
+>     'S': 'N',
+>     'W': 'E',
+> }
+>
+> def delta_to_dir(dr, dc):
+>     for d,(r,c) in DIRS.items():
+>         if (dr,dc)==(r,c):
+>             return d
+>     return None
+>
+> class MazeExplorer:
+>     def __init__(self, maze_id):
+>         self.maze_id = str(maze_id)
+>         self.proc = subprocess.Popen([
+>             'bash', './maze_game.sh', self.maze_id
+>         ], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+>         # Initialize map structures
+>         self.known = {}  # (r,c) -> '#', ' ', 'S', 'E'
+>         self.start = (0,0)
+>         self.exit = None
+>         self.cur = (0,0)
+>         self.path = [self.cur]
+>         self.known[self.start] = 'S'
+>         self.min_r = 0
+>         self.max_r = 0
+>         self.min_c = 0
+>         self.max_c = 0
+>
+>     def _read_until_response(self):
+>         # Read lines until one contains any of the expected tokens
+>         buf_lines = []
+>         while True:
+>             line = self.proc.stdout.readline()
+>             if not line:
+>                 # Process ended unexpectedly
+>                 break
+>             s = line.strip()
+>             buf_lines.append(s)
+>             if ('hit wall' in s) or ('moved' in s) or ('reached exit' in s):
+>                 return s
+>         # If we reached here, no response detected
+>         return '\n'.join(buf_lines).strip()
+>
+>     def send_move(self, d):
+>         try:
+>             self.proc.stdin.write(f"move {d}\n")
+>             self.proc.stdin.flush()
+>         except BrokenPipeError:
+>             return ''
+>         resp = self._read_until_response()
+>         return resp
+>
+>     def mark_cell(self, pos, ch):
+>         r,c = pos
+>         self.min_r = min(self.min_r, r)
+>         self.max_r = max(self.max_r, r)
+>         self.min_c = min(self.min_c, c)
+>         self.max_c = max(self.max_c, c)
+>         prev = self.known.get(pos)
+>         if ch == 'E':
+>             self.exit = pos
+>             self.known[pos] = 'E'
+>         else:
+>             # Preserve S/E if already marked
+>             if prev in ('S','E'):
+>                 return
+>             self.known[pos] = ch
+>
+>     def neighbors_unknown(self, pos):
+>         r,c = pos
+>         unknown_dirs = []
+>         for d,(dr,dc) in DIRS.items():
+>             npos = (r+dr, c+dc)
+>             if npos not in self.known:
+>                 unknown_dirs.append((d,npos))
+>         return unknown_dirs
+>
+>     def explore(self):
+>         # DFS loop
+>         while True:
+>             unk = self.neighbors_unknown(self.cur)
+>             if unk:
+>                 # Try the first unknown direction (deterministic order N,E,S,W)
+>                 for d in ['N','E','S','W']:
+>                     npos = (self.cur[0]+DIRS[d][0], self.cur[1]+DIRS[d][1])
+>                     if npos not in self.known:
+>                         resp = self.send_move(d)
+>                         if 'hit wall' in resp:
+>                             self.mark_cell(npos, '#')
+>                             continue
+>                         elif ('moved' in resp) or ('reached exit' in resp):
+>                             if 'reached exit' in resp:
+>                                 self.mark_cell(npos, 'E')
+>                             else:
+>                                 self.mark_cell(npos, ' ')
+>                             # Update previous cell to space if it was uninitialized open (preserve S)
+>                             if self.cur != self.start and self.known.get(self.cur) not in ('S','E','#'):
+>                                 self.mark_cell(self.cur, ' ')
+>                             # Advance
+>                             self.cur = npos
+>                             self.path.append(self.cur)
+>                             break
+>                         else:
+>                             # Unexpected, treat as wall to avoid infinite loop
+>                             self.mark_cell(npos, '#')
+>                             continue
+>                 continue
+>             else:
+>                 # No unknown neighbors, backtrack if possible
+>                 if len(self.path) > 1:
+>                     prev = self.path[-2]
+>                     dr = prev[0] - self.cur[0]
+>                     dc = prev[1] - self.cur[1]
+>                     bd = delta_to_dir(dr, dc)
+>                     if not bd:
+>                         raise RuntimeError('Invalid backtrack direction')
+>                     resp = self.send_move(bd)
+>                     # Expect moved or reached exit
+>                     if ('moved' in resp) or ('reached exit' in resp):
+>                         self.cur = prev
+>                         self.path.pop()
+>                         # Mark current cell as space unless S/E
+>                         if self.known.get(self.cur) not in ('S','E'):
+>                             self.mark_cell(self.cur, ' ')
+>                         continue
+>                     else:
+>                         # If backtracking fails, abort
+>                         break
+>                 else:
+>                     # Back at start and fully explored
+>                     break
+>         # Close subprocess
+>         try:
+>             if self.proc.stdin:
+>                 self.proc.stdin.close()
+>         except Exception:
+>             pass
+>         try:
+>             self.proc.terminate()
+>         except Exception:
+>             pass
+>
+>     def write_output(self, out_path):
+>         # Determine bounds; ensure S and E are marked
+>         self.mark_cell(self.start, 'S')
+>         if self.exit is not None:
+>             self.mark_cell(self.exit, 'E')
+>         rows = []
+>         for r in range(self.min_r, self.max_r+1):
+>             line_chars = []
+>             for c in range(self.min_c, self.max_c+1):
+>                 ch = self.known.get((r,c))
+>                 if ch is None:
+>                     ch = '#'
+>                 # Preserve S and E
+>                 if (r,c) == self.start:
+>                     ch = 'S'
+>                 elif self.exit is not None and (r,c) == self.exit:
+>                     ch = 'E'
+>                 elif ch in ('S','E',' ','#'):
+>                     pass
+>                 else:
+>                     # Default unknown to wall
+>                     ch = '#'
+>                 line_chars.append(ch)
+>             rows.append(''.join(line_chars))
+>         os.makedirs(os.path.dirname(out_path), exist_ok=True)
+>         with open(out_path, 'w') as f:
+>             for i, row in enumerate(rows):
+>                 f.write(row)
+>                 if i < len(rows)-1:
+>                     f.write('\n')
+>
+>
+> def run_one(maze_id):
+>     explorer = MazeExplorer(maze_id)
+>     explorer.explore()
+>     out_file = f"/app/output/{maze_id}.txt"
+>     explorer.write_output(out_file)
+>
+> if __name__ == '__main__':
+>     if len(sys.argv) < 2:
+>         # Default: run maze 1
+>         run_one(1)
+>     else:
+>         arg = sys.argv[1]
+>         if arg == 'all':
+>             for mid in range(1, 10+1):
+>                 run_one(mid)
+>         else:
+>             try:
+>                 mid = int(arg)
+>             except Exception:
+>                 mid = 1
+>             run_one(mid)
+> PY
+root@541df6c65d14:/app# chmod +x /app/dfs_maze_solver.py
+root@541df6c65d14:/app# python3 /app/dfs_maze_solver.py 1
+root@541df6c65d14:/app# ls -la /app/output
+total 12
+drwxr-xr-x 2 root root 4096 Oct 14 10:15 .
+drwxr-xr-x 1 root root 4096 Oct 14 10:15 ..
+-rw-r--r-- 1 root root   19 Oct 14 10:15 1.txt
+root@541df6c65d14:/app# diff -u /app/maze_1.txt /app/output/1.txt || true
+--- /app/maze_1.txt     2025-10-08 15:44:35.416214678 +0000
++++ /app/output/1.txt   2025-10-14 10:15:24.848982763 +0000
+@@ -1,4 +1,4 @@
+ ####
+ #S #
+ #E##
+-####
+\ No newline at end of file
++####
+\ No newline at end of file
+root@541df6c65d14:/app# python3 /app/dfs_maze_solver.py all
+root@541df6c65d14:/app# ls -la /app/output
+total 48
+drwxr-xr-x 2 root root 4096 Oct 14 10:15 .
+drwxr-xr-x 1 root root 4096 Oct 14 10:15 ..
+-rw-r--r-- 1 root root   19 Oct 14 10:15 1.txt
+-rw-r--r-- 1 root root   83 Oct 14 10:15 10.txt
+-rw-r--r-- 1 root root   71 Oct 14 10:15 2.txt
+-rw-r--r-- 1 root root  239 Oct 14 10:15 3.txt
+-rw-r--r-- 1 root root  419 Oct 14 10:15 4.txt
+-rw-r--r-- 1 root root   35 Oct 14 10:15 5.txt
+-rw-r--r-- 1 root root   53 Oct 14 10:15 6.txt
+-rw-r--r-- 1 root root  103 Oct 14 10:15 7.txt
+-rw-r--r-- 1 root root  219 Oct 14 10:15 8.txt
+-rw-r--r-- 1 root root   59 Oct 14 10:15 9.txt
+root@541df6c65d14:/app# ls -la /app/tests
+total 24
+drwxr-xr-x 2 root root 4096 Oct  8 15:44 .
+drwxr-xr-x 1 root root 4096 Oct 14 10:15 ..
+-rw-rw-r-- 1 root root   58 Oct  8 15:44 run-uv-pytest.sh
+-rw-rw-r-- 1 root root  380 Oct  8 15:44 setup-uv-pytest.sh
+-rw-rw-r-- 1 root root 5447 Oct  8 15:44 test_outputs.py
+root@541df6c65d14:/app# python3 -m pytest -q /app/tests
+...........                                                                                                                                              [100%]
+11 passed in 0.26s
+root@541df6c65d14:/app# ls -la /app/output
+total 52
+drwxr-xr-x 2 root root 4096 Oct 14 10:15 .
+drwxr-xr-x 1 root root 4096 Oct 14 10:16 ..
+-rw-r--r-- 1 root root   19 Oct 14 10:15 1.txt
+-rw-r--r-- 1 root root   83 Oct 14 10:15 10.txt
+-rw-r--r-- 1 root root   71 Oct 14 10:15 2.txt
+-rw-r--r-- 1 root root  239 Oct 14 10:15 3.txt
+-rw-r--r-- 1 root root  419 Oct 14 10:15 4.txt
+-rw-r--r-- 1 root root   35 Oct 14 10:15 5.txt
+-rw-r--r-- 1 root root   53 Oct 14 10:15 6.txt
+-rw-r--r-- 1 root root  103 Oct 14 10:15 7.txt
+-rw-r--r-- 1 root root  219 Oct 14 10:15 8.txt
+-rw-r--r-- 1 root root   59 Oct 14 10:15 9.txt
+root@541df6c65d14:/app#

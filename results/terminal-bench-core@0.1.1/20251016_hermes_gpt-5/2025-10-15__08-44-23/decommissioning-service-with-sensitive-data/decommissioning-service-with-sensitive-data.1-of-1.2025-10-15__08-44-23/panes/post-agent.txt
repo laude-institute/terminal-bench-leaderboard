@@ -1,0 +1,48 @@
+root@4a6f8b833ba2:/app# pwd
+/app
+root@4a6f8b833ba2:/app# ls -la /opt/sensitive_service_data
+total 16
+drwxr-xr-x 2 root root 4096 Oct 15 10:59 .
+drwxr-xr-x 1 root root 4096 Oct 15 10:59 ..
+-rw-r--r-- 1 root root   20 Oct 15 10:59 backup_codes.dat
+-rw-r--r-- 1 root root   40 Oct 15 10:59 user_secrets.txt
+root@4a6f8b833ba2:/app# tar -czf /app/sensitive_files.tar.gz /opt/sensitive_service_data
+tar: Removing leading `/' from member names
+root@4a6f8b833ba2:/app# apt-get update
+Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
+Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
+Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [48.0 kB]
+Get:4 http://deb.debian.org/debian bookworm/main amd64 Packages [8791 kB]
+Get:5 http://deb.debian.org/debian bookworm-updates/main amd64 Packages [6924 B]
+Get:6 http://deb.debian.org/debian-security bookworm-security/main amd64 Packages [281 kB]
+Fetched 9333 kB in 2s (3880 kB/s)
+Reading package lists... Done
+root@4a6f8b833ba2:/app# apt-get install -y gnupg
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+gnupg is already the newest version (2.2.40-1.1+deb12u1).
+0 upgraded, 0 newly installed, 0 to remove and 39 not upgraded.
+root@4a6f8b833ba2:/app# gpg --batch --yes --passphrase 't-bench-passphrase' --symmetric --cipher-algo AES256 --output /app/service_archive.gpg /app/sensitive_fi
+les.tar.gz
+gpg: directory '/root/.gnupg' created
+gpg: keybox '/root/.gnupg/pubring.kbx' created
+root@4a6f8b833ba2:/app# ls -l /app/service_archive.gpg
+-rw-r--r-- 1 root root 340 Oct 15 11:01 /app/service_archive.gpg
+root@4a6f8b833ba2:/app# shred -n 3 -z -u /app/sensitive_files.tar.gz
+root@4a6f8b833ba2:/app# find /opt/sensitive_service_data -type f -print0 | xargs -0 -I{} shred -n 3 -z -u {}
+root@4a6f8b833ba2:/app# find /opt/sensitive_service_data -type l -print0 | xargs -0 -I{} rm -f {}
+root@4a6f8b833ba2:/app# find /opt/sensitive_service_data -type d -empty -delete
+root@4a6f8b833ba2:/app# rmdir /opt/sensitive_service_data
+rmdir: failed to remove '/opt/sensitive_service_data': No such file or directory
+root@4a6f8b833ba2:/app# shred -n 3 -z -u /etc/service_config.ini
+root@4a6f8b833ba2:/app# shred -n 3 -z -u /tmp/service.pid
+root@4a6f8b833ba2:/app# ls -la /app
+total 12
+drwxr-xr-x 1 root root 4096 Oct 15 11:01 .
+drwxr-xr-x 1 root root 4096 Oct 15 10:59 ..
+-rw-r--r-- 1 root root  340 Oct 15 11:01 service_archive.gpg
+root@4a6f8b833ba2:/app# ls -la /opt/sensitive_service_data || echo "/opt/sensitive_service_data no longer exists"
+ls: cannot access '/opt/sensitive_service_data': No such file or directory
+/opt/sensitive_service_data no longer exists
+root@4a6f8b833ba2:/app#

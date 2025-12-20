@@ -1,0 +1,113 @@
+root@37487d29701b:/app# ls -la
+total 20
+drwxr-xr-x 1 root root 4096 Nov  9 09:38 .
+drwxr-xr-x 1 root root 4096 Dec 10 02:23 ..
+drwxr-xr-x 1 root root 4096 Dec 10 02:19 john
+-rwxrwxr-x 1 root root  215 Nov  9 09:38 secrets.7z
+root@37487d29701b:/app# apt-get update
+Hit:1 http://archive.ubuntu.com/ubuntu noble InRelease
+Hit:2 http://security.ubuntu.com/ubuntu noble-security InRelease
+Get:3 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+Hit:4 http://archive.ubuntu.com/ubuntu noble-backports InRelease
+Get:5 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [2083 kB]
+Get:6 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1943 kB]
+Fetched 4152 kB in 2s (1881 kB/s)
+Reading package lists... Done
+root@37487d29701b:/app# apt-get install -y libcompress-raw-lzma-perl p7zip-full
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  7zip
+Suggested packages:
+  7zip-standalone 7zip-rar
+The following NEW packages will be installed:
+  7zip libcompress-raw-lzma-perl p7zip-full
+0 upgraded, 3 newly installed, 0 to remove and 31 not upgraded.
+Need to get 1884 kB of archives.
+After this operation, 6452 kB of additional disk space will be used.
+Get:1 http://archive.ubuntu.com/ubuntu noble/universe amd64 7zip amd64 23.01+dfsg-11 [1846 kB]
+Get:2 http://archive.ubuntu.com/ubuntu noble/universe amd64 libcompress-raw-lzma-perl amd64 2.209-1build2 [35.1 kB]
+Get:3 http://archive.ubuntu.com/ubuntu noble/universe amd64 p7zip-full all 16.02+transitional.1 [2500 B]
+Fetched 1884 kB in 2s (1207 kB/s)
+debconf: delaying package configuration, since apt-utils is not installed
+Selecting previously unselected package 7zip.
+(Reading database ... 17136 files and directories currently installed.)
+Preparing to unpack .../7zip_23.01+dfsg-11_amd64.deb ...
+Unpacking 7zip (23.01+dfsg-11) ...
+Selecting previously unselected package libcompress-raw-lzma-perl:amd64.
+Preparing to unpack .../libcompress-raw-lzma-perl_2.209-1build2_amd64.deb ...
+Unpacking libcompress-raw-lzma-perl:amd64 (2.209-1build2) ...
+Selecting previously unselected package p7zip-full.
+Preparing to unpack .../p7zip-full_16.02+transitional.1_all.deb ...
+Unpacking p7zip-full (16.02+transitional.1) ...
+Setting up 7zip (23.01+dfsg-11) ...
+Setting up libcompress-raw-lzma-perl:amd64 (2.209-1build2) ...
+Setting up p7zip-full (16.02+transitional.1) ...
+root@37487d29701b:/app# perl /app/john/run/7z2john.pl secrets.7z > secrets.7z.hash
+ATTENTION: the hashes might contain sensitive encrypted data. Be careful when sharing or posting these hashes
+root@37487d29701b:/app# ls -la secrets.7z.hash
+-rw-r--r-- 1 root root 114 Dec 10 02:25 secrets.7z.hash
+root@37487d29701b:/app# /app/john/run/john --format=7z --mask=?d?d?d?d secrets.7z.hash
+Using default input encoding: UTF-8
+Loaded 1 password hash (7z, 7-Zip archive encryption [SHA256 256/256 AVX2 8x AES])
+Cost 1 (iteration count) is 524288 for all loaded hashes
+Cost 2 (padding size) is 3 for all loaded hashes
+Cost 3 (compression type) is 2 for all loaded hashes
+Cost 4 (data length) is 13 for all loaded hashes
+Will run 32 OpenMP threads
+Press 'q' or Ctrl-C to abort, 'h' for help, almost any other key for status
+1998             (secrets.7z)
+1g 0:00:00:05 DONE (2025-12-10 02:25) 0.1742g/s 981.2p/s 981.2c/s 981.2C/s 5438..0358
+Use the "--show" option to display all of the cracked passwords reliably
+Session completed.
+root@37487d29701b:/app# /app/john/run/john --show --format=7z secrets.7z.hash
+secrets.7z:1998
+
+1 password hash cracked, 0 left
+root@37487d29701b:/app# seq -w 0 9999 > digits.txt
+root@37487d29701b:/app# /app/john/run/john --format=7z --wordlist=digits.txt secrets.7z.hash
+Using default input encoding: UTF-8
+Loaded 1 password hash (7z, 7-Zip archive encryption [SHA256 256/256 AVX2 8x AES])
+Cracked 1 password hash (is in /app/john/run/john.pot), use "--show"
+No password hashes left to crack (see FAQ)
+root@37487d29701b:/app# /app/john/run/john --show --format=7z secrets.7z.hash | grep -E '^[^:]+:[^:]+$' | head -n1 | cut -d: -f2 > password.txt
+root@37487d29701b:/app# printf 'Cracked password: '; cat password.txt
+Cracked password: 1998
+root@37487d29701b:/app# rm -rf extracted && mkdir -p extracted
+root@37487d29701b:/app# 7z x -y -p$(cat password.txt) secrets.7z -oextracted
+
+7-Zip 23.01 (x64) : Copyright (c) 1999-2023 Igor Pavlov : 2023-06-20
+ 64-bit locale=C.UTF-8 Threads:32 OPEN_MAX:1048576
+
+Scanning the drive for archives:
+1 file, 215 bytes (1 KiB)
+
+Extracting archive: secrets.7z
+--
+Path = secrets.7z
+Type = 7z
+Physical Size = 215
+Headers Size = 199
+Method = LZMA2:12 7zAES
+Solid = -
+Blocks = 1
+
+Everything is Ok
+
+Folders: 1
+Files: 1
+Size:       9
+Compressed: 215
+root@37487d29701b:/app# ls -la extracted
+total 16
+drwxr-xr-x 3 root root 4096 Dec 10 02:26 .
+drwxr-xr-x 1 root root 4096 Dec 10 02:26 ..
+drwxr-xr-x 2 root root 4096 May  4  2025 secrets
+root@37487d29701b:/app# cp "$(find extracted -type f \( -name 'secrete_file.txt' -o -name 'secret_file.txt' \) -print -quit)" /app/solution.txt
+root@37487d29701b:/app# ls -la /app/solution.txt
+-rw-r--r-- 1 root root 9 Dec 10 02:26 /app/solution.txt
+root@37487d29701b:/app# ls -la /app/solution.txt
+-rw-r--r-- 1 root root 9 Dec 10 02:26 /app/solution.txt
+root@37487d29701b:/app# cat /app/solution.txt
+honeybearroot@37487d29701b:/app#

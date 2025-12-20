@@ -1,0 +1,1277 @@
+root@8a1085a5ad08:/app# ls -la
+total 536
+drwxr-xr-x 1 root root   4096 Oct 15 07:37 .
+drwxr-xr-x 1 root root   4096 Oct 15 07:37 ..
+drwxr-xr-x 2 root root 536576 Oct 15 07:37 c4_sample
+root@8a1085a5ad08:/app# du -sh c4_sample
+800M    c4_sample
+root@8a1085a5ad08:/app# find c4_sample -type f | wc -l
+9898
+root@8a1085a5ad08:/app# cat > /app/reshard.py << 'PY'
+> #!/usr/bin/env python3
+> import os, json, hashlib, shutil
+> MAX_FILESIZE = 15*1024*1024
+> MAX_FILES_PER_DIR = 30
+> input_root = os.path.abspath('c4_sample')
+> output_root = os.path.abspath('c4_reshard')
+>
+> def sha256_file(path):
+>     h = hashlib.sha256()
+>     with open(path, 'rb') as f:
+>         for chunk in iter(lambda: f.read(1024*1024), b''):
+>             h.update(chunk)
+>     return h.hexdigest()
+>
+> def ensure_dir(p):
+>     os.makedirs(p, exist_ok=True)
+>
+> if not os.path.isdir(input_root):
+>     raise SystemExit(f"Input folder not found: {input_root}")
+>
+> if os.path.exists(output_root):
+>     if os.listdir(output_root):
+>         raise SystemExit(f"Output folder exists and not empty: {output_root}")
+> else:
+>     os.makedirs(output_root)
+>
+> metadata = {
+>     'input_root': input_root,
+>     'output_root': output_root,
+>     'max_files_per_dir': MAX_FILES_PER_DIR,
+>     'max_filesize_bytes': MAX_FILESIZE,
+>     'files': []
+> }
+>
+> shard_index = 1
+> files_in_current = 0
+>
+> def new_shard():
+>     global shard_index, files_in_current
+>     shard_dirname = f"shard_{shard_index:05d}"
+>     dirpath = os.path.join(output_root, shard_dirname)
+>     ensure_dir(dirpath)
+>     shard_index += 1
+>     files_in_current = 0
+>     return shard_dirname, dirpath
+>
+> current_shard_name, current_shard_path = new_shard()
+> seq_id = 1
+>
+> for root, dirs, files in os.walk(input_root):
+>     dirs.sort()
+>     files.sort()
+>     for fname in files:
+>         src_path = os.path.join(root, fname)
+>         if not os.path.isfile(src_path):
+>             continue
+>         relpath = os.path.relpath(src_path, input_root)
+>         size = os.path.getsize(src_path)
+>         orig_hash = sha256_file(src_path)
+>         base, ext = os.path.splitext(fname)
+>         entry = {
+>             'original_relpath': relpath,
+>             'seq_id': seq_id,
+>             'original_size': size,
+>             'original_sha256': orig_hash
+>         }
+>         if size <= MAX_FILESIZE:
+>             if files_in_current >= MAX_FILES_PER_DIR:
+>                 current_shard_name, current_shard_path = new_shard()
+>             dest_name = f"file_{seq_id:06d}{ext}"
+>             dest_path = os.path.join(current_shard_path, dest_name)
+>             shutil.copy2(src_path, dest_path)
+>             files_in_current += 1
+>             entry['type'] = 'single'
+>             entry['shard_dir'] = current_shard_name
+>             entry['dest_filename'] = dest_name
+>             entry['parts'] = []
+>         else:
+>             entry['type'] = 'chunks'
+>             entry['parts'] = []
+>             chunk_index = 0
+>             with open(src_path, 'rb') as fsrc:
+>                 while True:
+>                     chunk = fsrc.read(MAX_FILESIZE)
+>                     if not chunk:
+>                         break
+>                     if files_in_current >= MAX_FILES_PER_DIR:
+>                         current_shard_name, current_shard_path = new_shard()
+>                     part_name = f"file_{seq_id:06d}.part{chunk_index:05d}"
+>                     part_path = os.path.join(current_shard_path, part_name)
+>                     with open(part_path, 'wb') as fdst:
+>                         fdst.write(chunk)
+>                     files_in_current += 1
+>                     entry['parts'].append({
+>                         'shard_dir': current_shard_name,
+>                         'filename': part_name,
+>                         'size': len(chunk)
+>                     })
+>                     chunk_index += 1
+>         metadata['files'].append(entry)
+>         seq_id += 1
+>
+> meta_path = os.path.join(output_root, 'metadata.json')
+> with open(meta_path, 'w', encoding='utf-8') as mf:
+>     json.dump(metadata, mf, indent=2, sort_keys=True)
+> PY
+root@8a1085a5ad08:/app# python3 /app/reshard.py
+root@8a1085a5ad08:/app# ls -la c4_reshard
+total 4588
+drwxr-xr-x 332 root root   12288 Oct 15 07:39 .
+drwxr-xr-x   1 root root    4096 Oct 15 07:39 ..
+-rw-r--r--   1 root root 3326495 Oct 15 07:39 metadata.json
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00001
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00002
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00003
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00004
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00005
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00006
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00007
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00008
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00009
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00010
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00011
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00012
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00013
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00014
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00015
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00016
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00017
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00018
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00019
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00020
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00021
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00022
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00023
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00024
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00025
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00026
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00027
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00028
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00029
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00030
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00031
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00032
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00033
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00034
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00035
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00036
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00037
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00038
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00039
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00040
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00041
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00042
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00043
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00044
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00045
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00046
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00047
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00048
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00049
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00050
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00051
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00052
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00053
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00054
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00055
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00056
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00057
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00058
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00059
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00060
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00061
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00062
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00063
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00064
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00065
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00066
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00067
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00068
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00069
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00070
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00071
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00072
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00073
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00074
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00075
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00076
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00077
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00078
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00079
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00080
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00081
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00082
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00083
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00084
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00085
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00086
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00087
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00088
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00089
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00090
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00091
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00092
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00093
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00094
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00095
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00096
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00097
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00098
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00099
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00100
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00101
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00102
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00103
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00104
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00105
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00106
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00107
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00108
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00109
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00110
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00111
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00112
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00113
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00114
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00115
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00116
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00117
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00118
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00119
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00120
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00121
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00122
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00123
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00124
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00125
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00126
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00127
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00128
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00129
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00130
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00131
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00132
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00133
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00134
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00135
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00136
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00137
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00138
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00139
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00140
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00141
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00142
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00143
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00144
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00145
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00146
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00147
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00148
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00149
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00150
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00151
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00152
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00153
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00154
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00155
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00156
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00157
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00158
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00159
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00160
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00161
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00162
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00163
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00164
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00165
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00166
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00167
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00168
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00169
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00170
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00171
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00172
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00173
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00174
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00175
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00176
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00177
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00178
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00179
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00180
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00181
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00182
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00183
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00184
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00185
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00186
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00187
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00188
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00189
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00190
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00191
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00192
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00193
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00194
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00195
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00196
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00197
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00198
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00199
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00200
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00201
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00202
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00203
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00204
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00205
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00206
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00207
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00208
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00209
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00210
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00211
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00212
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00213
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00214
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00215
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00216
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00217
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00218
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00219
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00220
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00221
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00222
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00223
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00224
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00225
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00226
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00227
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00228
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00229
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00230
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00231
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00232
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00233
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00234
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00235
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00236
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00237
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00238
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00239
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00240
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00241
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00242
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00243
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00244
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00245
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00246
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00247
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00248
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00249
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00250
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00251
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00252
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00253
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00254
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00255
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00256
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00257
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00258
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00259
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00260
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00261
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00262
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00263
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00264
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00265
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00266
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00267
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00268
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00269
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00270
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00271
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00272
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00273
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00274
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00275
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00276
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00277
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00278
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00279
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00280
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00281
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00282
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00283
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00284
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00285
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00286
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00287
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00288
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00289
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00290
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00291
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00292
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00293
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00294
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00295
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00296
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00297
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00298
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00299
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00300
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00301
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00302
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00303
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00304
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00305
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00306
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00307
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00308
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00309
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00310
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00311
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00312
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00313
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00314
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00315
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00316
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00317
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00318
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00319
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00320
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00321
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00322
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00323
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00324
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00325
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00326
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00327
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00328
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00329
+drwxr-xr-x   2 root root    4096 Oct 15 07:39 shard_00330
+root@8a1085a5ad08:/app# for d in c4_reshard/shard_*; do echo "$(basename "$d") files:"; find "$d" -maxdepth 1 -type f | wc -l; done
+shard_00001 files:
+30
+shard_00002 files:
+30
+shard_00003 files:
+30
+shard_00004 files:
+30
+shard_00005 files:
+30
+shard_00006 files:
+30
+shard_00007 files:
+30
+shard_00008 files:
+30
+shard_00009 files:
+30
+shard_00010 files:
+30
+shard_00011 files:
+30
+shard_00012 files:
+30
+shard_00013 files:
+30
+shard_00014 files:
+30
+shard_00015 files:
+30
+shard_00016 files:
+30
+shard_00017 files:
+30
+shard_00018 files:
+30
+shard_00019 files:
+30
+shard_00020 files:
+30
+shard_00021 files:
+30
+shard_00022 files:
+30
+shard_00023 files:
+30
+shard_00024 files:
+30
+shard_00025 files:
+30
+shard_00026 files:
+30
+shard_00027 files:
+30
+shard_00028 files:
+30
+shard_00029 files:
+30
+shard_00030 files:
+30
+shard_00031 files:
+30
+shard_00032 files:
+30
+shard_00033 files:
+30
+shard_00034 files:
+30
+shard_00035 files:
+30
+shard_00036 files:
+30
+shard_00037 files:
+30
+shard_00038 files:
+30
+shard_00039 files:
+30
+shard_00040 files:
+30
+shard_00041 files:
+30
+shard_00042 files:
+30
+shard_00043 files:
+30
+shard_00044 files:
+30
+shard_00045 files:
+30
+shard_00046 files:
+30
+shard_00047 files:
+30
+shard_00048 files:
+30
+shard_00049 files:
+30
+shard_00050 files:
+30
+shard_00051 files:
+30
+shard_00052 files:
+30
+shard_00053 files:
+30
+shard_00054 files:
+30
+shard_00055 files:
+30
+shard_00056 files:
+30
+shard_00057 files:
+30
+shard_00058 files:
+30
+shard_00059 files:
+30
+shard_00060 files:
+30
+shard_00061 files:
+30
+shard_00062 files:
+30
+shard_00063 files:
+30
+shard_00064 files:
+30
+shard_00065 files:
+30
+shard_00066 files:
+30
+shard_00067 files:
+30
+shard_00068 files:
+30
+shard_00069 files:
+30
+shard_00070 files:
+30
+shard_00071 files:
+30
+shard_00072 files:
+30
+shard_00073 files:
+30
+shard_00074 files:
+30
+shard_00075 files:
+30
+shard_00076 files:
+30
+shard_00077 files:
+30
+shard_00078 files:
+30
+shard_00079 files:
+30
+shard_00080 files:
+30
+shard_00081 files:
+30
+shard_00082 files:
+30
+shard_00083 files:
+30
+shard_00084 files:
+30
+shard_00085 files:
+30
+shard_00086 files:
+30
+shard_00087 files:
+30
+shard_00088 files:
+30
+shard_00089 files:
+30
+shard_00090 files:
+30
+shard_00091 files:
+30
+shard_00092 files:
+30
+shard_00093 files:
+30
+shard_00094 files:
+30
+shard_00095 files:
+30
+shard_00096 files:
+30
+shard_00097 files:
+30
+shard_00098 files:
+30
+shard_00099 files:
+30
+shard_00100 files:
+30
+shard_00101 files:
+30
+shard_00102 files:
+30
+shard_00103 files:
+30
+shard_00104 files:
+30
+shard_00105 files:
+30
+shard_00106 files:
+30
+shard_00107 files:
+30
+shard_00108 files:
+30
+shard_00109 files:
+30
+shard_00110 files:
+30
+shard_00111 files:
+30
+shard_00112 files:
+30
+shard_00113 files:
+30
+shard_00114 files:
+30
+shard_00115 files:
+30
+shard_00116 files:
+30
+shard_00117 files:
+30
+shard_00118 files:
+30
+shard_00119 files:
+30
+shard_00120 files:
+30
+shard_00121 files:
+30
+shard_00122 files:
+30
+shard_00123 files:
+30
+shard_00124 files:
+30
+shard_00125 files:
+30
+shard_00126 files:
+30
+shard_00127 files:
+30
+shard_00128 files:
+30
+shard_00129 files:
+30
+shard_00130 files:
+30
+shard_00131 files:
+30
+shard_00132 files:
+30
+shard_00133 files:
+30
+shard_00134 files:
+30
+shard_00135 files:
+30
+shard_00136 files:
+30
+shard_00137 files:
+30
+shard_00138 files:
+30
+shard_00139 files:
+30
+shard_00140 files:
+30
+shard_00141 files:
+30
+shard_00142 files:
+30
+shard_00143 files:
+30
+shard_00144 files:
+30
+shard_00145 files:
+30
+shard_00146 files:
+30
+shard_00147 files:
+30
+shard_00148 files:
+30
+shard_00149 files:
+30
+shard_00150 files:
+30
+shard_00151 files:
+30
+shard_00152 files:
+30
+shard_00153 files:
+30
+shard_00154 files:
+30
+shard_00155 files:
+30
+shard_00156 files:
+30
+shard_00157 files:
+30
+shard_00158 files:
+30
+shard_00159 files:
+30
+shard_00160 files:
+30
+shard_00161 files:
+30
+shard_00162 files:
+30
+shard_00163 files:
+30
+shard_00164 files:
+30
+shard_00165 files:
+30
+shard_00166 files:
+30
+shard_00167 files:
+30
+shard_00168 files:
+30
+shard_00169 files:
+30
+shard_00170 files:
+30
+shard_00171 files:
+30
+shard_00172 files:
+30
+shard_00173 files:
+30
+shard_00174 files:
+30
+shard_00175 files:
+30
+shard_00176 files:
+30
+shard_00177 files:
+30
+shard_00178 files:
+30
+shard_00179 files:
+30
+shard_00180 files:
+30
+shard_00181 files:
+30
+shard_00182 files:
+30
+shard_00183 files:
+30
+shard_00184 files:
+30
+shard_00185 files:
+30
+shard_00186 files:
+30
+shard_00187 files:
+30
+shard_00188 files:
+30
+shard_00189 files:
+30
+shard_00190 files:
+30
+shard_00191 files:
+30
+shard_00192 files:
+30
+shard_00193 files:
+30
+shard_00194 files:
+30
+shard_00195 files:
+30
+shard_00196 files:
+30
+shard_00197 files:
+30
+shard_00198 files:
+30
+shard_00199 files:
+30
+shard_00200 files:
+30
+shard_00201 files:
+30
+shard_00202 files:
+30
+shard_00203 files:
+30
+shard_00204 files:
+30
+shard_00205 files:
+30
+shard_00206 files:
+30
+shard_00207 files:
+30
+shard_00208 files:
+30
+shard_00209 files:
+30
+shard_00210 files:
+30
+shard_00211 files:
+30
+shard_00212 files:
+30
+shard_00213 files:
+30
+shard_00214 files:
+30
+shard_00215 files:
+30
+shard_00216 files:
+30
+shard_00217 files:
+30
+shard_00218 files:
+30
+shard_00219 files:
+30
+shard_00220 files:
+30
+shard_00221 files:
+30
+shard_00222 files:
+30
+shard_00223 files:
+30
+shard_00224 files:
+30
+shard_00225 files:
+30
+shard_00226 files:
+30
+shard_00227 files:
+30
+shard_00228 files:
+30
+shard_00229 files:
+30
+shard_00230 files:
+30
+shard_00231 files:
+30
+shard_00232 files:
+30
+shard_00233 files:
+30
+shard_00234 files:
+30
+shard_00235 files:
+30
+shard_00236 files:
+30
+shard_00237 files:
+30
+shard_00238 files:
+30
+shard_00239 files:
+30
+shard_00240 files:
+30
+shard_00241 files:
+30
+shard_00242 files:
+30
+shard_00243 files:
+30
+shard_00244 files:
+30
+shard_00245 files:
+30
+cat > /app/revert.py << 'PY'
+#!/usr/bin/env python3
+import os, json, argparse, shutil
+
+def load_metadata(meta_path):
+    with open(meta_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+def ensure_dir(p):
+    os.makedirs(p, exist_ok=True)
+
+def restore(metadata, source_root, inplace=False):
+    meta_path = os.path.join(source_root, 'metadata.json')
+    if not os.path.isfile(meta_path):
+        raise SystemExit(f"metadata.json not found at {meta_path}")
+    if inplace:
+        target_root_actual = os.path.abspath(source_root + '_staging_restore')
+        if os.path.exists(target_root_actual):
+            shutil.rmtree(target_root_actual)
+        os.makedirs(target_root_actual)
+        target_root = source_root
+    else:
+        target_root_actual = os.path.abspath(source_root + '_restored')
+        if os.path.exists(target_root_actual):
+            shutil.rmtree(target_root_actual)
+        os.makedirs(target_root_actual)
+        target_root = target_root_actual
+    for entry in metadata['files']:
+        relpath = entry['original_relpath']
+        dest_path = os.path.join(target_root_actual, relpath)
+        ensure_dir(os.path.dirname(dest_path))
+        if entry['type'] == 'single':
+            shard_dir = entry['shard_dir']
+            filename = entry['dest_filename']
+            piece_path = os.path.join(source_root, shard_dir, filename)
+            with open(piece_path, 'rb') as src, open(dest_path, 'wb') as dst:
+                shutil.copyfileobj(src, dst, length=1024*1024)
+        else:
+            with open(dest_path, 'wb') as dst:
+                for part in entry['parts']:
+                    piece_path = os.path.join(source_root, part['shard_dir'], part['filename'])
+                    with open(piece_path, 'rb') as src:
+                        shutil.copyfileobj(src, dst, length=1024*1024)
+    if inplace:
+        # remove everything in source_root except metadata.json
+        for name in os.listdir(source_root):
+            path = os.path.join(source_root, name)
+            if name == 'metadata.json':
+                continue
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            else:
+                os.remove(path)
+        # move restored content from staging into source_root
+        for root, dirs, files in os.walk(target_root_actual):
+            rel = os.path.relpath(root, target_root_actual)
+            dest_dir = os.path.join(source_root, rel) if rel != '.' else source_root
+            ensure_dir(dest_dir)
+            for d in dirs:
+                ensure_dir(os.path.join(dest_dir, d))
+            for f in files:
+                srcf = os.path.join(root, f)
+                dstf = os.path.join(dest_dir, f)
+                shutil.move(srcf, dstf)
+        shutil.rmtree(target_root_actual)
+    return target_root
+
+def main():
+    parser = argparse.ArgumentParser(description='Revert c4_reshard back to original c4_sample structure using metadata.json.')
+    default_meta = os.path.abspath(os.path.join(os.path.dirname(__file__), 'c4_reshard', 'metadata.json'))
+    parser.add_argument('--meta', default=default_meta, help='Path to metadata.json')
+    parser.add_argument('--inplace', action='store_true', help='Replace contents of c4_reshard/ with restored original structure')
+    args = parser.parse_args()
+    metadata = load_metadata(args.meta)
+    source_root = metadata.get('output_root') or os.path.dirname(args.meta)
+    out = restore(metadata, source_root, inplace=args.inplace)
+    print(f'Restored original structure at: {out}')
+
+if __name__ == '__main__':
+    main()
+PY
+shard_00246 files:
+30
+shard_00247 files:
+30
+shard_00248 files:
+30
+shard_00249 files:
+30
+shard_00250 files:
+30
+shard_00251 files:
+30
+shard_00252 files:
+30
+shard_00253 files:
+30
+shard_00254 files:
+30
+shard_00255 files:
+30
+shard_00256 files:
+30
+shard_00257 files:
+30
+shard_00258 files:
+30
+shard_00259 files:
+30
+shard_00260 files:
+30
+shard_00261 files:
+30
+shard_00262 files:
+30
+shard_00263 files:
+30
+shard_00264 files:
+30
+shard_00265 files:
+30
+shard_00266 files:
+30
+shard_00267 files:
+30
+shard_00268 files:
+30
+shard_00269 files:
+30
+shard_00270 files:
+30
+shard_00271 files:
+30
+shard_00272 files:
+30
+shard_00273 files:
+30
+shard_00274 files:
+30
+shard_00275 files:
+30
+shard_00276 files:
+30
+shard_00277 files:
+30
+shard_00278 files:
+30
+shard_00279 files:
+30
+shard_00280 files:
+30
+shard_00281 files:
+30
+shard_00282 files:
+30
+shard_00283 files:
+30
+shard_00284 files:
+30
+shard_00285 files:
+30
+shard_00286 files:
+30
+shard_00287 files:
+30
+shard_00288 files:
+30
+shard_00289 files:
+30
+shard_00290 files:
+30
+shard_00291 files:
+30
+shard_00292 files:
+30
+shard_00293 files:
+30
+shard_00294 files:
+30
+shard_00295 files:
+30
+shard_00296 files:
+30
+shard_00297 files:
+30
+shard_00298 files:
+30
+shard_00299 files:
+30
+shard_00300 files:
+30
+shard_00301 files:
+30
+shard_00302 files:
+30
+shard_00303 files:
+30
+shard_00304 files:
+30
+shard_00305 files:
+30
+shard_00306 files:
+30
+shard_00307 files:
+30
+shard_00308 files:
+30
+shard_00309 files:
+30
+shard_00310 files:
+30
+shard_00311 files:
+30
+shard_00312 files:
+30
+shard_00313 files:
+30
+shard_00314 files:
+30
+shard_00315 files:
+30
+shard_00316 files:
+30
+shard_00317 files:
+30
+shard_00318 files:
+30
+shard_00319 files:
+30
+shard_00320 files:
+30
+shard_00321 files:
+30
+shard_00322 files:
+30
+shard_00323 files:
+30
+shard_00324 files:
+30
+shard_00325 files:
+30
+shard_00326 files:
+30
+shard_00327 files:
+30
+shard_00328 files:
+30
+shard_00329 files:
+30
+shard_00330 files:
+28
+root@8a1085a5ad08:/app# cat > /app/revert.py << 'PY'
+> #!/usr/bin/env python3
+> import os, json, argparse, shutil
+>
+> def load_metadata(meta_path):
+>     with open(meta_path, 'r', encoding='utf-8') as f:
+>         return json.load(f)
+>
+> def ensure_dir(p):
+>     os.makedirs(p, exist_ok=True)
+>
+> def restore(metadata, source_root, inplace=False):
+>     meta_path = os.path.join(source_root, 'metadata.json')
+>     if not os.path.isfile(meta_path):
+>         raise SystemExit(f"metadata.json not found at {meta_path}")
+>     if inplace:
+>         target_root_actual = os.path.abspath(source_root + '_staging_restore')
+>         if os.path.exists(target_root_actual):
+>             shutil.rmtree(target_root_actual)
+>         os.makedirs(target_root_actual)
+>         target_root = source_root
+>     else:
+>         target_root_actual = os.path.abspath(source_root + '_restored')
+>         if os.path.exists(target_root_actual):
+>             shutil.rmtree(target_root_actual)
+>         os.makedirs(target_root_actual)
+>         target_root = target_root_actual
+>     for entry in metadata['files']:
+>         relpath = entry['original_relpath']
+>         dest_path = os.path.join(target_root_actual, relpath)
+>         ensure_dir(os.path.dirname(dest_path))
+>         if entry['type'] == 'single':
+>             shard_dir = entry['shard_dir']
+>             filename = entry['dest_filename']
+>             piece_path = os.path.join(source_root, shard_dir, filename)
+>             with open(piece_path, 'rb') as src, open(dest_path, 'wb') as dst:
+>                 shutil.copyfileobj(src, dst, length=1024*1024)
+>         else:
+>             with open(dest_path, 'wb') as dst:
+>                 for part in entry['parts']:
+>                     piece_path = os.path.join(source_root, part['shard_dir'], part['filename'])
+>                     with open(piece_path, 'rb') as src:
+>                         shutil.copyfileobj(src, dst, length=1024*1024)
+>     if inplace:
+>         # remove everything in source_root except metadata.json
+>         for name in os.listdir(source_root):
+>             path = os.path.join(source_root, name)
+>             if name == 'metadata.json':
+>                 continue
+>             if os.path.isdir(path):
+>                 shutil.rmtree(path)
+>             else:
+>                 os.remove(path)
+>         # move restored content from staging into source_root
+>         for root, dirs, files in os.walk(target_root_actual):
+>             rel = os.path.relpath(root, target_root_actual)
+>             dest_dir = os.path.join(source_root, rel) if rel != '.' else source_root
+>             ensure_dir(dest_dir)
+>             for d in dirs:
+>                 ensure_dir(os.path.join(dest_dir, d))
+>             for f in files:
+>                 srcf = os.path.join(root, f)
+>                 dstf = os.path.join(dest_dir, f)
+>                 shutil.move(srcf, dstf)
+>         shutil.rmtree(target_root_actual)
+>     return target_root
+>
+> def main():
+>     parser = argparse.ArgumentParser(description='Revert c4_reshard back to original c4_sample structure using metadata.json.')
+>     default_meta = os.path.abspath(os.path.join(os.path.dirname(__file__), 'c4_reshard', 'metadata.json'))
+>     parser.add_argument('--meta', default=default_meta, help='Path to metadata.json')
+>     parser.add_argument('--inplace', action='store_true', help='Replace contents of c4_reshard/ with restored original structure')
+>     args = parser.parse_args()
+>     metadata = load_metadata(args.meta)
+>     source_root = metadata.get('output_root') or os.path.dirname(args.meta)
+>     out = restore(metadata, source_root, inplace=args.inplace)
+>     print(f'Restored original structure at: {out}')
+>
+> if __name__ == '__main__':
+>     main()
+> PY
+root@8a1085a5ad08:/app# chmod +x /app/revert.py
+root@8a1085a5ad08:/app#

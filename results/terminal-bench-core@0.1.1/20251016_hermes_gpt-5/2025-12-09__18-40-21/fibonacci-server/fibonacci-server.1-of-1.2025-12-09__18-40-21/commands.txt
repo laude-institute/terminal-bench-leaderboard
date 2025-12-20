@@ -1,0 +1,20 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'python3 --version\n'
+'cat > /app/server.py << \'PY\'\n#!/usr/bin/env python3\nfrom http.server import BaseHTTPRequestHandler, HTTPServer\nfrom urllib.parse import urlparse, parse_qs\nimport json\n\n\ndef fib(n):\n    a, b = 0, 1\n    for _ in range(n):\n        a, b = b, a + b\n    return a\n\n\nclass Handler(BaseHTTPRequestHandler):\n    def do_GET(self):\n        parsed = urlparse(self.path)\n        if parsed.path != \'/fib\':\n            self.send_response(404)\n            self.send_header(\'Content-Type\', \'application/json\')\n            self.end_headers()\n            self.wfile.write(json.dumps({\'error\': \'Not found\'}).encode())\n            return\n\n        params = parse_qs(parsed.query)\n        if \'n\' not in params or len(params[\'n\']) == 0:\n            self.send_response(400)\n            self.send_header(\'Content-Type\', \'application/json\')\n            self.end_headers()\n            self.wfile.write(json.dumps({\'error\': "Missing \'n\' query parameter"}).encode())\n            return\n\n        n_str = params[\'n\'][0]\n        try:\n            n = int(n_str)\n        except Exception:\n            self.send_response(400)\n            self.send_header(\'Content-Type\', \'application/json\')\n            self.end_headers()\n            self.wfile.write(json.dumps({\'error\': "Query parameter \'n\' must be an integer"}).encode())\n            return\n\n        if n < 0:\n            self.send_response(400)\n            self.send_header(\'Content-Type\', \'application/json\')\n            self.end_headers()\n            self.wfile.write(json.dumps({\'error\': "Query parameter \'n\' must be a non-negative integer"}).encode())\n            return\n\n        result = fib(n)\n        self.send_response(200)\n        self.send_header(\'Content-Type\', \'application/json\')\n        self.end_headers()\n        self.wfile.write(json.dumps({\'result\': result}).encode())\n\n    def log_message(self, format, *args):\n        return\n\n\ndef main():\n    host = \'0.0.0.0\'\n    port = 3000\n    httpd = HTTPServer((host, port), Handler)\n    httpd.serve_forever()\n\n\nif __name__ == \'__main__\':\n    main()\nPY\n'
+'chmod +x /app/server.py\n'
+'export PY=$(command -v python3 || command -v python)\n'
+'$PY /app/server.py >/app/server.log 2>&1 & echo $! > /app/server.pid\n'
+"ss -lntp | grep ':3000' || true\n"
+'curl -sS http://localhost:3000/fib?n=10 || wget -qO- http://localhost:3000/fib?n=10\n'
+'curl -sS -i http://localhost:3000/fib || wget -S -qO- http://localhost:3000/fib\n'
+"curl -sS -i 'http://localhost:3000/fib?n=abc' || wget -S -qO- 'http://localhost:3000/fib?n=abc'\n"
+'cat /app/server.pid\n'
+'ps -p $(cat /app/server.pid) -o pid,cmd\n'
+'tail -n +1 /app/server.log\n'
+"python3 - << 'PY'\nimport urllib.request, urllib.error\n\ndef hit(url):\n    try:\n        with urllib.request.urlopen(url) as r:\n            body = r.read().decode()\n            print('OK', r.status, body)\n    except urllib.error.HTTPError as e:\n        body = e.read().decode()\n        print('ERR', e.code, body)\n    except Exception as e:\n        print('EXC', type(e).__name__, str(e))\n\nurls = [\n    'http://localhost:3000/fib?n=10',\n    'http://localhost:3000/fib',\n    'http://localhost:3000/fib?n=abc',\n]\nfor u in urls:\n    print('URL', u)\n    hit(u)\nPY\n"
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

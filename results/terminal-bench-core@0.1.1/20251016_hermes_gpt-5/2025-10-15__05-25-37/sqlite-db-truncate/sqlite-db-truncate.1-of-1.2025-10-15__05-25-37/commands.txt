@@ -1,0 +1,46 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la /app\n'
+'file /app/trunc.db\n'
+'sqlite3 --version\n'
+"sqlite3 /app/trunc.db 'PRAGMA integrity_check;'\n"
+"sqlite3 /app/trunc.db '.tables'\n"
+"sqlite3 /app/trunc.db '.recover' > /app/recovered.sql\n"
+'ls -la /app/recovered.sql\n'
+'sqlite3 /app/recovered.db < /app/recovered.sql\n'
+'sqlite3 /app/recovered.db "SELECT name, sql FROM sqlite_master WHERE type=\'table\';"\n'
+'sqlite3 /app/recovered.db "SELECT name FROM sqlite_master WHERE type=\'table\';"\n'
+'sqlite3 /app/recovered.db "SELECT name FROM sqlite_master WHERE type=\'table\';" | while read -r t; do sqlite3 /app/recovered.db "PRAGMA table_info(\'"$t"\');" | awk -F\'|\' -v tbl="$t" \'$2=="word"||$2=="value"{print tbl"|"$2}\'; done > /app/tables_columns.txt\n'
+'cat /app/tables_columns.txt\n'
+"awk -F'|' '{print $1}' /app/tables_columns.txt | sort -u > /app/candidate_tables.txt\n"
+'cat /app/candidate_tables.txt\n'
+'printf "import sqlite3, json\\nconn=sqlite3.connect(\'/app/recovered.db\')\\ncur=conn.cursor()\\n# discover candidate tables\\ncur.execute(\\"SELECT name FROM sqlite_master WHERE type=\'table\'\\")\\ntables=[r[0] for r in cur.fetchall()]\\nresults=[]\\nfor t in tables:\\n    try:\\n        cur.execute(f\'PRAGMA table_info({t})\')\\n        cols=[r[1] for r in cur.fetchall()]\\n        if \'word\' in cols and \'value\' in cols:\\n            cur.execute(f\'SELECT word, value FROM {t}\')\\n            for w,v in cur.fetchall():\\n                # ensure types\\n                if w is None: continue\\n                try:\\n                    v_out = int(v)\\n                except Exception:\\n                    try:\\n                        v_out = float(v)\n                    except Exception:\n                        continue\\n                results.append({\'word\': str(w), \'value\': v_out})\\n    except Exception as e:\\n        pass\\nprint(json.dumps(results))\\n" > /app/extract_pairs.py\n'
+'python3 /app/extract_pairs.py > /app/recover.json\n'
+'ls -la /app/recover.json\n'
+'head -c 500 /app/recover.json\n'
+'python3 -c "import sqlite3;import sys;\\ntry:\\n conn=sqlite3.connect(\'/app/trunc.db\'); cur=conn.cursor(); cur.execute(\'PRAGMA integrity_check\'); print(cur.fetchall());\\nexcept Exception as e:\\n print(\'ERROR:\', e)" \n'
+'apt-get update\n'
+'apt-get install -y sqlite3\n'
+'sqlite3 --version\n'
+"sqlite3 /app/trunc.db '.recover' > /app/recovered.sql\n"
+'ls -la /app/recovered.sql\n'
+'sqlite3 /app/recovered.db < /app/recovered.sql\n'
+'sqlite3 /app/recovered.db "SELECT name FROM sqlite_master WHERE type=\'table\';"\n'
+'printf "import sqlite3, json, os\\ntry:\\n    db_path = \'/app/recovered.db\' if (os.path.exists(\'/app/recovered.db\') and os.path.getsize(\'/app/recovered.db\')>0) else \'/app/trunc.db\'\\n    conn = sqlite3.connect(db_path)\\n    cur = conn.cursor()\\n    cur.execute(\\"SELECT name FROM sqlite_master WHERE type=\'table\'\\")\\n    tables = [r[0] for r in cur.fetchall()]\\n    results = []\\n    for t in tables:\\n        try:\\n            cur.execute(f\\"PRAGMA table_info({t})\\")\\n            cols = [r[1] for r in cur.fetchall()]\\n            if \'word\' in cols and \'value\' in cols:\\n                cur.execute(f\\"SELECT word, value FROM {t}\\")\\n                for w,v in cur.fetchall():\\n                    if w is None:\\n                        continue\\n                    v_out = None\\n                    try:\\n                        v_out = int(v)\\n                    except Exception:\\n                        try:\\n                            v_out = float(v)\\n                        except Exception:\\n                            continue\\n                    results.append({\'word\': str(w), \'value\': v_out})\\n        except Exception:\\n            pass\\n    print(json.dumps(results))\\nexcept Exception as e:\\n    print(\'[]\')\\n" > /app/extract_pairs.py\n'
+'python3 /app/extract_pairs.py > /app/recover.json\n'
+'ls -la /app/recover.json\n'
+'head -c 500 /app/recover.json\n'
+'hexdump -C /app/trunc.db | head -n 30\n'
+'strings -a /app/trunc.db | head -n 50\n'
+"strings -a /app/trunc.db | grep -n -E 'testword|word|value|CREATE TABLE' || true\n"
+'printf "import re, json\\nfrom pathlib import Path\\n# Read raw bytes\\np = Path(\'/app/trunc.db\')\\nb = p.read_bytes()\\n# Decode to latin1 to preserve byte values in a 1:1 mapping\\ns = b.decode(\'latin1\', errors=\'ignore\')\\n# Find words matching expected pattern\\nword_pat = re.compile(r\'(testword[0-9A-Za-z_]+)\')\\nnum_pat = re.compile(r\'(-?\\d+)\')\\nresults = []\\nseen = set()\\nfor m in word_pat.finditer(s):\\n    w = m.group(1)\\n    idx = m.end()\\n    # search forward window for numbers\\n    fwd = s[idx:idx+128]\\n    nums = list(num_pat.finditer(fwd))\\n    chosen = None\\n    if nums:\\n        # pick the first number in forward window\\n        chosen = nums[0].group(1)\\n    else:\\n        # search backward window if no forward number\\n        back = s[max(0, m.start()-128):m.start()]\\n        nums_back = list(num_pat.finditer(back))\\n        if nums_back:\\n            chosen = nums_back[-1].group(1)\\n    if chosen is None:\\n        continue\\n    try:\\n        val = int(chosen)\\n    except Exception:\\n        try:\\n            val = float(chosen)\\n        except Exception:\\n            continue\\n    if w not in seen:\\n        results.append({\'word\': w, \'value\': val})\\n        seen.add(w)\\nprint(json.dumps(results))\\n" > /app/extract_from_bytes.py\n'
+'python3 /app/extract_from_bytes.py > /app/recover.json\n'
+'ls -la /app/recover.json\n'
+'head -c 500 /app/recover.json\n'
+'ls -la /app/recover.json\n'
+'head -n 50 /app/recover.json\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

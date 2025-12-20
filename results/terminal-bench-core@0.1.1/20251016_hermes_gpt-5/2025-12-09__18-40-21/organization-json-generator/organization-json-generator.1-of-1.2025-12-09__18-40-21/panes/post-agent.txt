@@ -1,0 +1,410 @@
+root@726b43178960:/app# ls -la
+total 16
+drwxr-xr-x 1 root root 4096 Dec 10 03:39 .
+drwxr-xr-x 1 root root 4096 Dec 10 03:39 ..
+drwxr-xr-x 1 root root 4096 Dec 10 03:39 data
+-rw-rw-r-- 1 root root 3420 Nov  9 09:38 schema.json
+root@726b43178960:/app# cat schema.json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["metadata", "organization", "statistics"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["version", "timestamp", "generator"],
+      "properties": {
+        "version": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "generator": { "type": "string" }
+      }
+    },
+    "organization": {
+      "type": "object",
+      "required": ["name", "founded", "departments"],
+      "properties": {
+        "name": { "type": "string" },
+        "founded": { "type": "string", "format": "date" },
+        "departments": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "budget", "employees", "projects"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "budget": { "type": "number", "minimum": 0 },
+              "employees": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "object",
+                  "required": ["id", "name", "position", "skills", "years_of_service"],
+                  "properties": {
+                    "id": { "type": "string" },
+                    "name": { "type": "string" },
+                    "position": { "type": "string" },
+                    "skills": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": { "type": "string" }
+                    },
+                    "years_of_service": { "type": "integer", "minimum": 0 }
+                  }
+                }
+              },
+              "projects": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["name", "status", "members", "deadline"],
+                  "properties": {
+                    "name": { "type": "string" },
+                    "status": {
+                      "type": "string",
+                      "enum": ["Planning", "In Progress", "Testing", "Completed", "On Hold"]
+                    },
+                    "members": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "deadline": { "type": "string", "format": "date" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "required": [
+        "averageDepartmentBudget",
+        "totalEmployees",
+        "skillDistribution",
+        "departmentSizes",
+        "projectStatusDistribution",
+        "averageYearsOfService"
+      ],
+      "properties": {
+        "averageDepartmentBudget": { "type": "number" },
+        "totalEmployees": { "type": "integer" },
+        "skillDistribution": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "departmentSizes": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "projectStatusDistribution": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "averageYearsOfService": { "type": "number" }
+      }
+    }
+  }
+}root@726b43178960:/app# head -n 5 departments.csv
+head: cannot open 'departments.csv' for reading: No such file or directory
+root@726b43178960:/app# head -n 5 employees.csv
+head: cannot open 'employees.csv' for reading: No such file or directory
+root@726b43178960:/app# head -n 5 projects.csv
+head: cannot open 'projects.csv' for reading: No such file or directory
+root@726b43178960:/app# printf '%s
+nt_name"])' '    emp_salary_key = find_key(emp_fields, ["salary", "Salary", "annual_salary"])' '' '    proj_id_key = find_key(proj_fields, ["project_id", "proj_
+id", "id", "ProjectID"])' '    proj_name_key = find_key(proj_fields, ["name", "project_name", "Name"])' '    proj_dept_key = find_key(proj_fields, ["department_
+id", "dept_id", "DepartmentID", "department_name"])' '    proj_budget_key = find_key(proj_fields, ["budget", "Budget", "project_budget"])' '' '    # Build depar
+tments mapping' '    dept_map = {}' '    for d in departments:' '        did = d.get(dept_id_key) if dept_id_key else d.get(dept_name_key)' '        if did is N
+one:' '            continue' '        key = str(did).strip()' '        dept_map[key] = {' '            "metadata": d,' '            "id": key,' '            "na
+me": d.get(dept_name_key) if dept_name_key else d.get(dept_id_key),' '            "employees": [],' '            "projects": []' '        }' '' '    # Assign em
+ployees to departments' '    for e in employees:' '        dept_ref = e.get(emp_dept_key)' '        dept_key = None' '        if dept_ref is not None:' '
+     dept_key = str(dept_ref).strip()' '        # If employees have department_name and departments keyed by id, try match by name too' '        if dept_key not
+ in dept_map and dept_name_key and emp_dept_key == dept_name_key:' '            # fallback: build name->id mapping' '            for dk, dv in dept_map.items():
+' '                if (dv.get("name") and str(dv["name"]).strip() == str(dept_ref).strip()):' '                    dept_key = dk' '                    break' '
+       emp_entry = {' '            "id": e.get(emp_id_key),' '            "name": e.get(emp_name_key),' '            "department": dept_ref,' '            "meta
+data": e' '        }' '        # add numeric salary if present' '        if emp_salary_key and e.get(emp_salary_key) not in (None, ""):' '            emp_entry[
+"salary"] = to_float(e.get(emp_salary_key))' '        if dept_key in dept_map:' '            dept_map[dept_key]["employees"].append(emp_en> ' '#!/usr/bin/env py
+thon3' 'import csv, json, sys, os, statistics, datetime' '' 'def load_csv(path):' '    with open(path, newline="", encoding="utf-8") as f:' '        return list
+(csv.DictReader(f))' '' 'def to_int(val, default=None):' '    try:' '        return int(str(val).strip())' '    except Exception:' '        return default' '' '
+def to_float(val, default=None):' '    try:' '        return float(str(val).strip())' '    except Exception:' '        return default' '' 'def main():' '    bas
+e = os.path.abspath(os.path.dirname(__file__))' '    schema_path = os.path.join(base, "schema.json")' '    depts_path = os.path.join(base, "departments.csv")' '
+    emps_path = os.path.join(base, "employees.csv")' '    projs_path = os.path.join(base, "projects.csv")' '' '    # Load schema' '    schema = {}' '    if os.p
+ath.exists(schema_path):' '        with open(schema_path, "r", encoding="utf-8") as sf:' '            try:' '                schema = json.load(sf)' '
+  except Exception:' '                schema = {}' '' '    # Load CSVs' '    departments = load_csv(depts_path)' '    employees = load_csv(emps_path)' '    proj
+ects = load_csv(projs_path)' '' '    # Infer key field names' '    def find_key(fields, candidates):' '        for c in candidates:' '            if c in fields
+:' '                return c' '        return None' '' '    dept_fields = departments[0].keys() if departments else []' '    emp_fields = employees[0].keys() if
+ employees else []' '    proj_fields = projects[0].keys() if projects else []' '' '    dept_id_key = find_key(dept_fields, ["department_id", "dept_id", "id", "d
+eptId", "DepartmentID"])' '    dept_name_key = find_key(dept_fields, ["name", "department_name", "dept_name", "Name"])' '' '    emp_id_key = find_key(emp_fields
+, ["employee_id", "emp_id", "id", "EmployeeID"])' '    emp_name_key = find_key(emp_fields, ["name", "employee_name", "full_name", "Name"])' '    emp_dept_key =
+find_key(emp_fields, ["department_id", "dept_id", "department", "dept", "DepartmentID", "department_name"])' '    emp_salary_key = find_key(emp_fields, ["salary
+", "Salary", "annual_salary"])' '' '    proj_id_key = find_key(proj_fields, ["project_id", "proj_id", "id", "ProjectID"])' '    proj_name_key = find_key(proj_fi
+elds, ["name", "project_name", "Name"])' '    proj_dept_key = find_key(proj_fields, ["department_id", "dept_id", "DepartmentID", "department_name"])' '    proj_
+budget_key = find_key(proj_fields, ["budget", "Budget", "project_budget"])' '' '    # Build departments mapping' '    dept_map = {}' '    for d in departments:'
+ '        did = d.get(dept_id_key) if dept_id_key else d.get(dept_name_key)' '        if did is None:' '            continue' '        key = str(did).strip()' '
+        dept_map[key] = {' '            "metadata": d,' '            "id": key,' '            "name": d.get(dept_name_key) if dept_name_key else d.get(dept_id_k
+ey),' '            "employees": [],' '            "projects": []' '        }' '' '    # Assign employees to departments' '    for e in employees:' '        dept
+_ref = e.get(emp_dept_key)' '        dept_key = None' '        if dept_ref is not None:' '            dept_key = str(dept_ref).strip()' '        # If employees
+have department_name and departments keyed by id, try match by name too' '        if dept_key not in dept_map and dept_name_key and emp_dept_key == dept_name_ke
+y:' '            # fallback: build name->id mapping' '            for dk, dv in dept_map.items():' '                if (dv.get("name") and str(dv["name"]).strip
+() == str(dept_ref).strip()):' '                    dept_key = dk' '                    break' '        emp_entry = {' '            "id": e.get(emp_id_key),' '
+           "name": e.get(emp_name_key),' '            "department": dept_ref,' '            "metadata": e' '        }' '        # add numeric salary if present'
+ '        if emp_salary_key and e.get(emp_salary_key) not in (None, ""):' '            emp_entry["salary"] = to_float(e.get(emp_salary_key))' '        if dept_k
+ey in dept_map:' '            dept_map[dept_key]["employees"].append(emp_entry)' '    # Assign projects to departments' '    for p in projects:' '        dept_r
+ef = p.get(proj_dept_key)' '        dept_key = str(dept_ref).strip() if dept_ref is not None else None' '        proj_entry = {' '            "id": p.get(proj_i
+d_key),' '            "name": p.get(proj_name_key),' '            "department": dept_ref,' '            "metadata": p' '        }' '        if proj_budget_key a
+nd p.get(proj_budget_key) not in (None, ""):' '            proj_entry["budget"] = to_float(p.get(proj_budget_key))' '        if dept_key in dept_map:' '
+    dept_map[dept_key]["projects"].append(proj_entry)' '' '    # Compute statistics' '    org_stats = {' '        "total_departments": len(dept_map),' '
+"total_employees": 0,' '        "total_projects": 0,' '        "average_salary": None,' '        "total_budget": None' '    }' '    all_salaries = []' '    all_
+budgets = []' '' '    for d in dept_map.values():' '        emp_count = len(d["employees"])' '        proj_count = len(d["projects"])' '        salaries = [e.ge
+t("salary") for e in d["employees"] if isinstance(e.get("salary"), (int, float))]' '        budgets = [p.get("budget") for p in d["projects"] if isinstance(p.ge
+t("budget"), (int, float))]' '        dept_stats = {' '            "employee_count": emp_count,' '            "project_count": proj_count,' '            "averag
+e_salary": (sum(salaries)/len(salaries)) if salaries else None,' '            "total_budget": sum(budgets) if budgets else None' '        }' '        d["statist
+ics"] = dept_stats' '        org_stats["total_employees"] += emp_count' '        org_stats["total_projects"] += proj_count' '        all_salaries.extend(salarie
+s)' '        all_budgets.extend(budgets)' '' '    org_stats["average_salary"] = (sum(all_salaries)/len(all_salaries)) if all_salaries else None' '    org_stats[
+"total_budget"] = sum(all_budgets) if all_budgets else None' '' '    # Build organization metadata' '    generated_at = datetime.datetime.utcnow().isoformat() +
+ "Z"' '    org_meta = {' '        "generated_at": generated_at,' '        "source_files": {' '            "departments": os.path.basename(depts_path),' '
+     "employees": os.path.basename(emps_path),' '            "projects": os.path.basename(projs_path)' '        }' '    }' '    # Include schema info if present
+' '    schema_version = None' '    if isinstance(schema, dict):' '        schema_version = schema.get("$id") or schema.get("version") or schema.get("title")' '
+   if schema_version:' '        org_meta["schema"] = schema_version' '' '    # Construct final JSON according to schema intent' '    organization = {' '
+"metadata": org_meta,' '        "departments": [] ,' '        "statistics": org_stats' '    }' '    # Sort departments by name if available' '    sorted_depts =
+ sorted(dept_map.values(), key=lambda x: (str(x.get("name")) if x.get("name") is not None else str(x.get("id"))))' '    for d in sorted_depts:' '        # Prepa
+re department entry with essential fields and nested lists' '        dept_entry = {' '            "id": d.get("id"),' '            "name": d.get("name"),' '
+        "employees": d.get("employees", []),' '            "projects": d.get("projects", []),' '            "statistics": d.get("statistics"),' '            "me
+tadata": d.get("metadata", {})' '        }' '        organization["departments"].append(dept_entry)' '' '    out_path = os.path.join(base, "organization.json")'
+ '    with open(out_path, "w", encoding="utf-8") as outf:' '        json.dump(organization, outf, indent=2, ensure_ascii=False)' '    print(out_path)' '' 'if __
+name__ == "__main__":' '    main()' > processor.py
+root@726b43178960:/app# chmod +x processor.py
+root@726b43178960:/app# python3 processor.py
+Traceback (most recent call last):
+  File "/app/processor.py", line 193, in <module>
+    main()
+    ~~~~^^
+  File "/app/processor.py", line 37, in main
+    departments = load_csv(depts_path)
+  File "/app/processor.py", line 5, in load_csv
+    with open(path, newline="", encoding="utf-8") as f:
+         ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/app/departments.csv'
+root@726b43178960:/app# ls -la organization.json
+ls: cannot access 'organization.json': No such file or directory
+root@726b43178960:/app# head -n 50 organization.json
+head: cannot open 'organization.json' for reading: No such file or directory
+root@726b43178960:/app# ls -la
+total 24
+drwxr-xr-x 1 root root 4096 Dec 10 03:40 .
+drwxr-xr-x 1 root root 4096 Dec 10 03:39 ..
+drwxr-xr-x 1 root root 4096 Dec 10 03:39 data
+-rwxr-xr-x 1 root root 7348 Dec 10 03:40 processor.py
+-rw-rw-r-- 1 root root 3420 Nov  9 09:38 schema.json
+root@726b43178960:/app# ls -la data
+total 20
+drwxr-xr-x 1 root root 4096 Dec 10 03:39 .
+drwxr-xr-x 1 root root 4096 Dec 10 03:40 ..
+-rw-rw-r-- 1 root root  154 Nov  9 09:38 departments.csv
+-rw-rw-r-- 1 root root  992 Nov  9 09:38 employees.csv
+-rw-rw-r-- 1 root root  440 Nov  9 09:38 projects.csv
+root@726b43178960:/app# head -n 5 data/departments.csv
+id,name,budget
+D001,Engineering,1500000
+D002,Marketing,800000
+D003,Human Resources,400000
+D004,Research & Development,2000000
+root@726b43178960:/app# head -n 5 data/employees.csv
+id,name,position,skills,years_of_service,department_id
+D001-E001,Cristiano Ronaldo,Manager,Python;Leadership;Project Management,10,D001
+D001-E002,Bernardo Silva,Senior Developer,JavaScript;Python;Cloud Services,7,D001
+D001-E003,Sergio Ramos,Team Lead,Java;C++;DevOps,12,D001
+D002-E001,Kylian Mbappe,Designer,UI/UX Design;Communication;Marketing,5,D002
+root@726b43178960:/app# head -n 5 data/projects.csv
+name,status,member_ids,deadline,department_id
+Madrid,In Progress,D001-E001;D001-E002;D001-E003,2025-06-30,D001
+Ferrari,Completed,D001-E002;D001-E003,2025-03-15,D001
+RedBull,Planning,D002-E001;D002-E002,2025-09-10,D002
+McLaren,In Progress,D003-E001;D003-E002,2025-07-20,D003
+root@726b43178960:/app# printf '%s
+p in [",", ";", "|", "/"]:' '        if sep in s:' '            parts = [p.strip() for p in s.split(sep)]' '            break' '    if not parts:' '        part
+s = [s.strip()]' '    return [p for p in parts if p]' '' 'def normalize_status(s):' '    if s is None:' '        return "Planning"' '    m = s.strip().lower()'
+'    mapping = {' '        "planning": "Planning",' '        "planned": "Planning",' '        "in progress": "In Progress",' '        "progress": "In Progress",
+' '        "ongoing": "In Progress",' '        "testing": "Testing",' '        "qa": "Testing",' '        "completed": "Completed",' '        "done": "Completed
+",' '        "finished": "Completed",' '        "on hold": "On Hold",' '        "paused": "On Hold",' '        "deferred": "On Hold"' '    }' '    return mappin
+g.get(m, s.strip() if s.strip() in ["Planning","In Progress","Testing","Completed","On Hold"] else "Planning")' '' 'def main():' '    base = os.path.abspath(os.
+path.dirname(__file__))' '    schema_path = os.path.join(base, "schema.json")' '    depts_path = find_file(base, "departments.csv")' '    emps_path = find_file(
+base, "employees.csv")' '    projs_path = find_file(base, "projects.csv")' '' '    # Load data' '    departments = load_csv(depts_path)' '    employees = load_c
+sv(emps_path)' '    projects = load_csv(projs_path)' '' '    # Infer department fields' '    dept_fields = departments[0].keys() if departments else []' '    de
+f pick(fields, candidates):' '        for c in candidates:' '            if c in fields:' '                return c' '        return None' '' '    dept_id_key =
+ pick(dept_fields, ["id","department_id","dept_id","DepartmentID"])' '    dept_name_key = pick(dept_fields, ["name","department_name","dept_name","Name"])' '
+ dept_budget_key = pick(dept_fields, ["budget","Budget","department_budget"])' '    org_name_key = pick(dept_fields, ["organization","organization_name","org_na
+me","company","Company"])' '    founded_key = pick(dept_fields, ["founded","Founded","established","established_date"])' '' '    # Infer employee fields' '    e
+mp_fields = employees[0].keys() if employees else []' '    emp_id_key = pick(emp_fields, ["id","employee_id","emp_id","EmployeeID"])' '    emp_name_key = pick(e
+mp_fields, ["name","employee_name","full_name","Name"])' '    emp_position_key = pick(emp_fields, ["position","title","role","Position"])' '    emp_skills_key =
+ pick(emp_fields, ["skills","skillset","Skills"])' '    emp_yos_key = pick(emp_fields, ["years_of_service","YearsOfService","experience_years","years","yos"])'
+'    emp_dept_link_key = pick(emp_fields, ["department_id","dept_id","department","dept","DepartmentID","department_name"])' '' '    # Infer project fields' '
+  proj_fields = projects[0].keys() if projects else []' '    proj_name_key = pick(proj_fields, ["name","project_name","Name"])' '    proj_status_key = pick(proj
+_fields, ["status","Status"])' '    proj_members_key = pick(proj_fields, ["members","team","team_members"])' '    proj_deadline_key = pick(proj_fields, ["deadli
+ne","due_date"])' '    proj_dept_link_key > ' '#!/usr/bin/env python3' 'import csv, json, os, datetime' '' 'def find_file(base, name):' '    d = os.path.join(ba
+se, "data", name)' '    if os.path.exists(d):' '        return d' '    p = os.path.join(base, name)' '    return p' '' 'def load_csv(path):' '    with open(path
+, newline="", encoding="utf-8") as f:' '        return list(csv.DictReader(f))' '' 'def to_int(val, default=None):' '    try:' '        if val is None:' '
+      return default' '        s = str(val).strip()' '        if s == "":' '            return default' '        return int(float(s))' '    except Exception:' '
+        return default' '' 'def to_float(val, default=None):' '    try:' '        if val is None:' '            return default' '        s = str(val).strip().re
+place(",", "")' '        if s == "":' '            return default' '        return float(s)' '    except Exception:' '        return default' '' 'def split_list
+(val):' '    if val is None:' '        return []' '    s = str(val)' '    parts = []' '    for sep in [",", ";", "|", "/"]:' '        if sep in s:' '
+ parts = [p.strip() for p in s.split(sep)]' '            break' '    if not parts:' '        parts = [s.strip()]' '    return [p for p in parts if p]' '' 'def n
+ormalize_status(s):' '    if s is None:' '        return "Planning"' '    m = s.strip().lower()' '    mapping = {' '        "planning": "Planning",' '        "p
+lanned": "Planning",' '        "in progress": "In Progress",' '        "progress": "In Progress",' '        "ongoing": "In Progress",' '        "testing": "Test
+ing",' '        "qa": "Testing",' '        "completed": "Completed",' '        "done": "Completed",' '        "finished": "Completed",' '        "on hold": "On
+Hold",' '        "paused": "On Hold",' '        "deferred": "On Hold"' '    }' '    return mapping.get(m, s.strip() if s.strip() in ["Planning","In Progress","T
+esting","Completed","On Hold"] else "Planning")' '' 'def main():' '    base = os.path.abspath(os.path.dirname(__file__))' '    schema_path = os.path.join(base,
+"schema.json")' '    depts_path = find_file(base, "departments.csv")' '    emps_path = find_file(base, "employees.csv")' '    projs_path = find_file(base, "proj
+ects.csv")' '' '    # Load data' '    departments = load_csv(depts_path)' '    employees = load_csv(emps_path)' '    projects = load_csv(projs_path)' '' '    #
+Infer department fields' '    dept_fields = departments[0].keys() if departments else []' '    def pick(fields, candidates):' '        for c in candidates:' '
+          if c in fields:' '                return c' '        return None' '' '    dept_id_key = pick(dept_fields, ["id","department_id","dept_id","DepartmentI
+D"])' '    dept_name_key = pick(dept_fields, ["name","department_name","dept_name","Name"])' '    dept_budget_key = pick(dept_fields, ["budget","Budget","depart
+ment_budget"])' '    org_name_key = pick(dept_fields, ["organization","organization_name","org_name","company","Company"])' '    founded_key = pick(dept_fields,
+ ["founded","Founded","established","established_date"])' '' '    # Infer employee fields' '    emp_fields = employees[0].keys() if employees else []' '    emp_
+id_key = pick(emp_fields, ["id","employee_id","emp_id","EmployeeID"])' '    emp_name_key = pick(emp_fields, ["name","employee_name","full_name","Name"])' '    e
+mp_position_key = pick(emp_fields, ["position","title","role","Position"])' '    emp_skills_key = pick(emp_fields, ["skills","skillset","Skills"])' '    emp_yos
+_key = pick(emp_fields, ["years_of_service","YearsOfService","experience_years","years","yos"])' '    emp_dept_link_key = pick(emp_fields, ["department_id","dep
+t_id","department","dept","DepartmentID","department_name"])' '' '    # Infer project fields' '    proj_fields = projects[0].keys() if projects else []' '    pr
+oj_name_key = pick(proj_fields, ["name","project_name","Name"])' '    proj_status_key = pick(proj_fields, ["status","Status"])' '    proj_members_key = pick(pro
+j_fields, ["members","team","team_members"])' '    proj_deadline_key = pick(proj_fields, ["deadline","due_date"])' '    proj_dept_link_key = pick(proj_fields, [
+"department_id","dept_id","DepartmentID","department","department_name"])' '    proj_budget_key = pick(proj_fields, ["budget","Budget","project_budget"])' '' '
+   # Build departments structure' '    dept_map = {}' '    for d in departments:' '        did = str(d.get(dept_id_key) or d.get(dept_name_key) or "").strip()'
+'        if not did:' '            continue' '        name = d.get(dept_name_key) or d.get("name") or d.get("department_name") or did' '        budget = to_floa
+t(d.get(dept_budget_key), 0.0)' '        dept_map[did] = {' '            "id": str(did),' '            "name": str(name),' '            "budget": 0.0 if budget
+is None else float(budget),' '            "employees": [],' '            "projects": []' '        }' '' '    # Assign employees to departments' '    for e in em
+ployees:' '        # Determine department key' '        dept_ref = e.get(emp_dept_link_key)' '        dept_key = str(dept_ref).strip() if dept_ref is not None e
+lse None' '        # If link is by department name, try match by name' '        if dept_key not in dept_map and dept_key is not None:' '            for dk, dv i
+n dept_map.items():' '                if str(dv.get("name")).strip() == dept_key:' '                    dept_key = dk' '                    break' '        emp
+= {' '            "id": str(e.get(emp_id_key)) if emp_id_key else str(e.get(emp_name_key)),' '            "name": str(e.get(emp_name_key)) if emp_name_key else
+str(e.get(emp_id_key)),' '            "position": str(e.get(emp_position_key)) if emp_position_key else "Employee",' '            "skills": split_list(e.get(emp
+_skills_key)) if emp_skills_key else [],' '            "years_of_service": to_int(e.get(emp_yos_key), 0)' '        }' '        if not emp["skills"]:' '
+   emp["skills"] = ["General"]' '        # attach to department' '        if dept_key in dept_map:' '            dept_map[dept_key]["employees"].append(emp)' ''
+ '    # Assign projects to departments and accumulate budgets' '    for p in projects:' '        dept_ref = p.get(proj_dept_link_key)' '        dept_key = str(d
+ept_ref).strip() if dept_ref is not None else None' '        if dept_key not in dept_map and dept_key is not None:' '            for dk, dv in dept_map.items():
+' '                if str(dv.get("name")).strip() == dept_key:' '                    dept_key = dk' '                    break' '        proj = {' '
+"name": str(p.get(proj_name_key)) if proj_name_key else "Unnamed Project",' '            "status": normalize_status(p.get(proj_status_key)) if proj_status_key e
+lse "Planning",' '            "members": split_list(p.get(proj_members_key)) if proj_members_key else [],' '            "deadline": str(p.get(proj_deadline_key)
+) if proj_deadline_key else ""' '        }' '        # update department budget from project budget if available' '        budget_val = to_float(p.get(proj_budg
+et_key)) if proj_budget_key else None' '        if dept_key in dept_map:' '            dept_map[dept_key]["projects"].append(proj)' '            if budget_val i
+s not None:' '                dept_map[dept_key]["budget"] = float(dept_map[dept_key]["budget"]) + float(budget_val)' '' '    # If any department budget still N
+one, set to 0' '    for d in dept_map.values():' '        if d["budget"] is None:' '            d["budget"] = 0.0' '' '    # Organization metadata and identity'
+ '    # Try infer organization name and founded from departments CSV (first row)' '    org_name = None' '    founded = None' '    if departments:' '        org_
+name = departments[0].get(org_name_key) if org_name_key else None' '        founded = departments[0].get(founded_key) if founded_key else None' '    if not org_
+name:' '        org_name = "Organization"' '    if not founded:' '        founded = "2000-01-01"' '' '    metadata = {' '        "version": "1.0.0",' '        "
+timestamp": datetime.datetime.utcnow().isoformat() + "Z",' '        "generator": "json_processor.py"' '    }' '' '    # Compute statistics' '    # Average depar
+tment budget' '    budgets = [d["budget"] for d in dept_map.values() if isinstance(d.get("budget"), (int, float))]' '    averageDepartmentBudget = (sum(budgets)
+/len(budgets)) if budgets else 0.0' '    # Total employees' '    totalEmployees = sum(len(d["employees"]) for d in dept_map.values())' '    # Skill distribution
+' '    skillDistribution = {}' '    for d in dept_map.values():' '        for e in d["employees"]:' '            for s in e.get("skills", []):' '
+ key = s.strip()' '                if not key:' '                    continue' '                skillDistribution[key] = skillDistribution.get(key, 0) + 1' '
+ # Department sizes' '    departmentSizes = {}' '    for d in dept_map.values():' '        departmentSizes[d["name"]] = len(d["employees"])' '    # Project stat
+us distribution' '    projectStatusDistribution = {}' '    for d in dept_map.values():' '        for p in d["projects"]:' '            st = p.get("status")' '
+          projectStatusDistribution[st] = projectStatusDistribution.get(st, 0) + 1' '    # Average years of service' '    years = []' '    for d in dept_map.val
+ues():' '        for e in d["employees"]:' '            yos = e.get("years_of_service")' '            if isinstance(yos, int):' '                years.append(yo
+s)' '    averageYearsOfService = (sum(years)/len(years)) if years else 0.0' '' '    organization = {' '        "name": org_name,' '        "founded": founded,'
+'        "departments": list(dept_map.values())' '    }' '' '    output = {' '        "metadata": metadata,' '        "organization": organization,' '        "s
+tatistics": {' '            "averageDepartmentBudget": averageDepartmentBudget,' '            "totalEmployees": totalEmployees,' '            "skillDistribution
+": skillDistribution,' '            "departmentSizes": departmentSizes,' '            "projectStatusDistribution": projectStatusDistribution,' '            "ave
+rageYearsOfService": averageYearsOfService' '        }' '    }' '' '    out_path = os.path.join(base, "organization.json")' '    with open(out_path, "w", encodi
+ng="utf-8") as f:' '        json.dump(output, f, indent=2, ensure_ascii=False)' '    print(out_path)' '' 'if __name__ == "__main__":' '    main()' > json_proces
+sor.py
+root@726b43178960:/app# chmod +x json_processor.py
+root@726b43178960:/app# python3 json_processor.py
+/app/json_processor.py:196: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objec
+ts to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+/app/organization.json
+root@726b43178960:/app# ls -la organization.json
+-rw-r--r-- 1 root root 6525 Dec 10 03:40 organization.json
+root@726b43178960:/app# head -n 50 organization.json
+{
+  "metadata": {
+    "version": "1.0.0",
+    "timestamp": "2025-12-10T03:40:48.148703Z",
+    "generator": "json_processor.py"
+  },
+  "organization": {
+    "name": "Organization",
+    "founded": "2000-01-01",
+    "departments": [
+      {
+        "id": "D001",
+        "name": "Engineering",
+        "budget": 1500000.0,
+        "employees": [
+          {
+            "id": "D001-E001",
+            "name": "Cristiano Ronaldo",
+            "position": "Manager",
+            "skills": [
+              "Python",
+              "Leadership",
+              "Project Management"
+            ],
+            "years_of_service": 10
+          },
+          {
+            "id": "D001-E002",
+            "name": "Bernardo Silva",
+            "position": "Senior Developer",
+            "skills": [
+              "JavaScript",
+              "Python",
+              "Cloud Services"
+            ],
+            "years_of_service": 7
+          },
+          {
+            "id": "D001-E003",
+            "name": "Sergio Ramos",
+            "position": "Team Lead",
+            "skills": [
+              "Java",
+              "C++",
+              "DevOps"
+            ],
+            "years_of_service": 12
+          }
+        ],
+        "projects": [
+root@726b43178960:/app# sed -i 's/\["members","team","team_members"\]/["member_ids","members","team","team_members"]/g' json_processor.py
+root@726b43178960:/app# python3 json_processor.py
+/app/json_processor.py:196: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objec
+ts to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+/app/organization.json
+root@726b43178960:/app# grep -n '"members"' organization.json | head -n 10
+54:            "members": [
+64:            "members": [
+104:            "members": [
+144:            "members": [
+195:            "members": [
+205:            "members": [
+245:            "members": [
+root@726b43178960:/app# sed -n '/"statistics": {/,/}/p' organization.json
+  "statistics": {
+    "averageDepartmentBudget": 1060000.0,
+    "totalEmployees": 12,
+    "skillDistribution": {
+      "Python": 4,
+      "Leadership": 3,
+      "Project Management": 2,
+      "JavaScript": 1,
+      "Cloud Services": 1,
+      "Java": 1,
+      "C++": 1,
+      "DevOps": 1,
+      "UI/UX Design": 1,
+      "Communication": 6,
+      "Marketing": 2,
+      "Content Creation": 1,
+      "SQL": 2,
+      "Data Analysis": 4,
+      "Machine Learning": 2,
+      "Research": 1,
+      "Customer Service": 2,
+      "Sales": 1
+    },
+root@726b43178960:/app#

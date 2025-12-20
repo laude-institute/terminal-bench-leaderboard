@@ -1,0 +1,79 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'find . -maxdepth 3 -type f -name "*qdp*"\n'
+'grep -n "qdp" -R astropy/io/ascii\n'
+"sed -n '1,200p' astropy/io/ascii/qdp.py\n"
+"sed -n '200,400p' astropy/io/ascii/qdp.py\n"
+"sed -n '400,800p' astropy/io/ascii/qdp.py\n"
+'grep -n "READ\\|SERR\\|WERR\\|SYST\\|CSIZE\\|LABEL\\|LA\\|TX\\|TIME" astropy/io/ascii/qdp.py\n'
+'python3 -V\n'
+'git status\n'
+'printf "read serr 1 2\\n1 0.5 1 0.5\\n" > test.qdp\n'
+"PYTHONPATH=$PWD python3 - << 'PY'\nfrom astropy.table import Table\ntry:\n    t = Table.read('test.qdp', format='ascii.qdp')\n    print('OK', len(t), t.colnames)\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'applypatch() {\n  file="$1"; shift\n  tmpfile=$(mktemp)\n  cat "$file" > "$tmpfile"\n  "$@" < "$tmpfile" > "$file.new"\n  mv "$file.new" "$file"\n  rm -f "$tmpfile"\n}\n'
+'python3 - << \'PY\'\nimport io, re, sys\np = \'astropy/io/ascii/qdp.py\'\ns = open(p,\'r\',encoding=\'utf-8\').read()\n# Strategy: normalize command parsing by uppercasing command tokens before matching.\n# Replace occurrences where a command is matched case-sensitively.\n# Common pattern: line.strip().split() and checking tokens[0] or line.startswith(\'READ\')\n# We\'ll try to robustly add a normalized variable cmd_upper for comparisons.\n# Simple heuristic patches:\n# 1) Replace occurrences of line.startswith(\'READ\') with line.upper().startswith(\'READ\')\n# 2) Replace tokens[0] == \'READ\' with tokens[0].upper() == \'READ\'\npatterns = [\n    (r"(\\.startswith\\(\\s*\'([A-Z]+)\'\\s*\\))", r".upper().startswith(\'\\2\')"),\n    (r"(\\btokens\\s*\\[\\s*0\\s*\\]\\s*==\\s*\'([A-Z]+)\')", r"tokens[0].upper()==\'\\2\'"),\n    (r"(\\bparts\\s*\\[\\s*0\\s*\\]\\s*==\\s*\'([A-Z]+)\')", r"parts[0].upper()==\'\\2\'"),\n    (r"(\\bcmd\\s*==\\s*\'([A-Z]+)\')", r"cmd.upper()==\'\\2\'"),\n    (r"(\\bcommand\\s*==\\s*\'([A-Z]+)\')", r"command.upper()==\'\\2\'"),\n    (r"(\\bcmd\\s*in\\s*\\[([^\\]]+)\\])", r"cmd.upper() in [\\2]"),\n    (r"(\\bif\\s+line\\s*\\:\\s*#?\\s*command)", r"if line: # command"),\n]\nns = s\nfor pat, repl in patterns:\n    ns = re.sub(pat, repl, ns)\n# Also map any dict of commands keys to uppercase comparisons by normalizing input where lookup happens.\n# Add a helper in the parser class if present: normalize input lines for command identification.\n# If QDP parsing function named \'read\' or similar exists, inject normalization after reading a line.\nif ns == s:\n    print(\'No changes made by heuristic patches; attempting targeted insertion.\', file=sys.stderr)\n# Try inserting a line normalization near where lines are processed.\nns2 = ns\nns2 = ns2.replace("line = line.strip()", "line = line.strip(); line_upper = line.upper()")\nns2 = ns2.replace("line.strip()", "line_upper.strip()")\nopen(p,\'w\',encoding=\'utf-8\').write(ns2)\nprint(\'Patched qdp.py\')\nPY\n'
+"git diff -- astropy/io/ascii/qdp.py | sed -n '1,200p'\n"
+"PYTHONPATH=$PWD python3 - << 'PY'\nfrom astropy.table import Table\ntry:\n    t = Table.read('test.qdp', format='ascii.qdp')\n    print('OK', len(t), t.colnames)\n    print(t)\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'git add astropy/io/ascii/qdp.py\n'
+'git commit -m "ascii.qdp: treat QDP commands case-insensitively by normalizing command tokens to uppercase (accept \'read serr\' et al.)"\n'
+'git restore --source=HEAD --worktree -- astropy/io/ascii/qdp.py\n'
+"sed -n '1,220p' astropy/io/ascii/qdp.py\n"
+"sed -n '220,500p' astropy/io/ascii/qdp.py\n"
+"sed -n '500,800p' astropy/io/ascii/qdp.py\n"
+"python3 - << 'PY'\nimport io, re\np = 'astropy/io/ascii/qdp.py'\ns = open(p,'r',encoding='utf-8').read()\n# 1) Make line type regex case-insensitive\ns = s.replace('re.compile(_type_re)', 're.compile(_type_re, re.IGNORECASE)')\n# 2) Normalize command tokens to uppercase when interpreting command_lines for err_specs\ns = s.replace('command = cline.strip().split()', 'command = cline.strip().split(); command = [c.upper() for c in command]')\nopen(p,'w',encoding='utf-8').write(s)\nprint('Patched qdp.py')\nPY\n"
+"git diff -- astropy/io/ascii/qdp.py | sed -n '1,200p'\n"
+'printf "read serr 1 2\\n1 0.5 1 0.5\\n" > test.qdp\n'
+'python3 -m pip install --no-cache-dir packaging numpy\n'
+"PYTHONPATH=$PWD python3 - << 'PY'\nfrom astropy.table import Table\ntry:\n    t = Table.read('test.qdp', format='ascii.qdp')\n    print('OK', len(t), t.colnames)\n    print(t)\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'git config user.email "devnull@example.com"\n'
+'git config user.name "CI User"\n'
+'git add astropy/io/ascii/qdp.py\n'
+'git commit -m "ascii.qdp: accept case-insensitive QDP commands by using IGNORECASE in parser and normalizing command tokens"\n'
+'python3 -V\n'
+'python3 -m pip install --no-cache-dir -q packaging numpy pyerfa\n'
+"PYTHONPATH=$PWD python3 - << 'PY'\nfrom astropy.table import Table\ntry:\n    t = Table.read('test.qdp', format='ascii.qdp')\n    print('OK', len(t), t.colnames)\n    print(t)\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'git config user.email "devnull@example.com"\n'
+'git config user.name "CI User"\n'
+'git add astropy/io/ascii/qdp.py\n'
+'git commit -m "ascii.qdp: accept case-insensitive QDP commands by using IGNORECASE in parser and normalizing command tokens"\n'
+'git status -sb\n'
+'grep -n "re.IGNORECASE" astropy/io/ascii/qdp.py\n'
+'grep -n "command = cline.strip().split(); command = \\[c.upper() for c in command\\]" astropy/io/ascii/qdp.py\n'
+'python3 -m pip install --no-cache-dir -q setuptools wheel cython setuptools_scm pyerfa\n'
+'python3 setup.py build_ext --inplace\n'
+"PYTHONPATH=$PWD python3 - << 'PY'\nfrom astropy.table import Table\ntry:\n    t = Table.read('test.qdp', format='ascii.qdp')\n    print('OK', len(t), t.colnames)\n    print(t)\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'git status -sb\n'
+'python3 -m pip install --no-cache-dir -q extension-helpers setuptools wheel cython setuptools_scm numpy packaging pyerfa\n'
+'python3 -m pip install --no-cache-dir -e .\n'
+"PYTHONPATH=$PWD python3 - << 'PY'\nfrom astropy.table import Table\ntry:\n    t = Table.read('test.qdp', format='ascii.qdp')\n    print('OK', len(t), t.colnames)\n    print(t)\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'git diff HEAD -- astropy/io/ascii/qdp.py\n'
+'git status -sb\n'
+'python3 -m pip install --no-cache-dir -q "setuptools<70" wheel cython "setuptools_scm<8" extension-helpers numpy packaging pyerfa\n'
+'python3 -m pip install --no-cache-dir -e . --no-build-isolation\n'
+"python3 - << 'PY'\nfrom astropy.table import Table\ntry:\n    t = Table.read('test.qdp', format='ascii.qdp')\n    print('OK', len(t), t.colnames)\n    print(t)\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'git status -sb\n'
+'apt-get update\n'
+'apt-get install -y build-essential python3-dev\n'
+'python3 -m pip install --no-cache-dir -q "setuptools==59.6.0" wheel cython "setuptools_scm<8" extension-helpers numpy packaging pyerfa\n'
+'python3 -m pip install --no-cache-dir -e . --no-build-isolation\n'
+"python3 - << 'PY'\nfrom astropy.table import Table\ntry:\n    t = Table.read('test.qdp', format='ascii.qdp')\n    print('OK', len(t), t.colnames)\n    print(t)\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'git status -sb\n'
+''
+'python3 -m pip show astropy\n'
+"python3 - << 'PY'\nfrom astropy.table import Table\ntry:\n    t = Table.read('test.qdp', format='ascii.qdp')\n    print('OK', len(t), t.colnames)\n    print(t)\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'git status -sb\n'
+'python3 -c "import numpy as np; print(np.__version__)"\n'
+'python3 -m pip install --no-cache-dir numpy==1.24.1\n'
+'python3 -m pip install --no-cache-dir -e . --no-build-isolation\n'
+"python3 - << 'PY'\nfrom astropy.table import Table\ntry:\n    t = Table.read('test.qdp', format='ascii.qdp')\n    print('OK', len(t), t.colnames)\n    print(t)\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'git status -sb\n'
+':\n'
+'python3 -m pip show astropy\n'
+"python3 - << 'PY'\nfrom astropy.table import Table\ntry:\n    t = Table.read('test.qdp', format='ascii.qdp')\n    print('OK', len(t), t.colnames)\n    print(t)\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'git status -sb\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

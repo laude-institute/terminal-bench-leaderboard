@@ -1,0 +1,40 @@
+root@f08aa85eb96a:/app# tar -czf sensitive_files.tar.gz /opt/sensitive_service_data
+tar: Removing leading `/' from member names
+root@f08aa85eb96a:/app# gpg --batch --yes --symmetric --cipher-algo AES256 --passphrase 't-bench-passphrase' --output /app/service_archive.gpg /app/sensitive_fi
+les.tar.gz
+gpg: directory '/root/.gnupg' created
+gpg: keybox '/root/.gnupg/pubring.kbx' created
+root@f08aa85eb96a:/app# ls -l /app/service_archive.gpg
+-rw-r--r-- 1 root root 339 Dec 10 05:27 /app/service_archive.gpg
+root@f08aa85eb96a:/app# shred -n 3 -u -z /app/sensitive_files.tar.gz
+root@f08aa85eb96a:/app# find /opt/sensitive_service_data -type f -print0 | xargs -0 -I{} shred -n 3 -u -z "{}"
+root@f08aa85eb96a:/app# find /opt/sensitive_service_data -type l -exec rm -f {} +
+root@f08aa85eb96a:/app# find /opt/sensitive_service_data -depth -type d -empty -delete
+root@f08aa85eb96a:/app# rmdir /opt/sensitive_service_data 2>/dev/null || rm -rf /opt/sensitive_service_data
+root@f08aa85eb96a:/app# shred -n 3 -u -z /etc/service_config.ini 2>/dev/null || rm -f /etc/service_config.ini
+root@f08aa85eb96a:/app# shred -n 1 -u -z /tmp/service.pid 2>/dev/null || rm -f /tmp/service.pid
+root@f08aa85eb96a:/app# ls -la /app
+total 12
+drwxr-xr-x 1 root root 4096 Dec 10 05:27 .
+drwxr-xr-x 1 root root 4096 Dec 10 05:26 ..
+-rw-r--r-- 1 root root  339 Dec 10 05:27 service_archive.gpg
+root@f08aa85eb96a:/app# test -e /app/sensitive_files.tar.gz && echo "ERROR: Unencrypted archive still present" || echo "OK: No unencrypted archive present"
+OK: No unencrypted archive present
+root@f08aa85eb96a:/app# test -d /opt/sensitive_service_data && echo "ERROR: Sensitive directory still exists" || echo "OK: Sensitive directory removed"
+OK: Sensitive directory removed
+root@f08aa85eb96a:/app# test -e /etc/service_config.ini && echo "ERROR: Config still present" || echo "OK: Config removed"
+OK: Config removed
+root@f08aa85eb96a:/app# test -e /tmp/service.pid && echo "ERROR: PID still present" || echo "OK: PID removed"
+OK: PID removed
+root@f08aa85eb96a:/app#
+
+
+
+
+
+
+
+
+
+
+

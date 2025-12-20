@@ -1,0 +1,24 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'cat > /app/start_qemu.sh << \'EOF\'\n#!/usr/bin/env bash\nset -euo pipefail\nISO="${1:-}"\nif [[ -z "${ISO}" || ! -f "${ISO}" ]]; then\n  ISO=$(ls -1 /app/alpine*.iso 2>/dev/null | head -n1 || true)\nfi\nif [[ -z "${ISO}" || ! -f "${ISO}" ]]; then\n  ISO=$(find /app -maxdepth 3 -type f -name \'alpine*.iso\' -print -quit 2>/dev/null || true)\nfi\nif [[ -z "${ISO}" || ! -f "${ISO}" ]]; then\n  ISO=$(find / -maxdepth 4 -type f -name \'alpine*.iso\' -print -quit 2>/dev/null || true)\nfi\nif [[ -z "${ISO}" || ! -f "${ISO}" ]]; then\n  echo "alpine.iso not found" >&2\n  exit 1\nfi\nif ! command -v qemu-system-x86_64 >/dev/null 2>&1; then\n  export DEBIAN_FRONTEND=noninteractive\n  apt-get update\n  apt-get install -y qemu-system-x86 telnet\nfi\nLOG=/app/qemu.log\nPORT=6665\nnohup qemu-system-x86_64 -m 1024 -boot d -cdrom "${ISO}" -serial telnet:127.0.0.1:${PORT},server,nowait -display none -name alpine-telnet >"${LOG}" 2>&1 &\n# Wait for port listening\nfor i in $(seq 1 120); do\n  if ss -ltn 2>/dev/null | awk \'{print $4}\' | grep -q ":${PORT}$"; then\n    break\n  fi\n  sleep 1\ndone\n# Wait for login prompt up to 180s\nfor i in $(seq 1 180); do\n  if timeout 2 telnet 127.0.0.1 ${PORT} 2>&1 | tr -d \'\\r\' | grep -q -E \'login\'; then\n    echo "READY"\n    exit 0\n  fi\n  sleep 2\ndone\necho "Timeout waiting for login prompt" >&2\nexit 1\nEOF\n'
+'chmod +x /app/start_qemu.sh\n'
+'/app/start_qemu.sh\n'
+''
+'ss -ltn\n'
+'timeout 5 telnet 127.0.0.1 6665\n'
+'tail -n 200 /app/qemu.log\n'
+''
+'timeout 8 telnet 127.0.0.1 6665\n'
+"bash -lc 'export DEBIAN_FRONTEND=noninteractive; command -v qemu-system-x86_64 >/dev/null 2>&1 || { apt-get update && apt-get install -y qemu-system-x86 telnet; }'\n"
+'bash -lc \'ss -ltn | grep -q ":6665" || nohup qemu-system-x86_64 -m 1024 -boot d -cdrom /app/alpine.iso -serial telnet:127.0.0.1:6665,server,nowait -display none -name alpine-telnet >/app/qemu.log 2>&1 &\'\n'
+'bash -lc \'for i in $(seq 1 60); do ss -ltn | grep -q ":6665" && exit 0; sleep 1; done; exit 1\'\n'
+'bash -lc \'for i in $(seq 1 60); do if timeout 2 telnet 127.0.0.1 6665 2>&1 | tr -d "\\r" | grep -q -E "login"; then echo READY; exit 0; fi; sleep 1; done; echo TIMEOUT; exit 1\'\n'
+'/app/start_qemu.sh\n'
+'ss -ltn\n'
+'timeout 5 telnet 127.0.0.1 6665\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

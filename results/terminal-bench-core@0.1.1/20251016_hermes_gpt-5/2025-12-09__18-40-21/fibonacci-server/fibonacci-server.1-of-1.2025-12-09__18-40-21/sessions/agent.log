@@ -1,0 +1,127 @@
+[?2004hroot@c7e56c211b37:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@c7e56c211b37:/app# clear
+[?2004l[H[J[3J[?2004hroot@c7e56c211b37:/app# python3 --version
+[?2004lPython 3.12.3
+[?2004hroot@c7e56c211b37:/app# cat > /app/server.py << 'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> from http.server import BaseHTTPRequestHandler, HTTPServer
+[?2004l[?2004h> from urllib.parse import urlparse, parse_qs
+[?2004l[?2004h> import json
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def fib(n):
+[?2004l[?2004h>     a, b = 0, 1
+[?2004l[?2004h>     for _ in range(n):
+[?2004l[?2004h>         a, b = b, a + b
+[?2004l[?2004h>     return a
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> class Handler(BaseHTTPRequestHandler):
+[?2004l[?2004h>     def do_GET(self):
+[?2004l[?2004h>         parsed = urlparse(self.path)
+[?2004l[?2004h>         if parsed.path != '/fib':
+[?2004l[?2004h>             self.send_response(404)
+[?2004l[?2004h>             self.send_header('Content-Type', 'application/json')
+[?2004l[?2004h>             self.end_headers()
+[?2004l[?2004h>             self.wfile.write(json.dumps({'error': 'Not found'}).encode())
+[?2004l[?2004h>             return
+[?2004l[?2004h> 
+[?2004l[?2004h>         params = parse_qs(parsed.query)
+[?2004l[?2004h>         if 'n' not in params or len(params['n']) == 0:
+[?2004l[?2004h>             self.send_response(400)
+[?2004l[?2004h>             self.send_header('Content-Type', 'application/json')
+[?2004l[?2004h>             self.end_headers()
+[?2004l[?2004h>             self.wfile.write(json.dumps({'error': "Missing 'n' query parameter"}).encode())
+[?2004l[?2004h>             return
+[?2004l[?2004h> 
+[?2004l[?2004h>         n_str = params['n'][0]
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             n = int(n_str)
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             self.send_response(400)
+[?2004l[?2004h>             self.send_header('Content-Type', 'application/json')
+[?2004l[?2004h>             self.end_headers()
+[?2004l[?2004h>             self.wfile.write(json.dumps({'error': "Query parameter 'n' must be an integer"}).encode())
+[?2004l[?2004h>             return
+[?2004l[?2004h> 
+[?2004l[?2004h>         if n < 0:
+[?2004l[?2004h>             self.send_response(400)
+[?2004l[?2004h>             self.send_header('Content-Type', 'application/json')
+[?2004l[?2004h>             self.end_headers()
+[?2004l[?2004h>             self.wfile.write(json.dumps({'error': "Query parameter 'n' must be a non-negative integer"}).encode())
+[?2004l[?2004h>             return
+[?2004l[?2004h> 
+[?2004l[?2004h>         result = fib(n)
+[?2004l[?2004h>         self.send_response(200)
+[?2004l[?2004h>         self.send_header('Content-Type', 'application/json')
+[?2004l[?2004h>         self.end_headers()
+[?2004l[?2004h>         self.wfile.write(json.dumps({'result': result}).encode())
+[?2004l[?2004h> 
+[?2004l[?2004h>     def log_message(self, format, *args):
+[?2004l[?2004h>         return
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     host = '0.0.0.0'
+[?2004l[?2004h>     port = 3000
+[?2004l[?2004h>     httpd = HTTPServer((host, port), Handler)
+[?2004l[?2004h>     httpd.serve_forever()
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c7e56c211b37:/app# chmod +x /app/server.py
+[?2004l[?2004hroot@c7e56c211b37:/app# export PY=$(command -v python3 || command -v python)
+[?2004l[?2004hroot@c7e56c211b37:/app# $PY /app/server.py >/app/server.log 2>&1 & echo $! > /app/server.pid
+[?2004l[1] 129
+[?2004hroot@c7e56c211b37:/app# ss -lntp | grep ':3000' || true
+[?2004lbash: ss: command not found
+[?2004hroot@c7e56c211b37:/app# curl -sS http://localhost:3000/fib?n=10 || wget -qO- http://localhost:3000/fib?n=10
+[?2004lbash: curl: command not found
+bash: wget: command not found
+[?2004hroot@c7e56c211b37:/app# curl -sS -i http://localhost:3000/fib || wget -S -qO- http://localhost:3000/fib
+[?2004lbash: curl: command not found
+bash: wget: command not found
+[?2004hroot@c7e56c211b37:/app# curl -sS -i 'http://localhost:3000/fib?n=abc' || wget -S -qO- 'http://localhost:3000/fib?n=abc'
+[?2004lbash: curl: command not found
+bash: wget: command not found
+[?2004hroot@c7e56c211b37:/app# cat /app/server.pid
+[?2004l129
+[?2004hroot@c7e56c211b37:/app# ps -p $(cat /app/server.pid) -o pid,cmd
+[?2004l    PID CMD
+    129 /usr/bin/python3 /app/server.py
+[?2004hroot@c7e56c211b37:/app# tail -n +1 /app/server.log
+[?2004l[?2004hroot@c7e56c211b37:/app# python3 - << 'PY'
+[?2004l[?2004h> import urllib.request, urllib.error
+[?2004l[?2004h> 
+[?2004l[?2004h> def hit(url):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         with urllib.request.urlopen(url) as r:
+[?2004l[?2004h>             body = r.read().decode()
+[?2004l[?2004h>             print('OK', r.status, body)
+[?2004l[?2004h>     except urllib.error.HTTPError as e:
+[?2004l[?2004h>         body = e.read().decode()
+[?2004l[?2004h>         print('ERR', e.code, body)
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         print('EXC', type(e).__name__, str(e))
+[?2004l[?2004h> 
+[?2004l[?2004h> urls = [
+[?2004l[?2004h>     'http://localhost:3000/fib?n=10',
+[?2004l[?2004h>     'http://localhost:3000/fib',
+[?2004l[?2004h>     'http://localhost:3000/fib?n=abc',
+[?2004l[?2004h> ]
+[?2004l[?2004h> for u in urls:
+[?2004l[?2004h>     print('URL', u)
+[?2004l[?2004h>     hit(u)
+[?2004l[?2004h> PY
+[?2004lURL http://localhost:3000/fib?n=10
+OK 200 {"result": 55}
+URL http://localhost:3000/fib
+ERR 400 {"error": "Missing 'n' query parameter"}
+URL http://localhost:3000/fib?n=abc
+ERR 400 {"error": "Query parameter 'n' must be an integer"}
+[?2004hroot@c7e56c211b37:/app# [?2004l
+exit

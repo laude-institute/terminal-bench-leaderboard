@@ -1,0 +1,55 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'file chess_bard.png\n'
+"strings -n 6 chess_bard.png | grep -E -o '([rnbqkpRNBQKP1-8]+/){7}[rnbqkpRNBQKP1-8]+ [wb] [KQkq-]+ (-|[a-h][36]) [0-9]+ [0-9]+' | head -n 1 > fen.txt\n"
+'if [ -s fen.txt ]; then echo "FEN found:" && cat fen.txt; else echo "No FEN found in image metadata"; fi\n'
+'if [ -s fen.txt ]; then apt-get update; fi\n'
+'if [ -s fen.txt ]; then apt-get install -y stockfish python3-pip; fi\n'
+'if [ -s fen.txt ]; then pip3 install --no-input chess; fi\n'
+"if [ -s fen.txt ]; then cat > /app/solve.py << 'PY'\nimport sys\nimport chess\nimport chess.engine\n\nfen = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.read().strip()\nboard = chess.Board(fen)\nengine = chess.engine.SimpleEngine.popen_uci('/usr/bin/stockfish')\n\nresults = []\nfor move in list(board.legal_moves):\n    board.push(move)\n    info = engine.analyse(board, chess.engine.Limit(depth=18))\n    board.pop()\n    sc = info['score'].pov(chess.WHITE)\n    mate = sc.mate() if hasattr(sc, 'mate') else sc.mate\n    cp = None\n    try:\n        cp = sc.score()\n    except Exception:\n        try:\n            cp = sc.cp\n        except Exception:\n            cp = None\n    results.append((move.uci(), mate, cp))\n\n# Determine best according to mate first, then cp\nwinning_moves = []\n# Filter positive mates (white mates)\npos_mates = [r for r in results if r[1] is not None and r[1] > 0]\nif pos_mates:\n    best_m = min(r[1] for r in pos_mates)\n    winning_moves = [r[0] for r in pos_mates if r[1] == best_m]\nelse:\n    # Use highest CP\n    # Some engines return None for cp; filter those out\n    with_cp = [r for r in results if r[2] is not None]\n    if with_cp:\n        best_cp = max(r[2] for r in with_cp)\n        winning_moves = [r[0] for r in with_cp if r[2] == best_cp]\n\nengine.quit()\n\nfor m in winning_moves:\n    print(m)\nPY\nfi\n"
+'if [ -s fen.txt ]; then python3 /app/solve.py "$(cat fen.txt)" > /app/moves_raw.txt; fi\n'
+'if [ -s fen.txt ] && [ -s /app/moves_raw.txt ]; then cp /app/moves_raw.txt /app/move.txt; fi\n'
+'if [ -s fen.txt ] && [ ! -s /app/moves_raw.txt ]; then printf "uci\\nisready\\nposition fen %s\\ngo depth 20\\n" "$(cat fen.txt)" | stockfish | sed -n \'s/^bestmove //p\' > /app/move.txt; fi\n'
+'if [ ! -s fen.txt ]; then apt-get update; fi\n'
+'if [ ! -s fen.txt ]; then apt-get install -y caca-utils; fi\n'
+'if [ ! -s fen.txt ]; then img2txt -W 120 chess_bard.png; fi\n'
+'if [ -s /app/move.txt ]; then echo "Computed move(s):" && cat /app/move.txt; else echo "Move not yet computed. If FEN not found, inspect ASCII rendering above and we will derive the FEN next."; fi\n'
+'ls -la\n'
+"strings -n 4 chess_puzzle.png | grep -E -o '([rnbqkpRNBQKP1-8]+/){7}[rnbqkpRNBQKP1-8]+ [wb] [KQkq-]+ (-|[a-h][36]) [0-9]+ [0-9]+' | head -n 1 > fen.txt\n"
+"if [ ! -s fen.txt ]; then strings -n 3 chess_puzzle.png | grep -i -o -E '([prnbqkPRNBQK1-8]+/){7}[prnbqkPRNBQK1-8]+ [wb] [-KQkq]+ (-|[a-h][36]) [0-9]+ [0-9]+' | head -n 1 > fen.txt; fi\n"
+'if [ -s fen.txt ]; then echo "FEN found:" && cat fen.txt; else echo "No FEN found in image metadata"; fi\n'
+'if [ -s fen.txt ]; then apt-get update; fi\n'
+'if [ -s fen.txt ]; then apt-get install -y stockfish python3-pip; fi\n'
+'if [ -s fen.txt ]; then pip3 install --no-input chess; fi\n'
+'cat > /app/solve.py << \'PY\'\nimport sys\nimport chess\nimport chess.engine\n\nfen = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.read().strip()\nboard = chess.Board(fen)\nengine = chess.engine.SimpleEngine.popen_uci(\'/usr/bin/stockfish\')\nresults = []\nfor move in list(board.legal_moves):\n    board.push(move)\n    info = engine.analyse(board, chess.engine.Limit(depth=20))\n    s = info["score"].pov(chess.WHITE)\n    mate = getattr(s, \'mate\', None)\n    cp = getattr(s, \'cp\', None)\n    board.pop()\n    results.append((move.uci(), mate, cp))\nengine.quit()\n# Prefer mating lines with shortest mate distance\npos_mates = [r for r in results if r[1] is not None and r[1] > 0]\nif pos_mates:\n    best_m = min(r[1] for r in pos_mates)\n    best_moves = [r[0] for r in pos_mates if r[1] == best_m]\nelse:\n    with_cp = [r for r in results if r[2] is not None]\n    if with_cp:\n        best_cp = max(r[2] for r in with_cp)\n        best_moves = [r[0] for r in with_cp if r[2] == best_cp]\n    else:\n        best_moves = []\nfor m in best_moves:\n    print(m)\nPY\n'
+'if [ -s fen.txt ]; then python3 /app/solve.py "$(cat fen.txt)" > /app/moves_raw.txt; fi\n'
+'if [ -s fen.txt ] && [ -s /app/moves_raw.txt ]; then cp /app/moves_raw.txt /app/move.txt; fi\n'
+'if [ ! -s fen.txt ]; then img2txt -W 120 chess_puzzle.png; fi\n'
+'if [ -s /app/move.txt ]; then echo "Computed move(s):" && cat /app/move.txt; else echo "Move not yet computed."; fi\n'
+'ls -la\n'
+'if p=$(find / -type f -name chess_bard.png 2>/dev/null | head -n1); then [ -n "$p" ] && ln -sf "$p" /app/chess_bard.png; fi\n'
+'if [ -f /app/chess_bard.png ]; then ln -sf /app/chess_bard.png /app/target.png; elif [ -f /app/chess_puzzle.png ]; then ln -sf /app/chess_puzzle.png /app/target.png; fi\n'
+'ls -l /app/target.png || echo "No target.png set"\n'
+'rm -f fen.txt\n'
+"strings -n 4 /app/target.png | grep -E -o '([rnbqkpRNBQKP1-8]+/){7}[rnbqkpRNBQKP1-8]+ [wb] [KQkq-]+ (-|[a-h][36]) [0-9]+ [0-9]+' | head -n 1 > fen.txt\n"
+"if [ ! -s fen.txt ]; then strings -n 3 /app/target.png | grep -i -o -E '([prnbqkPRNBQK1-8]+/){7}[prnbqkPRNBQK1-8]+ [wb] [-KQkq]+ (-|[a-h][36]) [0-9]+ [0-9]+' | head -n 1 > fen.txt; fi\n"
+'if [ -s fen.txt ]; then echo "FEN found:" && cat fen.txt; else echo "No FEN found in strings"; fi\n'
+'if [ ! -s fen.txt ]; then apt-get update; fi\n'
+'if [ ! -s fen.txt ]; then apt-get install -y libimage-exiftool-perl; fi\n'
+'if [ ! -s fen.txt ]; then exiftool -s -s -s -fast2 /app/target.png > /app/meta.txt; fi\n'
+"if [ ! -s fen.txt ] && [ -f /app/meta.txt ]; then grep -E -o '([rnbqkpRNBQKP1-8]+/){7}[rnbqkpRNBQKP1-8]+ [wb] [KQkq-]+ (-|[a-h][36]) [0-9]+ [0-9]+' /app/meta.txt | head -n 1 > fen.txt; fi\n"
+'if [ -s fen.txt ]; then echo "FEN found via metadata:" && cat fen.txt; else echo "No FEN in metadata"; fi\n'
+'if [ -s fen.txt ]; then apt-get update; fi\n'
+'if [ -s fen.txt ]; then apt-get install -y stockfish python3-pip; fi\n'
+'if [ -s fen.txt ]; then pip3 install --no-input chess; fi\n'
+'cat > /app/solve.py << \'PY\'\nimport sys\nimport chess\nimport chess.engine\n\ndef main():\n    fen = sys.argv[1] if len(sys.argv) > 1 else sys.stdin.read().strip()\n    board = chess.Board(fen)\n    engine = chess.engine.SimpleEngine.popen_uci(\'/usr/bin/stockfish\')\n    results = []\n    for move in list(board.legal_moves):\n        board.push(move)\n        info = engine.analyse(board, chess.engine.Limit(depth=20))\n        s = info["score"].pov(chess.WHITE)\n        mate = s.mate()\n        cp = s.score(mate_score=100000) if mate is None else None\n        board.pop()\n        results.append((move.uci(), mate, cp))\n    engine.quit()\n    pos_mates = [r for r in results if r[1] is not None and r[1] > 0]\n    if pos_mates:\n        best_m = min(r[1] for r in pos_mates)\n        best_moves = [r[0] for r in pos_mates if r[1] == best_m]\n    else:\n        with_cp = [r for r in results if r[2] is not None]\n        if with_cp:\n            best_cp = max(r[2] for r in with_cp)\n            best_moves = [r[0] for r in with_cp if r[2] == best_cp]\n        else:\n            best_moves = []\n    for m in best_moves:\n        print(m)\n\nif __name__ == \'__main__\':\n    main()\nPY\n'
+'if [ -s fen.txt ]; then python3 /app/solve.py "$(cat fen.txt)" > /app/moves_raw.txt; fi\n'
+'if [ -s fen.txt ] && [ -s /app/moves_raw.txt ]; then cp /app/moves_raw.txt /app/move.txt; fi\n'
+'if [ ! -s fen.txt ]; then img2txt -W 120 /app/target.png; fi\n'
+'if [ -s /app/move.txt ]; then echo "Computed move(s):" && cat /app/move.txt; else echo "Move not yet computed."; fi\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

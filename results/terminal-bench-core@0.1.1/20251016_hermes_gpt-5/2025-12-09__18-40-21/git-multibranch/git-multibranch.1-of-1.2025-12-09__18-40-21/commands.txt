@@ -1,0 +1,53 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'export DEBIAN_FRONTEND=noninteractive\n'
+'apt-get update\n'
+'apt-get install -y git openssh-server nginx openssl sshpass curl ca-certificates\n'
+'mkdir -p /var/run/sshd\n'
+'ssh-keygen -A\n'
+'id -u git >/dev/null 2>&1 || useradd -m -s /usr/bin/git-shell git\n'
+"echo 'git:password' | chpasswd\n"
+"printf '\\nPasswordAuthentication yes\\nUsePAM yes\\n' >> /etc/ssh/sshd_config\n"
+'/usr/sbin/sshd -D &\n'
+'mkdir -p /git\n'
+'git init --bare /git/project\n'
+'chown -R git:git /git\n'
+'mkdir -p /var/www/html/dev\n'
+'chown -R git:git /var/www/html\n'
+'printf \'#!/bin/bash\\nset -e\\nwhile read oldrev newrev ref; do\\n  branch="${ref#refs/heads/}"\\n  case "$branch" in\\n    main) dest="/var/www/html" ;;\\n    dev) dest="/var/www/html/dev" ;;\\n    *) continue ;;\\n  esac\\n  mkdir -p "$dest"\\n  /usr/bin/git --git-dir=/git/project --work-tree="$dest" checkout -f "$branch"\\ndone\\n\' > /git/project/hooks/post-receive\n'
+'chmod +x /git/project/hooks/post-receive\n'
+'openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/selfsigned.key -out /etc/ssl/certs/selfsigned.crt -subj "/CN=localhost"\n'
+"printf 'server {\\n    listen 8443 ssl default_server;\\n    server_name localhost;\\n    ssl_certificate /etc/ssl/certs/selfsigned.crt;\\n    ssl_certificate_key /etc/ssl/private/selfsigned.key;\\n\\n    root /var/www/html;\\n    index index.html;\\n\\n    location /dev/ {\\n        alias /var/www/html/dev/;\\n        autoindex off;\\n    }\\n}\\n' > /etc/nginx/sites-available/git_deploy\n"
+'ln -sf /etc/nginx/sites-available/git_deploy /etc/nginx/sites-enabled/git_deploy\n'
+'rm -f /etc/nginx/sites-enabled/default\n'
+'nginx -t\n'
+'nginx -s reload || nginx\n'
+'mkdir -p /tmp/testrepo && cd /tmp/testrepo\n'
+'git init\n'
+'git checkout -b main\n'
+"printf '<!doctype html>\\n<html><body><h1>Main Branch</h1></body></html>\\n' > index.html\n"
+'git add index.html && git commit -m "Add main index"\n'
+'git checkout -b dev\n'
+"printf '<!doctype html>\\n<html><body><h1>Dev Branch</h1></body></html>\\n' > index.html\n"
+'git add index.html && git commit -m "Add dev index"\n'
+'git remote add origin git@localhost:/git/project\n'
+'GIT_SSH_COMMAND="sshpass -p password ssh -o StrictHostKeyChecking=no" git push -u origin main dev\n'
+'sleep 2\n'
+'curl -ks https://localhost:8443/index.html | head -n 1\n'
+'curl -ks https://localhost:8443/dev/index.html | head -n 1\n'
+'git config --global user.email "ci@example.com" && git config --global user.name "CI"\n'
+'git rev-parse --abbrev-ref HEAD\n'
+'git add index.html && git commit -m "Add dev index"\n'
+'git checkout main || git checkout -b main\n'
+"printf '<!doctype html>\\n<html><body><h1>Main Branch</h1></body></html>\\n' > index.html\n"
+'git add index.html && git commit -m "Add main index"\n'
+'git remote -v\n'
+'GIT_SSH_COMMAND="sshpass -p password ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" git push -u origin main dev\n'
+'sleep 2\n'
+"echo 'Main endpoint:' && curl -ks https://localhost:8443/index.html | grep -o 'Main Branch' || true\n"
+"echo 'Dev endpoint:' && curl -ks https://localhost:8443/dev/index.html | grep -o 'Dev Branch' || true\n"
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

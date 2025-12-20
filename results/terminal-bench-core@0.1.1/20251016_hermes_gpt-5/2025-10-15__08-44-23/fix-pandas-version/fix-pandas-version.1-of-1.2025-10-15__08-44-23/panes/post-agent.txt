@@ -1,0 +1,113 @@
+root@57810dae0167:/app# ls -la
+total 12
+drwxr-xr-x 1 root root 4096 Oct 15 10:17 .
+drwxr-xr-x 1 root root 4096 Oct 15 10:17 ..
+drwxr-xr-x 2 root root 4096 Oct  8 15:44 src
+root@57810dae0167:/app# ls -la src
+total 20
+drwxr-xr-x 2 root root 4096 Oct  8 15:44 .
+drwxr-xr-x 1 root root 4096 Oct 15 10:17 ..
+-rw-rw-r-- 1 root root   76 Oct  8 15:44 __init__.py
+-rw-rw-r-- 1 root root 1368 Oct  8 15:44 data_loader.py
+-rw-rw-r-- 1 root root 2688 Oct  8 15:44 data_processor.py
+root@57810dae0167:/app# grep -R -n "dtype_backend" src || true
+src/data_processor.py:18:    # This requires pandas >= 2.0.0 for date_format and dtype_backend
+src/data_processor.py:23:        dtype_backend="pyarrow",
+src/data_loader.py:28:        dtype_backend="pyarrow",
+root@57810dae0167:/app# python -V
+Python 3.8.20
+root@57810dae0167:/app# python -c "import pandas as pd; print(pd.__version__)"
+1.3.0
+root@57810dae0167:/app# python -m pip install --no-cache-dir "pandas>=2.0,<3"
+Collecting pandas<3,>=2.0
+  Downloading pandas-2.0.3-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (12.4 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 12.4/12.4 MB 11.7 MB/s eta 0:00:00
+Requirement already satisfied: python-dateutil>=2.8.2 in /usr/local/lib/python3.8/site-packages (from pandas<3,>=2.0) (2.9.0.post0)
+Requirement already satisfied: numpy>=1.20.3 in /usr/local/lib/python3.8/site-packages (from pandas<3,>=2.0) (1.21.0)
+Requirement already satisfied: pytz>=2020.1 in /usr/local/lib/python3.8/site-packages (from pandas<3,>=2.0) (2025.2)
+Collecting tzdata>=2022.1
+  Downloading tzdata-2025.2-py2.py3-none-any.whl (347 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 347.8/347.8 kB 12.8 MB/s eta 0:00:00
+Requirement already satisfied: six>=1.5 in /usr/local/lib/python3.8/site-packages (from python-dateutil>=2.8.2->pandas<3,>=2.0) (1.17.0)
+Installing collected packages: tzdata, pandas
+  Attempting uninstall: pandas
+    Found existing installation: pandas 1.3.0
+    Uninstalling pandas-1.3.0:
+      Successfully uninstalled pandas-1.3.0
+Successfully installed pandas-2.0.3 tzdata-2025.2
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a v
+irtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.0.1
+[notice] To update, run: pip install --upgrade pip
+root@57810dae0167:/app# python -m pip install --no-cache-dir pyarrow
+Requirement already satisfied: pyarrow in /usr/local/lib/python3.8/site-packages (6.0.0)
+Requirement already satisfied: numpy>=1.16.6 in /usr/local/lib/python3.8/site-packages (from pyarrow) (1.21.0)
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a v
+irtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.0.1
+[notice] To update, run: pip install --upgrade pip
+root@57810dae0167:/app# if [ -f requirements.txt ]; then if grep -Eq "^pandas([<>=].*)?$" requirements.txt; then sed -i "s/^pandas.*/pandas>=2.0/" requirements.
+txt; else printf "pandas>=2.0\n" >> requirements.txt; fi; if ! grep -Eq "^pyarrow([<>=].*)?$" requirements.txt; then printf "pyarrow>=12\n" >> requirements.txt;
+ fi; fi
+root@57810dae0167:/app# python -m src.data_processor
+   id  name  value  valid
+0   1  John   10.5   True
+1   2  Jane   20.3  False
+2   3   NaN   30.1    NaN
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.8/runpy.py", line 194, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/local/lib/python3.8/runpy.py", line 87, in _run_code
+    exec(code, run_globals)
+  File "/app/src/data_processor.py", line 90, in <module>
+    df = load_sample_transactions()
+  File "/app/src/data_loader.py", line 26, in load_sample_transactions
+    df = pd.read_csv(
+  File "/usr/local/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 912, in read_csv
+    return _read(filepath_or_buffer, kwds)
+  File "/usr/local/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 577, in _read
+    parser = TextFileReader(filepath_or_buffer, **kwds)
+  File "/usr/local/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 1407, in __init__
+    self._engine = self._make_engine(f, self.engine)
+  File "/usr/local/lib/python3.8/site-packages/pandas/io/parsers/readers.py", line 1679, in _make_engine
+    return mapping[engine](f, **self.options)
+  File "/usr/local/lib/python3.8/site-packages/pandas/io/parsers/c_parser_wrapper.py", line 92, in __init__
+    import_optional_dependency("pyarrow")
+  File "/usr/local/lib/python3.8/site-packages/pandas/compat/_optional.py", line 171, in import_optional_dependency
+    raise ImportError(msg)
+ImportError: Pandas requires version '7.0.0' or newer of 'pyarrow' (version '6.0.0' currently installed).
+root@57810dae0167:/app# python -m pip install --no-cache-dir -U "pyarrow>=12,<15"
+Collecting pyarrow<15,>=12
+  Downloading pyarrow-14.0.2-cp38-cp38-manylinux_2_28_x86_64.whl (38.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 38.1/38.1 MB 11.8 MB/s eta 0:00:00
+Requirement already satisfied: numpy>=1.16.6 in /usr/local/lib/python3.8/site-packages (from pyarrow<15,>=12) (1.21.0)
+Installing collected packages: pyarrow
+  Attempting uninstall: pyarrow
+    Found existing installation: pyarrow 6.0.0
+    Uninstalling pyarrow-6.0.0:
+      Successfully uninstalled pyarrow-6.0.0
+Successfully installed pyarrow-14.0.2
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a v
+irtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.0.1
+[notice] To update, run: pip install --upgrade pip
+root@57810dae0167:/app# python -c "import pyarrow,sys; print('pyarrow', pyarrow.__version__)"
+pyarrow 14.0.2
+root@57810dae0167:/app# python -m src.data_processor
+   id  name  value  valid
+0   1  John   10.5   True
+1   2  Jane   20.3  False
+2   3   NaN   30.1    NaN
+   transaction_id  customer_id  amount is_approved     category  segment transaction_date processing_date
+0               1          101  100.50        True         food        1       2023-01-15      2023-01-15
+1               2          102   75.25       False       travel        2       2023-02-20      2023-02-20
+2               3          103   50.75        True  electronics        3       2023-03-25      2023-03-25
+3               4          101  150.00        True         food        1       2023-04-10      2023-04-10
+4               5          102  200.00       False       travel        2       2023-05-15      2023-05-15
+root@57810dae0167:/app# if [ -f requirements.txt ]; then if grep -Eq "^pandas([<>=].*)?$" requirements.txt; then sed -i "s/^pandas.*/pandas>=2.0/" requirements.
+txt; else printf "pandas>=2.0\n" >> requirements.txt; fi; if grep -Eq "^pyarrow([<>=].*)?$" requirements.txt; then sed -i "s/^pyarrow.*/pyarrow>=12/" requiremen
+ts.txt; else printf "pyarrow>=12\n" >> requirements.txt; fi; else printf "pandas>=2.0\npyarrow>=12\n" > requirements.txt; fi
+root@57810dae0167:/app#

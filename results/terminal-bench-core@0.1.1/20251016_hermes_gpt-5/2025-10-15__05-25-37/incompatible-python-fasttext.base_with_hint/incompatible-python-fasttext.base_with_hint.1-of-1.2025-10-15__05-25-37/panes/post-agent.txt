@@ -1,0 +1,92 @@
+root@793f7df42418:/app# ls -la
+total 104296
+drwxr-xr-x 1 root root      4096 Oct 14 10:35 .
+drwxr-xr-x 1 root root      4096 Oct 15 06:22 ..
+-rw-r--r-- 1 root root 106785163 Oct 14 10:36 model.bin
+root@793f7df42418:/app# python3 -V
+Python 3.13.1
+root@793f7df42418:/app# python -V
+Python 3.13.1
+root@793f7df42418:/app# which python3
+/usr/local/bin/python3
+root@793f7df42418:/app# which python
+/usr/local/bin/python
+root@793f7df42418:/app# python3 -c "import sys; print(sys.version); import fasttext; print('fasttext file:', fasttext.__file__); print('version:', getattr(fastt
+ext, '__version__', None))"
+3.13.1 (main, Jan 14 2025, 02:51:49) [GCC 12.2.0]
+fasttext file: /usr/local/lib/python3.13/site-packages/fasttext/__init__.py
+version: None
+root@793f7df42418:/app# ls -la fasttext*
+ls: cannot access 'fasttext*': No such file or directory
+root@793f7df42418:/app# find /app -maxdepth 3 -type f -name "model.bin" -print
+/app/model.bin
+root@793f7df42418:/app# python3 -c "import fasttext, os; p='model.bin'; print('exists:', os.path.exists(p)); m=fasttext.load_model(p) if os.path.exists(p) else
+None; print(m.predict('hello world')) if m else print('model.bin not found in CWD')"
+exists: True
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import fasttext, os; p='model.bin'; print('exists:', os.path.exists(p)); m=fasttext.load_model(p) if os.path.exists(p) else None; print(m.predict('hello wor
+ld')) if m else print('model.bin not found in CWD')
+                                                                                                                                            ~~~~~~~~~^^^^^^^^^^^
+^^^^
+  File "/usr/local/lib/python3.13/site-packages/fasttext/FastText.py", line 239, in predict
+    return labels, np.array(probs, copy=False)
+                   ~~~~~~~~^^^^^^^^^^^^^^^^^^^
+ValueError: Unable to avoid copy while creating an array as requested.
+If using `np.array(obj, copy=False)` replace it with `np.asarray(obj)` to allow a copy when needed (no behavior change in NumPy 1.x).
+For more details, see https://numpy.org/devdocs/numpy_2_0_migration_guide.html#adapting-to-changes-in-the-copy-keyword.
+root@793f7df42418:/app# python3 -c "import numpy as np; print('numpy version:', np.__version__)"
+numpy version: 2.3.3
+root@793f7df42418:/app# sed -n '220,260p' /usr/local/lib/python3.13/site-packages/fasttext/FastText.py
+                raise ValueError("predict processes one line at a time (remove '\\n')")
+            entry += "\n"
+            return entry
+
+        if type(text) == list:
+            text = [check(entry) for entry in text]
+            all_labels, all_probs = self.f.multilinePredict(
+                text, k, threshold, on_unicode_error
+            )
+
+            return all_labels, all_probs
+        else:
+            text = check(text)
+            predictions = self.f.predict(text, k, threshold, on_unicode_error)
+            if predictions:
+                probs, labels = zip(*predictions)
+            else:
+                probs, labels = ([], ())
+
+            return labels, np.array(probs, copy=False)
+
+    def get_input_matrix(self):
+        """
+        Get a reference to the full input matrix of a Model. This only
+        works if the model is not quantized.
+        """
+        if self.f.isQuant():
+            raise ValueError("Can't get quantized Matrix")
+        return np.array(self.f.getInputMatrix())
+
+    def get_output_matrix(self):
+        """
+        Get a reference to the full output matrix of a Model. This only
+        works if the model is not quantized.
+        """
+        if self.f.isQuant():
+            raise ValueError("Can't get quantized Matrix")
+        return np.array(self.f.getOutputMatrix())
+
+    def get_words(self, include_freq=False, on_unicode_error="strict"):
+        """
+root@793f7df42418:/app# grep -n "copy=False" /usr/local/lib/python3.13/site-packages/fasttext/FastText.py
+41:        return np.array(y_scores, copy=False), np.array(y_true, copy=False)
+56:        return np.array(precision, copy=False), np.array(recall, copy=False)
+239:            return labels, np.array(probs, copy=False)
+root@793f7df42418:/app# cp /usr/local/lib/python3.13/site-packages/fasttext/FastText.py /usr/local/lib/python3.13/site-packages/fasttext/FastText.py.bak
+root@793f7df42418:/app# sed -i 's/np.array(probs, copy=False)/np.asarray(probs)/' /usr/local/lib/python3.13/site-packages/fasttext/FastText.py
+root@793f7df42418:/app# grep -n "np.asarray(probs)" /usr/local/lib/python3.13/site-packages/fasttext/FastText.py
+239:            return labels, np.asarray(probs)
+root@793f7df42418:/app# python -c "import fasttext; m=fasttext.load_model('model.bin'); print(m.predict('hello world'))"
+(('__label__4',), array([0.99451137]))
+root@793f7df42418:/app#

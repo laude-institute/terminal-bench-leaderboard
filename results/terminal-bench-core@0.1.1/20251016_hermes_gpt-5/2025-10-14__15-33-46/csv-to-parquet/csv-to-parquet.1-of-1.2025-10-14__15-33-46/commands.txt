@@ -1,0 +1,27 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -l /app\n'
+'head -n 5 /app/data.csv\n'
+'cat > /tmp/convert_csv_to_parquet.sh <<\'SH\'\n#!/usr/bin/env bash\nset -u\ncsv="/app/data.csv"\nout="/app/data.parquet"\nif [ ! -f "$csv" ]; then\n  echo "CSV not found at $csv" >&2\n  exit 1\nfi\nstatus=1\n# Try pyarrow\npython3 - <<\'PY\'\nimport sys\ntry:\n    import pyarrow.csv as csv\n    import pyarrow.parquet as pq\n    tbl = csv.read_csv("/app/data.csv")\n    pq.write_table(tbl, "/app/data.parquet")\n    print("OK_pyarrow")\nexcept Exception as e:\n    print("ERR_pyarrow:", e)\n    sys.exit(1)\nPY\nstatus=$?\nif [ $status -ne 0 ]; then\n  echo "Fallback to duckdb..."\n  if command -v duckdb >/dev/null 2>&1; then\n    if duckdb -c "COPY (SELECT * FROM read_csv_auto(\'/app/data.csv\')) TO \'/app/data.parquet\' (FORMAT \'parquet\');"; then\n      status=0\n    else\n      status=$?\n    fi\n  else\n    status=2\n  fi\nfi\nif [ $status -ne 0 ]; then\n  echo "Fallback to pandas..."\n  python3 - <<\'PY\'\nimport sys\ntry:\n    import pandas as pd\n    df = pd.read_csv("/app/data.csv")\n    try:\n        df.to_parquet("/app/data.parquet", engine="pyarrow")\n        print("OK_pandas_pyarrow")\n    except Exception:\n        try:\n            df.to_parquet("/app/data.parquet", engine="fastparquet")\n            print("OK_pandas_fastparquet")\n        except Exception as e:\n            print("ERR_pandas:", e)\n            sys.exit(1)\nexcept Exception as e:\n    print("ERR_pandas_import:", e)\n    sys.exit(1)\nPY\n  status=$?\nfi\nif [ $status -ne 0 ]; then\n  echo "Attempting pip install pyarrow..."\n  python3 -m pip install --no-cache-dir --quiet pyarrow && python3 - <<\'PY\'\nimport pyarrow.csv as csv\nimport pyarrow.parquet as pq\ntbl = csv.read_csv("/app/data.csv")\npq.write_table(tbl, "/app/data.parquet")\nprint("OK_pyarrow_after_install")\nPY\n  status=$?\nfi\nif [ $status -ne 0 ]; then\n  echo "Conversion failed" >&2\n  exit 1\nfi\nls -l /app/data.parquet\nSH\n'
+'chmod +x /tmp/convert_csv_to_parquet.sh\n'
+'/tmp/convert_csv_to_parquet.sh\n'
+'ls -l /app/data.parquet\n'
+'apt-get update\n'
+'apt-get install -y python3-pyarrow\n'
+'/tmp/convert_csv_to_parquet.sh\n'
+'ls -l /app/data.parquet\n'
+'apt-get install -y python3-pip\n'
+'python3 -m pip install --no-cache-dir -U pip setuptools wheel\n'
+'python3 -m pip install --no-cache-dir pyarrow\n'
+'python3 - <<\'PY\'\nimport pyarrow.csv as csv\nimport pyarrow.parquet as pq\nimport sys\ntry:\n    tbl = csv.read_csv("/app/data.csv")\n    pq.write_table(tbl, "/app/data.parquet")\n    print("Conversion succeeded")\nexcept Exception as e:\n    print("Conversion failed:", e)\n    sys.exit(1)\nPY\n'
+'ls -l /app/data.parquet\n'
+'apt-get install -y python3-venv\n'
+'python3 -m venv /opt/pyarrow-venv\n'
+'/opt/pyarrow-venv/bin/pip install --no-cache-dir pyarrow\n'
+'/opt/pyarrow-venv/bin/python - <<\'PY\'\nimport pyarrow.csv as csv\nimport pyarrow.parquet as pq\nimport sys\ntry:\n    tbl = csv.read_csv("/app/data.csv")\n    pq.write_table(tbl, "/app/data.parquet")\n    print("Conversion succeeded")\nexcept Exception as e:\n    print("Conversion failed:", e)\n    sys.exit(1)\nPY\n'
+'ls -l /app/data.parquet\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

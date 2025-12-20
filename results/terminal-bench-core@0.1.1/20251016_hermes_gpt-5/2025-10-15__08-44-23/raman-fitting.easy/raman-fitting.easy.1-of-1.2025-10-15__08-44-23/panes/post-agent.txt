@@ -1,0 +1,270 @@
+root@8d22c68cef11:/app# ls -la
+total 96
+drwxr-xr-x 1 root root  4096 Oct  8 15:44 .
+drwxr-xr-x 1 root root  4096 Oct 15 10:37 ..
+-rw-rw-r-- 1 root root 88805 Oct  8 15:44 graphene.dat
+root@8d22c68cef11:/app# head -n 30 graphene.dat
+47183,554644    19261,547207
+46588,360019    19266,089699
+46008,191298    19077,996963
+45442,488736    19173,287322
+44890,718036    19501,518253
+44352,368927    19506,586203
+43826,959593    19752,431144
+43314,029137    19812,863021
+42813,138290    19678,348151
+42323,866373    19764,871128
+41845,813826    19360,099292
+41378,600916    19413,554878
+40921,863181    19626,191780
+40475,250679    19704,066336
+40038,430487    19495,727898
+39611,084116    19672,573559
+39192,908278    19538,763458
+38783,609488    19344,943112
+38382,908122    19510,307527
+37990,536178    19552,152695
+37606,236678    19568,884582
+37229,764497    19605,714542
+36860,880256    19652,302102
+36499,358232    19518,303269
+36144,980263    19684,212843
+35797,536721    19599,237174
+35456,826102    19666,264313
+35122,653398    19895,771042
+34794,833482    19781,231391
+34473,186962    19931,483503
+root@8d22c68cef11:/app# python3 -m pip install --no-cache-dir numpy scipy
+Collecting numpy
+  Downloading numpy-2.3.3-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
+Collecting scipy
+  Downloading scipy-1.16.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (62 kB)
+Downloading numpy-2.3.3-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.6/16.6 MB 10.9 MB/s eta 0:00:00
+Downloading scipy-1.16.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (35.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.7/35.7 MB 10.3 MB/s eta 0:00:00
+Installing collected packages: numpy, scipy
+Successfully installed numpy-2.3.3 scipy-1.16.2
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your syst
+em unusable.It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you ar
+e doing and want to suppress this warning.
+
+[notice] A new release of pip is available: 24.3.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+root@8d22c68cef11:/app# cat > fit_raman.py << 'PY'
+> #!/usr/bin/env python3
+> import os
+> import re
+> import json
+> import numpy as np
+> from scipy.optimize import curve_fit
+>
+> def lorentzian(x, x0, gamma, amplitude, offset):
+>     g2 = (0.5*gamma)**2
+>     return offset + amplitude * (g2 / ((x - x0)**2 + g2))
+>
+> def convert_file(input_path):
+>     with open(input_path, 'rb') as f:
+>         raw = f.read()
+>     text = raw.decode('utf-8', errors='ignore')
+>     data = []
+>     for line in text.splitlines():
+>         line = line.replace(';', ' ').replace('\t', ' ').replace(',', '.')
+>         nums = re.findall(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", line)
+>         if len(nums) >= 2:
+>             try:
+>                 x = float(nums[0])
+>                 y = float(nums[1])
+>                 data.append((x, y))
+>             except Exception:
+>                 continue
+>     if not data:
+>         raise RuntimeError("No numeric data found in input file")
+>     arr = np.array(data, dtype=float)
+>     out_csv = os.path.join(os.path.dirname(input_path), 'graphene_converted.csv')
+>     np.savetxt(out_csv, arr, delimiter=',', header='wavenumber,intensity', comments='')
+>     return arr
+>
+> def fit_peak(x, y, x0_guess, window=80.0):
+>     mask = (x >= x0_guess - window) & (x <= x0_guess + window)
+>     xw = x[mask]
+>     yw = y[mask]
+>     if xw.size < 10:
+>         mask = (x >= x0_guess - 200) & (x <= x0_guess + 200)
+>         xw = x[mask]
+>         yw = y[mask]
+>     idx = np.argsort(xw)
+>     xw = xw[idx]
+>     yw = yw[idx]
+>     offset_guess = float(np.median(yw))
+>     amplitude_guess = float(np.max(yw) - offset_guess)
+>     halfmax = offset_guess + amplitude_guess/2.0
+>     above = yw > halfmax
+>     if np.any(above):
+>         xs = xw[above]
+>         gamma_guess = float(xs.max() - xs.min()) if xs.size >= 2 else 30.0
+>     else:
+>         gamma_guess = 30.0
+>     gamma_guess = max(5.0, min(gamma_guess, 200.0))
+>     bounds = ([x0_guess - 100.0, 1e-6, 0.0, -np.inf], [x0_guess + 100.0, 500.0, np.inf, np.inf])
+>     popt, _ = curve_fit(lorentzian, xw, yw, p0=[x0_guess, gamma_guess, max(1e-6, amplitude_guess), offset_guess], bounds=bounds, maxfev=20000)
+>     return {'x0': float(popt[0]), 'gamma': float(popt[1]), 'amplitude': float(popt[2]), 'offset': float(popt[3])}
+>
+> def main():
+>     base = '/app'
+>     input_path = os.path.join(base, 'graphene.dat')
+>     if not os.path.isfile(input_path):
+>         for root, dirs, files in os.walk(base):
+>             if 'graphene.dat' in files:
+>                 input_path = os.path.join(root, 'graphene.dat')
+>                 break
+>     arr = convert_file(input_path)
+>     x = arr[:, 0]
+>     y = arr[:, 1]
+>     res_G = fit_peak(x, y, 1580.0, window=80.0)
+>     res_2D = fit_peak(x, y, 2700.0, window=120.0)
+>     results = {'G': res_G, '2D': res_2D}
+>     out_path = os.path.join(base, 'results.json')
+>     with open(out_path, 'w') as f:
+>         json.dump(results, f, indent=2)
+>     print(out_path)
+>
+> if __name__ == '__main__':
+>     main()
+> PY
+root@8d22c68cef11:/app# chmod +x fit_raman.py
+root@8d22c68cef11:/app# python3 fit_raman.py
+/app/results.json
+root@8d22c68cef11:/app# cat results.json
+{
+  "G": {
+    "x0": 1514.777622399585,
+    "gamma": 1.72325121068251e-05,
+    "amplitude": 232.47876554479652,
+    "offset": 6105.328940038869
+  },
+  "2D": {
+    "x0": 2605.353572057023,
+    "gamma": 164.11707820458122,
+    "amplitude": 101.65184617587504,
+    "offset": 323.6562686552873
+  }
+}root@8d22c68cef11:/app# wc -l graphene.dat
+3565 graphene.dat
+root@8d22c68cef11:/app# cat > fit_raman.py << 'PY'
+> #!/usr/bin/env python3
+> import os
+> import re
+> import json
+> import numpy as np
+> from scipy.optimize import curve_fit
+>
+> def lorentzian(x, x0, gamma, amplitude, offset):
+>     g2 = (0.5*gamma)**2
+>     return offset + amplitude * (g2 / ((x - x0)**2 + g2))
+>
+> def convert_file(input_path):
+>     with open(input_path, 'rb') as f:
+>         raw = f.read()
+>     text = raw.decode('utf-8', errors='ignore')
+>     data = []
+>     for line in text.splitlines():
+>         line = line.replace(';', ' ').replace('\t', ' ').replace(',', '.')
+>         nums = re.findall(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", line)
+>         if len(nums) >= 2:
+>             try:
+>                 x = float(nums[0])
+>                 y = float(nums[1])
+>                 data.append((x, y))
+>             except Exception:
+>                 continue
+>     if not data:
+>         raise RuntimeError("No numeric data found in input file")
+>     arr = np.array(data, dtype=float)
+>     out_csv = os.path.join(os.path.dirname(input_path), 'graphene_converted.csv')
+>     np.savetxt(out_csv, arr, delimiter=',', header='wavenumber,intensity', comments='')
+>     return arr
+>
+> def fit_peak(x, y, x0_guess, window=100.0):
+>     mask = (x >= x0_guess - window) & (x <= x0_guess + window)
+>     xw = x[mask]
+>     yw = y[mask]
+>     if xw.size < 10:
+>         mask = (x >= x0_guess - 200) & (x <= x0_guess + 200)
+>         xw = x[mask]
+>         yw = y[mask]
+>     idx = np.argsort(xw)
+>     xw = xw[idx]
+>     yw = yw[idx]
+>     if xw.size < 5:
+>         raise RuntimeError(f"Insufficient data around peak {x0_guess}")
+>     offset_guess = float(np.min(yw))
+>     amplitude_guess = float(np.max(yw) - offset_guess)
+>     if amplitude_guess <= 0:
+>         amplitude_guess = max(1e-6, float(np.std(yw)))
+>     halfmax = offset_guess + amplitude_guess/2.0
+>     above = yw > halfmax
+>     if np.any(above):
+>         xs = xw[above]
+>         gamma_guess = float(xs.max() - xs.min()) if xs.size >= 2 else 30.0
+>     else:
+>         gamma_guess = 30.0
+>     gamma_guess = max(10.0, min(gamma_guess, 300.0))
+>     bounds = ([x0_guess - 150.0, 5.0, 0.0, -np.inf], [x0_guess + 150.0, 500.0, np.inf, np.inf])
+>     popt, _ = curve_fit(lorentzian, xw, yw, p0=[x0_guess, gamma_guess, amplitude_guess, offset_guess], bounds=bounds, maxfev=50000)
+>     return {'x0': float(popt[0]), 'gamma': float(popt[1]), 'amplitude': float(popt[2]), 'offset': float(popt[3])}
+>
+> def main():
+>     base = '/app'
+>     input_path = os.path.join(base, 'graphene.dat')
+>     if not os.path.isfile(input_path):
+>         for root, dirs, files in os.walk(base):
+>             if 'graphene.dat' in files:
+>                 input_path = os.path.join(root, 'graphene.dat')
+>                 break
+>     arr = convert_file(input_path)
+>     x = arr[:, 0]
+>     y = arr[:, 1]
+>     res_G = fit_peak(x, y, 1580.0, window=100.0)
+>     res_2D = fit_peak(x, y, 2700.0, window=150.0)
+>     results = {'G': res_G, '2D': res_2D}
+>     out_path = os.path.join(base, 'results.json')
+>     with open(out_path, 'w') as f:
+>         json.dump(results, f, indent=2)
+>     print(out_path)
+>
+> if __name__ == '__main__':
+>     main()
+> PY
+root@8d22c68cef11:/app# chmod +x fit_raman.py
+root@8d22c68cef11:/app# python3 fit_raman.py
+/app/results.json
+root@8d22c68cef11:/app# cat results.json
+{
+  "G": {
+    "x0": 1654.835440490779,
+    "gamma": 23.788811065532244,
+    "amplitude": 593.4698169815192,
+    "offset": 5557.074372072163
+  },
+  "2D": {
+    "x0": 2598.905331430575,
+    "gamma": 120.67816299249061,
+    "amplitude": 93.2709642542291,
+    "offset": 341.97366101906215
+  }
+}root@8d22c68cef11:/app# cat results.json
+{
+  "G": {
+    "x0": 1654.835440490779,
+    "gamma": 23.788811065532244,
+    "amplitude": 593.4698169815192,
+    "offset": 5557.074372072163
+  },
+  "2D": {
+    "x0": 2598.905331430575,
+    "gamma": 120.67816299249061,
+    "amplitude": 93.2709642542291,
+    "offset": 341.97366101906215
+  }
+}root@8d22c68cef11:/app#

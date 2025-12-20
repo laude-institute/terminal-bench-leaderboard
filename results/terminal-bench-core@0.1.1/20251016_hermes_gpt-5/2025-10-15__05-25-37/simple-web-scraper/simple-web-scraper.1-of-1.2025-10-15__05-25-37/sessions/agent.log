@@ -1,0 +1,127 @@
+[?2004hroot@00fdb925ad75:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@00fdb925ad75:/app# clear
+[?2004l[H[J[3J[?2004hroot@00fdb925ad75:/app# ls -la
+[?2004ltotal 8
+drwxr-xr-x 2 root root 4096 Mar 28  2025 .
+drwxr-xr-x 1 root root 4096 Oct 15 07:16 ..
+[?2004hroot@00fdb925ad75:/app# cat > scrape_books.py << 'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import requests
+[?2004l[?2004h> from bs4 import BeautifulSoup
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> import re
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     url = 'http://server:8000'
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         resp = requests.get(url, timeout=10)
+[?2004l[?2004h>         resp.raise_for_status()
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         print(f'Error fetching {url}: {e}')
+[?2004l[?2004h>         return
+[?2004l[?2004h> 
+[?2004l[?2004h>     soup = BeautifulSoup(resp.text, 'html.parser')
+[?2004l[?2004h>     books = []
+[?2004l[?2004h>     for b in soup.select('div.book'):
+[?2004l[?2004h>         title_el = b.select_one('div.book-title')
+[?2004l[?2004h>         author_el = b.select_one('div.book-author')
+[?2004l[?2004h>         year_el = b.select_one('span.book-year')
+[?2004l[?2004h>         rating_el = b.select_one('span.book-rating')
+[?2004l[?2004h>         price_el = b.select_one('span.book-price')
+[?2004l[?2004h> 
+[?2004l[?2004h>         title = title_el.get_text(strip=True) if title_el else None
+[?2004l[?2004h>         author_text = author_el.get_text(strip=True) if author_el else None
+[?2004l[?2004h>         if author_text and author_text.lower().startswith('by '):
+[?2004l[?2004h>             author = author_text[3:].strip()
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             author = author_text
+[?2004l[?2004h> 
+[?2004l[?2004h>         year_text = year_el.get_text(' ', strip=True) if year_el else None
+[?2004l[?2004h>         rating_text = rating_el.get_text(' ', strip=True) if rating_el else None
+[?2004l[?2004h>         price_text = price_el.get_text(' ', strip=True) if price_el else None
+[?2004l[?2004h> 
+[?2004l[?2004h>         year = None
+[?2004l[?2004h>         if year_text:
+[?2004l[?2004h>             ym = re.search(r'(\d{4})', year_text)
+[?2004l[?2004h>             if ym:
+[?2004l[?2004h>                 year = int(ym.group(1))
+[?2004l[?2004h> 
+[?2004l[?2004h>         rating = None
+[?2004l[?2004h>         if rating_text:
+[?2004l[?2004h>             rm = re.search(r'([\d.]+)', rating_text)
+[?2004l[?2004h>             if rm:
+[?2004l[?2004h>                 rating = float(rm.group(1))
+[?2004l[?2004h> 
+[?2004l[?2004h>         price = None
+[?2004l[?2004h>         if price_text:
+[?2004l[?2004h>             pm = re.search(r'([\d.]+)', price_text)
+[?2004l[?2004h>             if pm:
+[?2004l[?2004h>                 price = float(pm.group(1))
+[?2004l[?2004h> 
+[?2004l[?2004h>         books.append({
+[?2004l[?2004h>             'title': title,
+[?2004l[?2004h>             'author': author,
+[?2004l[?2004h>             'year': year,
+[?2004l[?2004h>             'rating': rating,
+[?2004l[?2004h>             'price': price
+[?2004l[?2004h>         })
+[?2004l[?2004h> 
+[?2004l[?2004h>     df = pd.DataFrame(books, columns=['title', 'author', 'year', 'rating', 'price'])
+[?2004l[?2004h>     df.to_csv('books.csv', index=False)
+[?2004l[?2004h> 
+[?2004l[?2004h>     total = len(df)
+[?2004l[?2004h>     avg_price = float(df['price'].dropna().mean()) if total > 0 else 0.0
+[?2004l[?2004h> 
+[?2004l[?2004h>     highest_title = None
+[?2004l[?2004h>     highest_rating = None
+[?2004l[?2004h>     if total > 0 and df['rating'].notna().any():
+[?2004l[?2004h>         idx = df['rating'].idxmax()
+[?2004l[?2004h>         if pd.notna(df.at[idx, 'rating']):
+[?2004l[?2004h>             highest_title = df.at[idx, 'title']
+[?2004l[?2004h>             highest_rating = df.at[idx, 'rating']
+[?2004l[?2004h> 
+[?2004l[?2004h>     with open('report.txt', 'w') as f:
+[?2004l[?2004h>         f.write(f'Total number of books scraped: {total}\n')
+[?2004l[?2004h>         f.write(f'Average book price: ${avg_price:.2f}\n')
+[?2004l[?2004h>         if highest_title is not None:
+[?2004l[?2004h>             f.write(f'Highest rated book: {highest_title} ({highest_rating:.2f}/5)\n')
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             f.write('Highest rated book: N/A\n')
+[?2004l[?2004h> 
+[?2004l[?2004h>     print('Scraping complete. Saved books.csv and report.txt.')
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@00fdb925ad75:/app# chmod +x scrape_books.py
+[?2004l[?2004hroot@00fdb925ad75:/app# python3 scrape_books.py
+[?2004lScraping complete. Saved books.csv and report.txt.
+[?2004hroot@00fdb925ad75:/app# ls -la
+[?2004ltotal 20
+drwxr-xr-x 1 root root 4096 Oct 15 07:17 .
+drwxr-xr-x 1 root root 4096 Oct 15 07:16 ..
+-rw-r--r-- 1 root root  345 Oct 15 07:17 books.csv
+-rw-r--r-- 1 root root  111 Oct 15 07:17 report.txt
+-rwxr-xr-x 1 root root 2815 Oct 15 07:17 scrape_books.py
+[?2004hroot@00fdb925ad75:/app# sed -n '1,10p' books.csv
+[?2004ltitle,author,year,rating,price
+The Great Gatsby,F. Scott Fitzgerald,1925,4.2,12.99
+To Kill a Mockingbird,Harper Lee,1960,4.8,14.99
+1984,George Orwell,1949,4.6,11.99
+Pride and Prejudice,Jane Austen,1813,4.5,9.99
+The Catcher in the Rye,J.D. Salinger,1951,4.1,13.99
+Moby Dick,Herman Melville,1851,4.0,15.99
+The Hobbit,J.R.R. Tolkien,1937,4.7,16.99
+[?2004hroot@00fdb925ad75:/app# cat report.txt
+[?2004lTotal number of books scraped: 7
+Average book price: $13.85
+Highest rated book: To Kill a Mockingbird (4.80/5)
+[?2004hroot@00fdb925ad75:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@00fdb925ad75:/app# 

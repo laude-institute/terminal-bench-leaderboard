@@ -1,0 +1,243 @@
+root@4257fada7303:/app# ls -la
+total 635132
+drwxr-xr-x 1 root root      4096 Oct 15 11:07 .
+drwxr-xr-x 1 root root      4096 Oct 15 11:07 ..
+-rw-r--r-- 1 root root         5 Oct 15 11:07 .python-version
+drwxr-xr-x 4 root root      4096 Oct 15 11:07 .venv
+-rw-r--r-- 1 root root         0 Oct 15 11:07 README.md
+-rw-r--r-- 1 root root 648864939 Oct 15 05:36 high_res.ppm
+-rw-r--r-- 1 root root   1440015 Oct 15 05:36 image.ppm
+-rw-rw-r-- 1 root root       395 Oct  8 15:44 install.sh
+-rw-r--r-- 1 root root        81 Oct 15 11:07 main.py
+-rwxr-xr-x 1 root root     21240 Oct 15 05:35 orig
+-rw-r--r-- 1 root root       171 Oct 15 11:07 pyproject.toml
+-rw-r--r-- 1 root root      4600 Oct 15 11:07 uv.lock
+root@4257fada7303:/app# file image.ppm
+bash: file: command not found
+root@4257fada7303:/app# head -c 128 image.ppm | sed -n 'l'
+P6$
+800 600$
+255$
+\237\305\377\237\305\377\237\305\377\236\305\377\236\305\377\236\305\
+\377\236\305\377\236\305\377\236\305\377\236\305\377\236\305\377\236\
+\305\377\236\305\377\236\305\377\236\305\377\236\305\377\236\305\377\
+\236\305\377\236\305\377\236\305\377\236\305\377\236\305\377\236\305\
+\377\236\305\377\236\305\377\236\305\377\236\305\377\236\305\377\235\
+\305\377\235\305\377\235\305\377\235\305\377\235\305\377\235\305\377\
+\235\305\377\235\305\377\235\304\377\235\304$
+root@4257fada7303:/app# python3 - << 'PY'
+> import sys
+> import re
+> fn='image.ppm'
+> with open(fn,'rb') as f:
+>     data=f.read()
+> # Parse PPM header (P3 or P6)
+> magic=data[:2]
+> if magic==b'P6':
+>     # Read lines separated by whitespace until we have width,height,maxval
+>     i=2
+>     # skip whitespace after magic
+>     while i<len(data) and data[i] in b" \t\r\n": i+=1
+>     tokens=[]
+>     # read tokens, skipping comments
+>     while len(tokens)<3:
+>         # skip whitespace
+>         while i<len(data) and data[i] in b" \t\r\n": i+=1
+>         if i>=len(data): break
+>         if data[i]==ord('#'):
+>             # skip to end of line
+>             while i<len(data) and data[i]!=ord('\n'): i+=1
+>             continue
+>         # read next token up to whitespace
+>         j=i
+>         while j<len(data) and data[j] not in b" \t\r\n": j+=1
+>         tokens.append(data[i:j].decode())
+>         i=j
+>     w,h,maxval = map(int,tokens)
+>     header_end=i
+>     # Skip single whitespace after maxval
+>     if header_end<len(data) and data[header_end] in b" \t\r\n": header_end+=1
+>     pixels=data[header_end:]
+>     # Compute simple stats
+>     import struct
+>     # Each pixel is 3 bytes
+>     n = w*h
+>     if len(pixels) < 3*n:
+>         print('WARN: pixel data shorter than expected', len(pixels), 3*n)
+>     r = pixels[0:3*n:3]
+>     g = pixels[1:3*n:3]
+>     b = pixels[2:3*n:3]
+>     import statistics
+>     def mean(xs):
+>         return sum(xs)/len(xs)
+>     print('P6', w, h, maxval)
+>     print('means', mean(r), mean(g), mean(b))
+>     # Sample corners and center
+>     def idx(x,y):
+>         return (y*w + x)*3
+>     def pix(x,y):
+>         k=idx(x,y)
+>         return pixels[k:k+3]
+>     samples=[(0,0),(w-1,0),(0,h-1),(w-1,h-1),(w//2,h//2)]
+>     for x,y in samples:
+>         p=pix(x,y)
+>         print('sample',x,y,list(p))
+>     # Check variation along x and y using a small subset
+>     import numpy as np
+>     xs=[0,w//4,w//2,3*w//4,w-1]
+>     ys=[0,h//4,h//2,3*h//4,h-1]
+>     lineX=[]
+>     for x in range(0,w, max(1,w//32)):
+>         k=idx(x,h//2)
+>         lineX.append(sum(pixels[k:k+3]))
+>     lineY=[]
+>     for y in range(0,h, max(1,h//32)):
+>         k=idx(w//2,y)
+>         lineY.append(sum(pixels[k:k+3]))
+>     def trend(arr):
+>         # correlation with index
+>         n=len(arr)
+>         if n<2: return 0.0
+>         xs=list(range(n))
+>         mx=sum(xs)/n; my=sum(arr)/n
+>         num=sum((x-mx)*(y-my) for x,y in zip(xs,arr))
+>         den=(sum((x-mx)**2 for x in xs)**0.5)*(sum((y-my)**2 for y in arr)**0.5)
+>         return num/den if den!=0 else 0.0
+>     print('trendX', trend(lineX))
+>     print('trendY', trend(lineY))
+> elif magic==b'P3':
+>     # ASCII PPM: read header lines
+>     txt=data.decode(errors='ignore')
+>     lines=[l for l in txt.splitlines() if not l.startswith('#')]
+>     # lines[0]=P3, lines[1] contains w h, lines[2]=maxval (possibly combined)
+>     parts=[]
+>     for l in lines[1:]:
+>         parts.extend(l.split())
+>         if len(parts)>=3:
+>             break
+>     w,h,maxval=map(int,parts[:3])
+>     print('P3',w,h,maxval)
+>     # compute first few pixels
+>     nums=list(map(int, re.findall(r"\d+", txt)))
+>     # skip header numbers (w,h,maxval)
+>     # first number is 3? Actually magic doesn't count. Next three are w,h,maxval.
+>     nums=nums[3:]
+>     first=nums[:15]
+>     print('first_pixels', first)
+> else:
+>     print('Unknown format', magic)
+> PY
+P6 800 600 255
+means 135.41925 151.48912916666666 177.1025875
+sample 0 0 [159, 197, 255]
+sample 799 0 [159, 197, 255]
+sample 0 599 [102, 102, 102]
+sample 799 599 [119, 119, 119]
+sample 400 300 [51, 10, 10]
+Traceback (most recent call last):
+  File "<stdin>", line 58, in <module>
+ModuleNotFoundError: No module named 'numpy'
+root@4257fada7303:/app# cat > image.c << 'EOF'
+> #include <stdio.h>
+> #include <math.h>
+> #include <stdint.h>
+>
+> int main(void) {
+>     int w = 800, h = 600;
+>     FILE *f = fopen("reconstructed.ppm", "wb");
+>     if (!f) { perror("fopen"); return 1; }
+>     fprintf(f, "P6\n%d %d\n255\n", w, h);
+>
+>     // Observed colors from samples
+>     double skyR = 159.0, skyG = 197.0, skyB = 255.0; // top corners
+>     double groundLeft = 102.0, groundRight = 119.0;  // bottom corners gray
+>
+>     double cx = (w - 1) / 2.0;
+>     double cy = (h - 1) / 2.0;
+>     double r0 = 100.0; // inner radius (fully dark)
+>     double r1 = 200.0; // outer radius (fully base)
+>
+>     double objR = 51.0, objG = 10.0, objB = 10.0;    // center dark reddish
+>
+>     for (int y = 0; y < h; y++) {
+>         double t = (double)y / (double)(h - 1); // 0 at top, 1 at bottom
+>         for (int x = 0; x < w; x++) {
+>             // Horizontal gradient in ground gray from left to right
+>             double gx = groundLeft + (groundRight - groundLeft) * ((double)x / (double)(w - 1));
+>             // Vertical interpolation between sky and ground gray
+>             double baseR = skyR * (1.0 - t) + gx * t;
+>             double baseG = skyG * (1.0 - t) + gx * t;
+>             double baseB = skyB * (1.0 - t) + gx * t;
+>
+>             // Central dark object blending
+>             double dx = (double)x - cx;
+>             double dy = (double)y - cy;
+>             double d = sqrt(dx * dx + dy * dy);
+>             double s;
+>             if (d <= r0) s = 0.0;
+>             else if (d >= r1) s = 1.0;
+>             else s = (d - r0) / (r1 - r0);
+>
+>             double R = s * baseR + (1.0 - s) * objR;
+>             double G = s * baseG + (1.0 - s) * objG;
+>             double B = s * baseB + (1.0 - s) * objB;
+>
+>             if (R < 0) R = 0; if (R > 255) R = 255;
+>             if (G < 0) G = 0; if (G > 255) G = 255;
+>             if (B < 0) B = 0; if (B > 255) B = 255;
+>
+>             uint8_t out[3];
+>             out[0] = (uint8_t)(R + 0.5);
+>             out[1] = (uint8_t)(G + 0.5);
+>             out[2] = (uint8_t)(B + 0.5);
+>             fwrite(out, 1, 3, f);
+>         }
+>     }
+>
+>     fclose(f);
+>     return 0;
+> }
+> EOF
+root@4257fada7303:/app# gcc -o image image.c -lm
+root@4257fada7303:/app# ./image
+root@4257fada7303:/app# python3 - << 'PY'
+> import sys
+> fn='reconstructed.ppm'
+> with open(fn,'rb') as f:
+>     data=f.read()
+> magic=data[:2]
+> if magic!=b'P6':
+>     print('Format unexpected', magic); sys.exit(1)
+> # parse header
+> i=2
+> while i<len(data) and data[i] in b" \t\r\n": i+=1
+> vals=[]
+> while len(vals)<3:
+>     while i<len(data) and data[i] in b" \t\r\n": i+=1
+>     if i>=len(data): break
+>     if data[i]==ord('#'):
+>         while i<len(data) and data[i]!=ord('\n'): i+=1
+>         continue
+>     j=i
+>     while j<len(data) and data[j] not in b" \t\r\n": j+=1
+>     vals.append(int(data[i:j]))
+>     i=j
+> w,h,maxval=vals
+> if i<len(data) and data[i] in b" \t\r\n": i+=1
+> pixels=data[i:]
+> print('P6',w,h,maxval)
+> # samples
+> def idx(x,y): return (y*w + x)*3
+> def pix(x,y):
+>     k=idx(x,y); return pixels[k:k+3]
+> for x,y in [(0,0),(w-1,0),(0,h-1),(w-1,h-1),(w//2,h//2)]:
+>     p=pix(x,y)
+>     print('sample',x,y,list(p))
+> PY
+P6 800 600 255
+sample 0 0 [159, 197, 255]
+sample 799 0 [159, 197, 255]
+sample 0 599 [102, 102, 102]
+sample 799 599 [119, 119, 119]
+sample 400 300 [51, 10, 10]
+root@4257fada7303:/app#

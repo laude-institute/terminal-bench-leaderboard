@@ -1,0 +1,39 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'python3 -V\n'
+'python3 -m pip install --no-cache-dir flask transformers torch requests\n'
+'mkdir -p /app/model_cache/sentiment_model\n'
+"cat > /app/download_model.py << 'PY'\n#!/usr/bin/env python3\nfrom transformers import AutoTokenizer, AutoModelForSequenceClassification\nimport os\n\nmodel_name = 'distilbert-base-uncased-finetuned-sst-2-english'\nsave_dir = '/app/model_cache/sentiment_model'\nos.makedirs(save_dir, exist_ok=True)\n\ntokenizer = AutoTokenizer.from_pretrained(model_name)\nmodel = AutoModelForSequenceClassification.from_pretrained(model_name)\n\ntokenizer.save_pretrained(save_dir)\nmodel.save_pretrained(save_dir)\nprint('Model saved to', save_dir)\nPY\n"
+'python3 /app/download_model.py\n'
+'cat > /app/app.py << \'PY\'\n#!/usr/bin/env python3\nfrom flask import Flask, request, jsonify\nimport torch\nfrom transformers import AutoTokenizer, AutoModelForSequenceClassification\n\nMODEL_DIR = \'/app/model_cache/sentiment_model\'\napp = Flask(__name__)\n\n# Load model and tokenizer from local directory\ntry:\n    tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)\n    model = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR)\n    model.eval()\nexcept Exception as e:\n    raise RuntimeError(f\'Failed to load model/tokenizer from {MODEL_DIR}: {e}\')\n\n# Map indices for positive/negative\nid2label = {int(k): v for k, v in model.config.id2label.items()}\npos_idx = next(i for i, lab in id2label.items() if lab.upper().startswith(\'POS\'))\nneg_idx = next(i for i, lab in id2label.items() if lab.upper().startswith(\'NEG\'))\n\n@app.route(\'/sentiment\', methods=[\'POST\'])\ndef sentiment():\n    if not request.is_json:\n        return jsonify({\'error\': \'Request content-type must be application/json\'}), 400\n    data = request.get_json(silent=True)\n    if not data or \'text\' not in data or not isinstance(data.get(\'text\'), str):\n        return jsonify({\'error\': "Invalid request body. Expected JSON with a string field \'text\'."}), 400\n\n    text = data[\'text\']\n    inputs = tokenizer(text, return_tensors=\'pt\')\n    with torch.no_grad():\n        outputs = model(**inputs)\n        probs = torch.nn.functional.softmax(outputs.logits[0], dim=-1).tolist()\n\n    positive = float(probs[pos_idx])\n    negative = float(probs[neg_idx])\n    sent = \'positive\' if positive >= negative else \'negative\'\n\n    return jsonify({\n        \'sentiment\': sent,\n        \'confidence\': {\n            \'positive\': positive,\n            \'negative\': negative\n        }\n    })\n\nif __name__ == \'__main__\':\n    app.run(host=\'0.0.0.0\', port=5000)\nPY\n'
+'nohup python3 /app/app.py >/app/server.log 2>&1 &\n'
+'sleep 2\n'
+"cat > /app/test_client.py << 'PY'\n#!/usr/bin/env python3\nimport time\nimport requests\n\nurl = 'http://127.0.0.1:5000/sentiment'\ntexts = [\n    'I love this product!',\n    'This is the worst experience ever.',\n    'Meh, it was okay, nothing special.'\n]\n\n# Wait for server to be ready\nfor i in range(30):\n    try:\n        r = requests.post(url, json={'text': 'ping'})\n        if r.status_code in (200, 400):\n            break\n    except Exception:\n        pass\n    time.sleep(1)\nelse:\n    print('Server not responding')\n    raise SystemExit(1)\n\nfor t in texts:\n    try:\n        r = requests.post(url, json={'text': t})\n        print('Input:', t)\n        print('Status:', r.status_code)\n        try:\n            print('Response:', r.json())\n        except Exception:\n            print('Response text:', r.text)\n    except Exception as e:\n        print('Error for:', t, e)\nPY\n"
+'python3 /app/test_client.py\n'
+''
+'python3 -c "import flask, transformers, torch; print(\'OK\', flask.__version__, transformers.__version__, torch.__version__)"\n'
+'ls -la /app/model_cache/sentiment_model\n'
+'python3 /app/download_model.py\n'
+"pkill -f '/app/app.py' || true\n"
+'nohup python3 /app/app.py >/app/server.log 2>&1 &\n'
+'sleep 3\n'
+'tail -n 50 /app/server.log\n'
+'python3 /app/test_client.py\n'
+'\n'
+''
+'python3 -c "import flask, transformers, torch; print(\'OK\', flask.__version__, transformers.__version__, torch.__version__)"\n'
+'ls -la /app/model_cache/sentiment_model\n'
+'python3 /app/download_model.py\n'
+"pkill -f '/app/app.py' || true\n"
+'nohup python3 /app/app.py >/app/server.log 2>&1 &\n'
+'sleep 3\n'
+'tail -n 50 /app/server.log\n'
+'python3 /app/test_client.py\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+'sleep 20\n'
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']
+'ls -la /app/model_cache/sentiment_model\n'

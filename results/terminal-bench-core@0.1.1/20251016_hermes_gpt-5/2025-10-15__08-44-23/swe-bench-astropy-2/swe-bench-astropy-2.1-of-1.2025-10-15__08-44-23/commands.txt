@@ -1,0 +1,60 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la\n'
+'git status -sb\n'
+'git rev-parse --abbrev-ref HEAD\n'
+'git grep -n "Unrecognized QDP line" -- :/ | cat\n'
+'git grep -n "class QDP" -n -- astropy | cat\n'
+'git grep -n "ascii.qdp" -- astropy | cat\n'
+'git grep -n "QDP" -- astropy/io/ascii | cat\n'
+'grep -RIn "qdp" astropy/io/ascii | sed -n \'1,200p\'\n'
+"python3 - << 'PY'\nimport sys, pathlib\nprint('Python version:', sys.version)\nfrom astropy.table import Table\np = pathlib.Path('test.qdp')\np.write_text('read serr 1 2\\n1 0.5 1 0.5\\n', encoding='utf-8')\ntry:\n    t = Table.read(str(p), format='ascii.qdp')\n    print('Read OK. Columns:', t.colnames)\n    print('First row:', t[0])\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'git grep -n "def read_qdp" -- astropy | cat\n'
+'git grep -n "QDP" -- astropy | sed -n \'1,200p\'\n'
+'find astropy -maxdepth 4 -type f -name "*qdp*.py" -print\n'
+'grep -RIn "QDP" astropy/io | sed -n \'1,200p\'\n'
+'grep -RIn "Unrecognized QDP line" astropy | sed -n \'1,200p\'\n'
+'rg -n "QDP|qdp|Unrecognized QDP" astropy | sed -n \'1,200p\'\n'
+"python3 - << 'PY'\nimport os, sys, pathlib, re\nbase = pathlib.Path('astropy')\nfound = []\nfor p in base.rglob('*.py'):\n    try:\n        s = p.read_text(encoding='utf-8', errors='ignore')\n    except Exception:\n        continue\n    if 'QDP' in s or 'qdp' in p.name or 'qdp' in s:\n        found.append(str(p))\nprint('\\n'.join(found[:200]))\nPY\n"
+'ls astropy/io/ascii\n'
+"sed -n '1,200p' astropy/io/ascii/qdp.py\n"
+"sed -n '200,500p' astropy/io/ascii/qdp.py\n"
+"python3 - << 'PY'\nfrom pathlib import Path\np = Path('astropy/io/ascii/qdp.py')\ns = p.read_text(encoding='utf-8')\nprint('Has file:', p.exists(), 'size', len(s))\nprint(s[:4000])\nPY\n"
+'python3 - << \'PY\'\n# Patch astropy/io/ascii/qdp.py to make command parsing case-insensitive\nfrom pathlib import Path\np = Path(\'astropy/io/ascii/qdp.py\')\ns = p.read_text(encoding=\'utf-8\')\norig = s\n# Simple heuristic: replace occurrences of line.startswith(\'READ\') etc. with case-insensitive checks using upper()\nimport re\n# Create a helper function insertion if not present\nif \'def _qdp_cmd_upper(line):\' not in s:\n    insert_helper = "\\n\\n# Added: normalize QDP command lines to uppercase for matching\\ndef _qdp_cmd_upper(line):\\n    # Preserve data lines (numbers, blanks) unchanged; this is only for command matching\\n    return line.upper()\\n"\n    # Insert helper after imports\n    m = re.search(r"^(from __future__.*\\n)?(.*?\\n)(?:from|import)", s, re.DOTALL|re.MULTILINE)\n    # safer: append helper near top after module docstring\n    if s.lstrip().startswith(\'"""\'):\n        # find end of docstring\n        ds_end = s.find(\'"""\', 3)\n        if ds_end != -1:\n            insert_pos = ds_end + 3\n        else:\n            insert_pos = 0\n    else:\n        insert_pos = 0\n    s = s[:insert_pos] + insert_helper + s[insert_pos:]\n# Replace direct startswith comparisons by using uppercased copy variable\nif \'_uline =\' not in s:\n    s = re.sub(r"for line in lines:\\n", "for line in lines:\\n            _uline = line.upper()\\n", s)\n# Replace checks like line.startswith(\'READ\') to _uline.startswith(\'READ\')\ns = s.replace("line.startswith(\'READ\'", "_uline.startswith(\'READ\'")\ns = s.replace(\' line.startswith("READ"\', \' _uline.startswith("READ"\')\ns = s.replace("line.startswith(\'READ SERR\'", "_uline.startswith(\'READ SERR\'")\ns = s.replace(\' line.startswith("READ SERR"\', \' _uline.startswith("READ SERR"\')\ns = s.replace("line.startswith(\'READ TERR\'", "_uline.startswith(\'READ TERR\'")\ns = s.replace(\' line.startswith("READ TERR"\', \' _uline.startswith("READ TERR"\')\ns = s.replace("line.startswith(\'READ ERR\'", "_uline.startswith(\'READ ERR\'")\ns = s.replace(\' line.startswith("READ ERR"\', \' _uline.startswith("READ ERR"\')\ns = s.replace("line.startswith(\'READ\'", "_uline.startswith(\'READ\'")\n# Other QDP commands possibly checked\nfor cmd in [\'SKIP\', \'NO\', \'MARK\', \'LAB\', \'LA\', \'READ\', \'COLS\', \'READSERR\', \'READ TERR\', \'READ SERR\', \'READ ERR\', \'READ T\', \'X\', \'Y\']:\n    s = s.replace(f"line.startswith(\'{cmd}\'", f"_uline.startswith(\'{cmd}\'")\n    s = s.replace(f\'line.startswith("{cmd}"\', f\'_uline.startswith("{cmd}"\')\n# Also replace re.match(r\'^READ\', line) etc.\ns = re.sub(r"re\\.match\\(r?([\\\'\\"]\\^?READ[^\\\'\\"]*[\\\'\\"]),\\s*line\\)", r"re.match(\\1, _uline)", s)\nif s != orig:\n    p.write_text(s, encoding=\'utf-8\')\n    print(\'Patched qdp.py for case-insensitive command parsing.\')\nelse:\n    print(\'No changes made; maybe already case-insensitive or file not found.\')\nPY\n'
+"python3 - << 'PY'\nfrom astropy.table import Table\nfrom pathlib import Path\np = Path('test.qdp')\np.write_text('read serr 1 2\\n1 0.5 1 0.5\\n', encoding='utf-8')\ntry:\n    t = Table.read(str(p), format='ascii.qdp')\n    print('Read OK. Columns:', t.colnames)\n    print('First row:', t[0].as_void())\n    # Check if error columns exist (typically y and yerr? depends on parser)\n    print('Meta:', t.meta)\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+"git diff -- astropy/io/ascii/qdp.py | sed -n '1,200p'\n"
+"sed -n '1,220p' astropy/io/ascii/qdp.py\n"
+"sed -n '220,500p' astropy/io/ascii/qdp.py\n"
+'python3 -m pip --version\n'
+'python3 -m pip install -q packaging numpy\n'
+"python3 - << 'PY'\nfrom astropy.table import Table\nfrom pathlib import Path\np = Path('test.qdp')\np.write_text('read serr 1 2\\n1 0.5 1 0.5\\n', encoding='utf-8')\ntry:\n    t = Table.read(str(p), format='ascii.qdp')\n    print('Read OK. Columns:', t.colnames)\n    print('First row:', t[0])\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'grep -n "READ SERR\\|READ TERR\\|line.startswith\\|re.match" astropy/io/ascii/qdp.py\n'
+'python3 - << \'PY\'\nfrom pathlib import Path\nimport re\np = Path(\'astropy/io/ascii/qdp.py\')\ns = p.read_text(encoding=\'utf-8\')\norig = s\n# Make _line_type regex case-insensitive\ns = re.sub(r"_line_type_re\\s*=\\s*re\\.compile\\(\\s*_type_re\\s*\\)", "_line_type_re = re.compile(_type_re, re.IGNORECASE)", s)\n# Normalize any direct command checks to be case-insensitive by uppercasing the line\ns = s.replace("line.startswith(\'READ SERR\'", "line.upper().startswith(\'READ SERR\'")\ns = s.replace(\' line.startswith("READ SERR"\', \' line.upper().startswith("READ SERR"\')\ns = s.replace("line.startswith(\'READ TERR\'", "line.upper().startswith(\'READ TERR\'")\ns = s.replace(\' line.startswith("READ TERR"\', \' line.upper().startswith("READ TERR"\')\n# Any regex matches on READ should be case-insensitive\ns = re.sub(r"re\\.match\\(([^,]+),\\s*line\\)", lambda m: f"re.match({m.group(1)}, line, re.IGNORECASE)", s)\nif s != orig:\n    p.write_text(s, encoding=\'utf-8\')\n    print(\'Patched qdp.py to treat QDP commands case-insensitively.\')\nelse:\n    print(\'No changes made; already case-insensitive or pattern not found.\')\nPY\n'
+"git diff -- astropy/io/ascii/qdp.py | sed -n '1,200p'\n"
+'python3 -m pip install -q pyerfa\n'
+"python3 - << 'PY'\nfrom astropy.table import Table\nfrom pathlib import Path\np = Path('test.qdp')\np.write_text('read serr 1 2\\n1 0.5 1 0.5\\n', encoding='utf-8')\ntry:\n    t = Table.read(str(p), format='ascii.qdp')\n    print('Read OK. Columns:', t.colnames)\n    print('First row:', t[0])\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'python3 -m pip install -e .\n'
+''
+"python3 - << 'PY'\nfrom pathlib import Path\nfrom astropy.table import Table\np = Path('test.qdp')\np.write_text('read serr 1 2\\n1 0.5 1 0.5\\n', encoding='utf-8')\ntry:\n    t = Table.read(str(p), format='ascii.qdp')\n    print('Read OK. Columns:', t.colnames)\n    print('First row:', t[0])\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'python3 setup.py build_ext --inplace\n'
+"python3 - << 'PY'\nfrom pathlib import Path\nfrom astropy.table import Table\np = Path('test.qdp')\np.write_text('read serr 1 2\\n1 0.5 1 0.5\\n', encoding='utf-8')\ntry:\n    t = Table.read(str(p), format='ascii.qdp')\n    print('Read OK. Columns:', t.colnames)\n    print('First row:', t[0])\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'python3 -m pip install -U "pip<25.0" "setuptools==65.7.0" wheel\n'
+'python3 -m pip install -q extension-helpers cython\n'
+'python3 -m pip install -q numpy packaging pyerfa\n'
+'python3 setup.py build_ext --inplace\n'
+'printf "read serr 1 2\\n1 0.5 1 0.5\\n" > test.qdp\n'
+"python3 - << 'PY'\nfrom astropy.table import Table\ntry:\n    t = Table.read('test.qdp', format='ascii.qdp')\n    print('Read OK. Columns:', t.colnames)\n    print('First row:', t[0])\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'python3 -m pip install .\n'
+"python3 - << 'PY'\nfrom astropy.table import Table\ntry:\n    t = Table.read('test.qdp', format='ascii.qdp')\n    print('Read OK. Columns:', t.colnames)\n    print('First row:', t[0])\nexcept Exception as e:\n    import traceback; traceback.print_exc()\nPY\n"
+'git status -sb\n'
+"git diff -- astropy/io/ascii/qdp.py | sed -n '1,120p'\n"
+'python3 - << \'PY\'\nimport importlib.machinery, importlib.util\nfrom pathlib import Path\np = Path(\'astropy/io/ascii/qdp.py\')\nloader = importlib.machinery.SourceFileLoader(\'qdp_mod\', str(p))\nspec = importlib.util.spec_from_loader(loader.name, loader)\nmod = importlib.util.module_from_spec(spec)\nloader.exec_module(mod)\nprint(\'Loaded module:\', mod.__name__)\nprint(\'_line_type("read serr 1 2") ->\', mod._line_type(\'read serr 1 2\'))\nlines = [\'read serr 1 2\', \'1 0.5 1 0.5\']\ntypes, ncol = mod._get_type_from_list_of_lines(lines)\nprint(\'Types:\', types, \'ncol:\', ncol)\nPY\n'
+'git config user.email "devnull@example.com"\n'
+'git config user.name "CI User"\n'
+'git add astropy/io/ascii/qdp.py\n'
+'git commit -m "ascii.qdp: accept lowercase QDP commands by making command regex case-insensitive"\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']
