@@ -1,0 +1,251 @@
+root@7899d1c4fae5:/app# ls -la /app
+total 24
+drwxr-xr-x 1 root root 4096 Dec 10 02:57 .
+drwxr-xr-x 1 root root 4096 Dec 10 02:57 ..
+drwxr-xr-x 1 root root 4096 Dec 10 02:57 logs
+drwxr-xr-x 2 root root 4096 Dec 10 02:57 reports
+drwxr-xr-x 1 root root 4096 Dec 10 02:57 rules
+root@7899d1c4fae5:/app# ls -la /app/logs /app/rules
+/app/logs:
+total 20
+drwxr-xr-x 1 root root 4096 Dec 10 02:57 .
+drwxr-xr-x 1 root root 4096 Dec 10 02:57 ..
+-rw-r--r-- 1 root root 1381 Dec 10 02:57 auth.log
+-rw-r--r-- 1 root root 1395 Dec 10 02:57 http.log
+
+/app/rules:
+total 16
+drwxr-xr-x 1 root root 4096 Dec 10 02:57 .
+drwxr-xr-x 1 root root 4096 Dec 10 02:57 ..
+-rw-r--r-- 1 root root  888 Dec 10 02:57 detection_rules.json
+root@7899d1c4fae5:/app# head -n 50 /app/rules/detection_rules.json
+{
+  "rules": [
+    {
+      "id": "SSH-BRUTE-FORCE",
+      "description": "SSH brute force attempt",
+      "pattern": "Failed password for",
+      "threshold": 5,
+      "timeframe": 60,
+      "severity": "high"
+    },
+    {
+      "id": "WEB-SCAN",
+      "description": "Web server scanning activity",
+      "pattern": "GET /admin|GET /phpmyadmin|GET /wp-admin|GET /manager/html|GET /.env|GET /config.php",
+      "threshold": 3,
+      "timeframe": 300,
+      "severity": "medium"
+    },
+    {
+      "id": "INVALID-USER",
+      "description": "Login attempts with invalid users",
+      "pattern": "invalid user",
+      "threshold": 2,
+      "timeframe": 300,
+      "severity": "low"
+    },
+    {
+      "id": "SUDO-COMMAND",
+      "description": "Sudo command execution",
+      "pattern": "sudo:.*COMMAND=",
+      "threshold": 1,
+      "timeframe": 3600,
+      "severity": "info"
+    }
+  ]
+}
+root@7899d1c4fae5:/app# cat > /app/intrusion_detector.sh <<'EOF'
+> #!/usr/bin/env bash
+> set -euo pipefail
+>
+> LOG_DIR='/app/logs'
+> RULES_FILE='/app/rules/detection_rules.json'
+> ALERT_OUT='/app/alert.json'
+> REPORT_OUT='/app/report.json'
+>
+> timestamp() {
+>   date -u +'%Y-%m-%dT%H:%M:%SZ'
+> }
+>
+> for f in "$RULES_FILE" "$LOG_DIR/auth.log" "$LOG_DIR/http.log"; do
+>   if [ ! -f "$f" ]; then
+>     echo 'Error: required file not found:' "$f" >&2
+>     exit 1
+>   fi
+> done
+>
+> python3 - <<'PYEOF'
+> import json, re, os, datetime
+>
+> log_dir='/app/logs'
+> rules_path='/app/rules/detection_rules.json'
+> alert_out='/app/alert.json'
+> report_out='/app/report.json'
+>
+> with open(rules_path, 'r', encoding='utf-8') as f:
+>     data = json.load(f)
+>
+> if isinstance(data, dict) and 'rules' in data:
+>     rules = data['rules']
+> elif isinstance(data, list):
+>     rules = data
+> else:
+>     rules = []
+>
+> iso_ts = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+> events = []
+> stats = {}
+> ipv4_re = re.compile(r'(?:\d{1,3}\.){3}\d{1,3}')
+>
+> def compile_rule_regex(rule):
+>     pat = rule.get('pattern')
+>     pats = rule.get('patterns')
+>     if isinstance(pat, str) and pat:
+>         return re.compile(pat, re.IGNORECASE)
+>     if isinstance(pats, list) and pats:
+>         return re.compile('|'.join([p for p in pats if isinstance(p, str)]), re.IGNORECASE)
+>     return None
+>
+> for rule in rules:
+>     rid = rule.get('id') or rule.get('name') or 'unknown_rule'
+>     sev = rule.get('severity') or 'info'
+>     files = rule.get('files')
+>     if not isinstance(files, list) or not files:
+>         files = ['auth.log','http.log']
+>     regex = compile_rule_regex(rule)
+>     ip_regex = re.compile(rule.get('ip_regex')) if isinstance(rule.get('ip_regex'), str) else ipv4_re
+>     matches = 0
+>     ips = set()
+>     for fn in files:
+>         path = os.path.join(log_dir, fn)
+>         if not os.path.isfile(path):
+>             continue
+>         with open(path, 'r', encoding='utf-8', errors='ignore') as lf:
+>             for line in lf:
+>                 if regex is not None and not regex.search(line):
+>                     continue
+>                 matches += 1
+>                 for ip in ip_regex.findall(line):
+>                     ips.add(ip)
+>     events.append({'id': rid, 'severity': sev, 'matches': matches, 'ips': ','.join(sorted(ips))})
+>     stats[rid] = matches
+>
+> alert = {'timestamp': iso_ts, 'alerts': events}
+> report = {'timestamp': iso_ts, 'events': events, 'statistics': stats}
+> with open(alert_out, 'w', encoding='utf-8') as f:
+>     json.dump(alert, f, ensure_ascii=False, separators=(',',':'))
+> with open(report_out, 'w', encoding='utf-8') as f:
+>     json.dump(report, f, ensure_ascii=False, separators=(',',':'))
+> PYEOF
+>
+> echo 'Intrusion detection completed:' "$ALERT_OUT" 'and' "$REPORT_OUT" 'created.'
+> EOF
+root@7899d1c4fae5:/app# chmod +x /app/intrusion_detector.sh
+root@7899d1c4fae5:/app# cat > /app/response.sh <<'EOF'
+> #!/usr/bin/env bash
+> set -euo pipefail
+>
+> if [ $# -ne 1 ]; then
+>   echo 'Usage: $0 <IP>' >&2
+>   exit 1
+> fi
+> IP="$1"
+> LOG_DIR='/app/logs'
+> TS="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+> OUT="/app/incident_${IP}_${TS}.txt"
+>
+> # Basic IPv4 validation
+> if ! printf '%s' "$IP" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'; then
+>   echo 'Error: Invalid IP address format' >&2
+>   exit 1
+> fi
+>
+> BLOCK_RULE="iptables -A INPUT -s ${IP} -j DROP"
+>
+> AUTH_LOG="$LOG_DIR/auth.log"
+> HTTP_LOG="$LOG_DIR/http.log"
+>
+> auth_hits=''
+> http_hits=''
+> [ -f "$AUTH_LOG" ] && auth_hits="$(grep -a -h -E "$IP" "$AUTH_LOG" || true)"
+> [ -f "$HTTP_LOG" ] && http_hits="$(grep -a -h -E "$IP" "$HTTP_LOG" || true)"
+>
+> failed_pw_cnt=0
+> invalid_user_cnt=0
+> admin_access_cnt=0
+> http_401_cnt=0
+> http_403_cnt=0
+> login_attempts_cnt=0
+>
+> if [ -n "$auth_hits" ]; then
+>   failed_pw_cnt=$(printf '%s\n' "$auth_hits" | grep -E -c 'Failed password|authentication failure|FAILED LOGIN' || true)
+>   invalid_user_cnt=$(printf '%s\n' "$auth_hits" | grep -E -c 'Invalid user|USER NOT FOUND' || true)
+> fi
+> if [ -n "$http_hits" ]; then
+>   admin_access_cnt=$(printf '%s\n' "$http_hits" | grep -E -c '/admin|/wp-admin|/administrator|/admin/login' || true)
+>   http_401_cnt=$(printf '%s\n' "$http_hits" | grep -E -c ' 401 |Unauthorized' || true)
+>   http_403_cnt=$(printf '%s\n' "$http_hits" | grep -E -c ' 403 |Forbidden' || true)
+>   login_attempts_cnt=$(printf '%s\n' "$http_hits" | grep -E -c '/login|POST /login|/signin' || true)
+> fi
+>
+> {
+>   printf 'Incident Report for IP: %s\nTimestamp: %s\n\n' "$IP" "$TS"
+>   printf 'Suggested block rule:\n  %s\n\n' "$BLOCK_RULE"
+>   printf 'Summary of suspicious activities:\n'
+>   printf '- Failed password attempts (auth.log): %d\n' "$failed_pw_cnt"
+>   printf '- Invalid user attempts (auth.log): %d\n' "$invalid_user_cnt"
+>   printf '- Admin page access attempts (http.log): %d\n' "$admin_access_cnt"
+>   printf '- HTTP 401 (Unauthorized) (http.log): %d\n' "$http_401_cnt"
+>   printf '- HTTP 403 (Forbidden) (http.log): %d\n' "$http_403_cnt"
+>   printf '- Login endpoint hits (http.log): %d\n\n' "$login_attempts_cnt"
+>   printf 'Detailed activity from auth.log:\n'
+>   if [ -n "$auth_hits" ]; then
+>     printf '%s\n' "$auth_hits"
+>   else
+>     printf '(no entries)\n'
+>   fi
+>   printf '\nDetailed activity from http.log:\n'
+>   if [ -n "$http_hits" ]; then
+>     printf '%s\n' "$http_hits"
+>   else
+>     printf '(no entries)\n'
+>   fi
+> } > "$OUT"
+>
+> echo 'Incident report written to' "$OUT"
+> EOF
+root@7899d1c4fae5:/app# chmod +x /app/response.sh
+root@7899d1c4fae5:/app# /app/intrusion_detector.sh
+<stdin>:18: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent
+datetimes in UTC: datetime.datetime.now(datetime.UTC).
+Intrusion detection completed: /app/alert.json and /app/report.json created.
+root@7899d1c4fae5:/app# ls -la /app/alert.json /app/report.json
+-rw-r--r-- 1 root root 340 Dec 10 02:59 /app/alert.json
+-rw-r--r-- 1 root root 422 Dec 10 02:59 /app/report.json
+root@7899d1c4fae5:/app# cat /app/alert.json
+{"timestamp":"2025-12-10T02:59:31Z","alerts":[{"id":"SSH-BRUTE-FORCE","severity":"high","matches":8,"ips":"198.51.100.23,45.32.67.89"},{"id":"WEB-SCAN","severit
+y":"medium","matches":6,"ips":"45.32.67.89"},{"id":"INVALID-USER","severity":"low","matches":2,"ips":"198.51.100.23"},{"id":"SUDO-COMMAND","severity":"info","ma
+tches":3,"ips":""}]}root@7899d1c4fae5:/app# cat /app/report.json
+{"timestamp":"2025-12-10T02:59:31Z","events":[{"id":"SSH-BRUTE-FORCE","severity":"high","matches":8,"ips":"198.51.100.23,45.32.67.89"},{"id":"WEB-SCAN","severit
+y":"medium","matches":6,"ips":"45.32.67.89"},{"id":"INVALID-USER","severity":"low","matches":2,"ips":"198.51.100.23"},{"id":"SUDO-COMMAND","severity":"info","ma
+tches":3,"ips":""}],"statistics":{"SSH-BRUTE-FORCE":8,"WEB-SCAN":6,"INVALID-USER":2,"SUDO-COMMAND":3}}root@7899d1c4fae5:/app# IP=$(grep -Eo '([0-9]{1,3}\.){3}[0
+-9]{1,3}' /app/logs/auth.log /app/logs/http.log | head -n 1); echo "$IP"; /app/response.sh "$IP"
+/app/logs/auth.log:192.168.1.5
+Error: Invalid IP address format
+root@7899d1c4fae5:/app# ls -la /app/incident_*.txt
+ls: cannot access '/app/incident_*.txt': No such file or directory
+root@7899d1c4fae5:/app# /app/response.sh 198.51.100.23
+/app/response.sh: line 51: printf: - : invalid option
+printf: usage: printf [-v var] format [arguments]
+root@7899d1c4fae5:/app# ls -la /app/incident_198.51.100.23_*.txt
+-rw-r--r-- 1 root root 173 Dec 10 03:00 /app/incident_198.51.100.23_2025-12-10T03:00:08Z.txt
+root@7899d1c4fae5:/app# cat /app/incident_198.51.100.23_*.txt
+Incident Report for IP: 198.51.100.23
+Timestamp: 2025-12-10T03:00:08Z
+
+Suggested block rule:
+  iptables -A INPUT -s 198.51.100.23 -j DROP
+
+Summary of suspicious activities:
+root@7899d1c4fae5:/app#

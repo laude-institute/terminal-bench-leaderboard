@@ -1,0 +1,201 @@
+[?2004hroot@3ae5507fef7c:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@3ae5507fef7c:/app# clear
+[?2004l[H[J[3J[?2004hroot@3ae5507fef7c:/app# mkdir -p /app/hf-cache/albert/albert-base-v2
+[?2004l[?2004hroot@3ae5507fef7c:/app# cat > /app/download_albert.sh << 'EOF'
+[?2004l[?2004h> #!/usr/bin/env bash
+[?2004l[?2004h> set -euo pipefail
+[?2004l[?2004h> BASE_ID="albert/albert-base-v2"
+[?2004l[?2004h> TARGET_DIR="/app/hf-cache/albert/albert-base-v2"
+[?2004l[?2004h> FILES=(
+[?2004l[?2004h>   "config.json"
+[?2004l[?2004h>   "pytorch_model.bin"
+[?2004l[?2004h>   "spiece.model"
+[?2004l[?2004h>   "tokenizer_config.json"
+[?2004l[?2004h>   "special_tokens_map.json"
+[?2004l[?2004h> )
+[?2004l[?2004h> for f in "${FILES[@]}"; do
+[?2004l[?2004h>   url="https://huggingface.co/${BASE_ID}/resolve/main/${f}"
+[?2004l[?2004h>   out="${TARGET_DIR}/${f}"
+[?2004l[?2004h>   echo "Downloading ${f}..."
+[?2004l[?2004h>   if command -v wget >/dev/null 2>&1; then
+[?2004l[?2004h>     wget -q -O "${out}" "${url}"
+[?2004l[?2004h>   elif command -v curl >/dev/null 2>&1; then
+[?2004l[?2004h>     curl -L -o "${out}" "${url}"
+[?2004l[?2004h>   else
+[?2004l[?2004h>     echo "Neither wget nor curl is available" >&2; exit 1
+[?2004l[?2004h>   fi
+[?2004l[?2004h>   if [ ! -s "${out}" ]; then
+[?2004l[?2004h>     echo "Failed to download ${f}" >&2; exit 1
+[?2004l[?2004h>   fi
+[?2004l[?2004h> done
+[?2004l[?2004h> echo "Cached Albert base v2 at ${TARGET_DIR}"
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@3ae5507fef7c:/app# chmod +x /app/download_albert.sh
+[?2004l[?2004hroot@3ae5507fef7c:/app# /app/download_albert.sh
+[?2004lDownloading config.json...
+Neither wget nor curl is available
+[?2004hroot@3ae5507fef7c:/app# ls -lh /app/hf-cache/albert/albert-base-v2
+[?2004ltotal 0
+[?2004hroot@3ae5507fef7c:/app# cat > /app/fetch_albert.sh << 'EOF'
+[?2004l[?2004h> #!/usr/bin/env bash
+[?2004l[?2004h> set -euo pipefail
+[?2004l[?2004h> TARGET_DIR="/app/hf-cache/albert/albert-base-v2"
+[?2004l[?2004h> BASE="https://huggingface.co/albert/albert-base-v2/resolve/main"
+[?2004l[?2004h> FILES=(
+[?2004l[?2004h>   "config.json"
+[?2004l[?2004h>   "pytorch_model.bin"
+[?2004l[?2004h>   "model.safetensors"
+[?2004l[?2004h>   "spiece.model"
+[?2004l[?2004h>   "tokenizer_config.json"
+[?2004l[?2004h>   "special_tokens_map.json"
+[?2004l[?2004h>   "tokenizer.json"
+[?2004l[?2004h> )
+[?2004l[?2004h> mkdir -p "$TARGET_DIR"
+[?2004l[?2004h> if command -v python3 >/dev/null 2>&1; then
+[?2004l[?2004h>   python3 - << 'PY'
+[?2004l[?2004h> import os, sys, urllib.request
+[?2004l[?2004h> TARGET = "/app/hf-cache/albert/albert-base-v2"
+[?2004l[?2004h> BASE = "https://huggingface.co/albert/albert-base-v2/resolve/main"
+[?2004l[?2004h> FILES = [
+[?2004l[?2004h>     "config.json",
+[?2004l[?2004h>     "pytorch_model.bin",
+[?2004l[?2004h>     "model.safetensors",
+[?2004l[?2004h>     "spiece.model",
+[?2004l[?2004h>     "tokenizer_config.json",
+[?2004l[?2004h>     "special_tokens_map.json",
+[?2004l[?2004h>     "tokenizer.json",
+[?2004l[?2004h> ]
+[?2004l[?2004h> os.makedirs(TARGET, exist_ok=True)
+[?2004l[?2004h> for f in FILES:
+[?2004l[?2004h>     url = f"{BASE}/{f}"
+[?2004l[?2004h>     out = os.path.join(TARGET, f)
+[?2004l[?2004h>     print(f"Downloading {f}...")
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         with urllib.request.urlopen(url) as r, open(out, "wb") as o:
+[?2004l[?2004h>             while True:
+[?2004l[?2004h>                 chunk = r.read(1024 * 1024)
+[?2004l[?2004h>                 if not chunk:
+[?2004l[?2004h>                     break
+[?2004l[?2004h>                 o.write(chunk)
+[?2004l[?2004h>         if not os.path.exists(out) or os.path.getsize(out) == 0:
+[?2004l[?2004h>             raise RuntimeError("Downloaded file is empty")
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         print(f"Failed to download {f}: {e}", file=sys.stderr)
+[?2004l[?2004h>         sys.exit(1)
+[?2004l[?2004h> print("Cached Albert base v2 at", TARGET)
+[?2004l[?2004h> PY
+[?2004l[?2004h> elif command -v apt-get >/dev/null 2>&1; then
+[?2004l[?2004h>   apt-get update
+[?2004l[?2004h>   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl ca-certificates
+[?2004l[?2004h>   /app/download_albert.sh
+[?2004l[?2004h> else
+[?2004l[?2004h>   echo "No available downloader (python3 or apt-get) found" >&2
+[?2004l[?2004h>   exit 1
+[?2004l[?2004h> fi
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@3ae5507fef7c:/app# chmod +x /app/fetch_albert.sh
+[?2004l[?2004hroot@3ae5507fef7c:/app# /app/fetch_albert.sh
+[?2004lDownloading config.json...
+Downloading pytorch_model.bin...
+Downloading model.safetensors...
+Downloading spiece.model...
+Downloading tokenizer_config.json...
+Downloading special_tokens_map.json...
+Failed to download special_tokens_map.json: HTTP Error 404: Not Found
+[?2004hroot@3ae5507fef7c:/app# ls -lh /app/hf-cache/albert/albert-base-v2
+[?2004ltotal 92M
+-rw-r--r-- 1 root root  684 Dec 10 01:37 config.json
+-rw-r--r-- 1 root root  46M Dec 10 01:37 model.safetensors
+-rw-r--r-- 1 root root  46M Dec 10 01:37 pytorch_model.bin
+-rw-r--r-- 1 root root 743K Dec 10 01:37 spiece.model
+-rw-r--r-- 1 root root   25 Dec 10 01:37 tokenizer_config.json
+[?2004hroot@3ae5507fef7c:/app# cat > /app/fetch_albert.sh << 'EOF'
+[?2004l[?2004h> #!/usr/bin/env bash
+[?2004l[?2004h> set -euo pipefail
+[?2004l[?2004h> TARGET_DIR="/app/hf-cache/albert/albert-base-v2"
+[?2004l[?2004h> BASE="https://huggingface.co/albert/albert-base-v2/resolve/main"
+[?2004l[?2004h> FILES=(
+[?2004l[?2004h>   "config.json"
+[?2004l[?2004h>   "pytorch_model.bin"
+[?2004l[?2004h>   "model.safetensors"
+[?2004l[?2004h>   "spiece.model"
+[?2004l[?2004h>   "tokenizer_config.json"
+[?2004l[?2004h>   "special_tokens_map.json"
+[?2004l[?2004h>   "tokenizer.json"
+[?2004l[?2004h> )
+[?2004l[?2004h> mkdir -p "$TARGET_DIR"
+[?2004l[?2004h> if command -v python3 >/dev/null 2>&1; then
+[?2004l[?2004h>   python3 - << 'PY'
+[?2004l[?2004h> import os, sys, urllib.request
+[?2004l[?2004h> TARGET = "/app/hf-cache/albert/albert-base-v2"
+[?2004l[?2004h> BASE = "https://huggingface.co/albert/albert-base-v2/resolve/main"
+[?2004l[?2004h> FILES = [
+[?2004l[?2004h>     "config.json",
+[?2004l[?2004h>     "pytorch_model.bin",
+[?2004l[?2004h>     "model.safetensors",
+[?2004l[?2004h>     "spiece.model",
+[?2004l[?2004h>     "tokenizer_config.json",
+[?2004l[?2004h>     "special_tokens_map.json",
+[?2004l[?2004h>     "tokenizer.json",
+[?2004l[?2004h> ]
+[?2004l[?2004h> os.makedirs(TARGET, exist_ok=True)
+[?2004l[?2004h> ok = 0
+[?2004l[?2004h> for f in FILES:
+[?2004l[?2004h>     url = f"{BASE}/{f}"
+[?2004l[?2004h>     out = os.path.join(TARGET, f)
+[?2004l[?2004h>     print(f"Downloading {f}...")
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         with urllib.request.urlopen(url) as r, open(out, "wb") as o:
+[?2004l[?2004h>             while True:
+[?2004l[?2004h>                 chunk = r.read(1024 * 1024)
+[?2004l[?2004h>                 if not chunk:
+[?2004l[?2004h>                     break
+[?2004l[?2004h>                 o.write(chunk)
+[?2004l[?2004h>         if not os.path.exists(out) or os.path.getsize(out) == 0:
+[?2004l[?2004h>             raise RuntimeError("Downloaded file is empty")
+[?2004l[?2004h>         ok += 1
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         print(f"Warning: skipped {f}: {e}", file=sys.stderr)
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             if os.path.exists(out):
+[?2004l[?2004h>                 os.remove(out)
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             pass
+[?2004l[?2004h>         continue
+[?2004l[?2004h> print(f"Downloaded {ok}/{len(FILES)} files to {TARGET}")
+[?2004l[?2004h> PY
+[?2004l[?2004h> elif command -v apt-get >/dev/null 2>&1; then
+[?2004l[?2004h>   apt-get update
+[?2004l[?2004h>   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl ca-certificates
+[?2004l[?2004h>   /app/download_albert.sh || true
+[?2004l[?2004h> else
+[?2004l[?2004h>   echo "No available downloader (python3 or apt-get) found" >&2
+[?2004l[?2004h>   exit 1
+[?2004l[?2004h> fi
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@3ae5507fef7c:/app# chmod +x /app/fetch_albert.sh
+[?2004l[?2004hroot@3ae5507fef7c:/app# /app/fetch_albert.sh
+[?2004lDownloading config.json...
+Downloading pytorch_model.bin...
+Downloading model.safetensors...
+Downloading spiece.model...
+Downloading tokenizer_config.json...
+Downloading special_tokens_map.json...
+Warning: skipped special_tokens_map.json: HTTP Error 404: Not Found
+Downloading tokenizer.json...
+Downloaded 6/7 files to /app/hf-cache/albert/albert-base-v2
+[?2004hroot@3ae5507fef7c:/app# ls -lh /app/hf-cache/albert/albert-base-v2
+[?2004ltotal 93M
+-rw-r--r-- 1 root root  684 Dec 10 01:38 config.json
+-rw-r--r-- 1 root root  46M Dec 10 01:38 model.safetensors
+-rw-r--r-- 1 root root  46M Dec 10 01:38 pytorch_model.bin
+-rw-r--r-- 1 root root 743K Dec 10 01:38 spiece.model
+-rw-r--r-- 1 root root 1.3M Dec 10 01:38 tokenizer.json
+-rw-r--r-- 1 root root   25 Dec 10 01:38 tokenizer_config.json
+[?2004hroot@3ae5507fef7c:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@3ae5507fef7c:/app# 

@@ -1,0 +1,161 @@
+root@d80bf65b0eb6:/app# python3 --version
+Python 3.10.19
+root@d80bf65b0eb6:/app# python3 -m pip install -q --no-cache-dir mteb sentence-transformers huggingface_hub scikit-learn numpy scipy
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a v
+irtual environment instead: https://pip.pypa.io/warnings/venv
+
+[notice] A new release of pip is available: 23.0.1 -> 25.3
+[notice] To update, run: pip install --upgrade pip
+root@d80bf65b0eb6:/app# cat > evaluate.py << 'PY'
+> #!/usr/bin/env python3
+> import os
+> import json
+> from mteb import MTEB
+> from sentence_transformers import SentenceTransformer
+> from huggingface_hub import HfApi
+>
+> MODEL_ID = os.getenv("MODEL_ID", "sentence-transformers/all-mpnet-base-v2")
+> api = HfApi()
+> info = api.model_info(MODEL_ID)
+> sha = info.sha
+> print(f"Using model {MODEL_ID} at revision {sha}")
+> model = SentenceTransformer(MODEL_ID, revision=sha)
+> eval = MTEB(tasks=["STS12"])
+> results = eval.run(model, output_folder="results", evaluation_splits=["test"])
+> print(json.dumps(results, indent=2))
+> PY
+root@d80bf65b0eb6:/app# python3 evaluate.py
+Using model sentence-transformers/all-mpnet-base-v2 at revision e8c3b32edf5434bc2275fc9bab85f82640a19130
+modules.json: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████| 349/349 [00:00<00:00, 1.83MB/s]
+config_sentence_transformers.json: 100%|████████████████████████████████████████████████████████████████████████████████████████| 116/116 [00:00<00:00, 530kB/s]
+README.md: 11.6kB [00:00, 14.1MB/s]
+sentence_bert_config.json: 100%|██████████████████████████████████████████████████████████████████████████████████████████████| 53.0/53.0 [00:00<00:00, 254kB/s]
+config.json: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████| 571/571 [00:00<00:00, 1.95MB/s]
+model.safetensors: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 438M/438M [00:35<00:00, 12.3MB/s]
+tokenizer_config.json: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████| 363/363 [00:00<00:00, 2.85MB/s]
+vocab.txt: 232kB [00:00, 17.4MB/s]
+tokenizer.json: 466kB [00:00, 12.1MB/s]
+special_tokens_map.json: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████| 239/239 [00:00<00:00, 1.03MB/s]
+config.json: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████| 190/190 [00:00<00:00, 905kB/s]
+/usr/local/lib/python3.10/site-packages/mteb/evaluation/MTEB.py:121: UserWarning: Passing task names as strings is deprecated and will be removed in 2.0 release
+. Please use `tasks = mteb.get_tasks(tasks=[...])` method to get tasks instead.
+  warnings.warn(
+WARNING:mteb.models.sentence_transformer_wrapper:Model prompts are not in the expected format. Ignoring them.
+─────────────────────────────────────────────────────────────────────── Selected tasks  ────────────────────────────────────────────────────────────────────────
+STS
+    - STS12, s2s
+
+
+SHA=$(python3 -c 'from huggingface_hub import HfApi;print(HfApi().model_info("sentence-transformers/all-mpnet-base-v2").sha)') && echo "$SHA"
+FOUND=$(find results -type f -name 'STS12.json' | head -n 1) && echo "Found: $FOUND" && mkdir -p "results/sentence-transformers__all-mpnet-base-v2/$SHA" && cp -
+f "$FOUND" "results/sentence-transformers__all-mpnet-base-v2/$SHA/STS12.json" && ls -l "results/sentence-transformers__all-mpnet-base-v2/$SHA/STS12.json"
+sed -n '1,200p' results/sentence-transformers__all-mpnet-base-v2/$SHA/STS12.json
+Traceback (most recent call last):
+  File "/app/evaluate.py", line 16, in <module>
+    print(json.dumps(results, indent=2))
+  File "/usr/local/lib/python3.10/json/__init__.py", line 238, in dumps
+    **kw).encode(obj)
+  File "/usr/local/lib/python3.10/json/encoder.py", line 201, in encode
+    chunks = list(chunks)
+  File "/usr/local/lib/python3.10/json/encoder.py", line 429, in _iterencode
+    yield from _iterencode_list(o, _current_indent_level)
+  File "/usr/local/lib/python3.10/json/encoder.py", line 325, in _iterencode_list
+    yield from chunks
+  File "/usr/local/lib/python3.10/json/encoder.py", line 438, in _iterencode
+    o = _default(o)
+  File "/usr/local/lib/python3.10/json/encoder.py", line 179, in default
+    raise TypeError(f'Object of type {o.__class__.__name__} '
+TypeError: Object of type TaskResult is not JSON serializable
+root@d80bf65b0eb6:/app# SHA=$(python3 -c 'from huggingface_hub import HfApi;print(HfApi().model_info("sentence-transformers/all-mpnet-base-v2").sha)') && echo "
+$SHA"
+e8c3b32edf5434bc2275fc9bab85f82640a19130
+root@d80bf65b0eb6:/app# FOUND=$(find results -type f -name 'STS12.json' | head -n 1) && echo "Found: $FOUND" && mkdir -p "results/sentence-transformers__all-mpn
+et-base-v2/$SHA" && cp -f "$FOUND" "results/sentence-transformers__all-mpnet-base-v2/$SHA/STS12.json" && ls -l "results/sentence-transformers__all-mpnet-base-v2
+/$SHA/STS12.json"
+Found: results/sentence-transformers__all-mpnet-base-v2/e8c3b32edf5434bc2275fc9bab85f82640a19130/STS12.json
+cp: 'results/sentence-transformers__all-mpnet-base-v2/e8c3b32edf5434bc2275fc9bab85f82640a19130/STS12.json' and 'results/sentence-transformers__all-mpnet-base-v2
+/e8c3b32edf5434bc2275fc9bab85f82640a19130/STS12.json' are the same file
+root@d80bf65b0eb6:/app# sed -n '1,200p' results/sentence-transformers__all-mpnet-base-v2/$SHA/STS12.json
+{
+  "dataset_revision": "a0d554a64d88156834ff5ae9920b964011b16384",
+  "task_name": "STS12",
+  "mteb_version": "1.36.8",
+  "scores": {
+    "test": [
+      {
+        "pearson": 0.832801,
+        "spearman": 0.726323,
+        "cosine_pearson": 0.832801,
+        "cosine_spearman": 0.726343,
+        "manhattan_pearson": 0.78659,
+        "manhattan_spearman": 0.722683,
+        "euclidean_pearson": 0.790134,
+        "euclidean_spearman": 0.726336,
+        "main_score": 0.726343,
+        "hf_subset": "default",
+        "languages": [
+          "eng-Latn"
+        ]
+      }
+    ]
+  },
+  "evaluation_time": 32.550267696380615,
+  "kg_co2_emissions": null
+}root@d80bf65b0eb6:/app# ls -R results
+results:
+sentence-transformers__all-mpnet-base-v2
+
+results/sentence-transformers__all-mpnet-base-v2:
+e8c3b32edf5434bc2275fc9bab85f82640a19130
+
+results/sentence-transformers__all-mpnet-base-v2/e8c3b32edf5434bc2275fc9bab85f82640a19130:
+STS12.json  model_meta.json
+root@d80bf65b0eb6:/app# ls -R results
+results:
+sentence-transformers__all-mpnet-base-v2
+
+results/sentence-transformers__all-mpnet-base-v2:
+e8c3b32edf5434bc2275fc9bab85f82640a19130
+
+results/sentence-transformers__all-mpnet-base-v2/e8c3b32edf5434bc2275fc9bab85f82640a19130:
+STS12.json  model_meta.json
+root@d80bf65b0eb6:/app# find results -type f -name STS12.json -print
+results/sentence-transformers__all-mpnet-base-v2/e8c3b32edf5434bc2275fc9bab85f82640a19130/STS12.json
+root@d80bf65b0eb6:/app# SHA=$(python3 -c 'from huggingface_hub import HfApi;print(HfApi().model_info("sentence-transformers/all-mpnet-base-v2").sha)') && echo "
+$SHA"
+e8c3b32edf5434bc2275fc9bab85f82640a19130
+root@d80bf65b0eb6:/app# FOUND=$(find results -type f -name STS12.json | head -n 1) && echo "Found: $FOUND"
+Found: results/sentence-transformers__all-mpnet-base-v2/e8c3b32edf5434bc2275fc9bab85f82640a19130/STS12.json
+root@d80bf65b0eb6:/app# mkdir -p "results/sentence-transformers__all-mpnet-base-v2/$SHA"
+root@d80bf65b0eb6:/app# if [ -n "$FOUND" ]; then cp -f "$FOUND" "results/sentence-transformers__all-mpnet-base-v2/$SHA/STS12.json"; fi
+cp: 'results/sentence-transformers__all-mpnet-base-v2/e8c3b32edf5434bc2275fc9bab85f82640a19130/STS12.json' and 'results/sentence-transformers__all-mpnet-base-v2
+/e8c3b32edf5434bc2275fc9bab85f82640a19130/STS12.json' are the same file
+root@d80bf65b0eb6:/app# ls -l "results/sentence-transformers__all-mpnet-base-v2/$SHA/STS12.json"
+-rw-r--r-- 1 root root 651 Dec  9 21:03 results/sentence-transformers__all-mpnet-base-v2/e8c3b32edf5434bc2275fc9bab85f82640a19130/STS12.json
+root@d80bf65b0eb6:/app# sed -n '1,200p' "results/sentence-transformers__all-mpnet-base-v2/$SHA/STS12.json"
+{
+  "dataset_revision": "a0d554a64d88156834ff5ae9920b964011b16384",
+  "task_name": "STS12",
+  "mteb_version": "1.36.8",
+  "scores": {
+    "test": [
+      {
+        "pearson": 0.832801,
+        "spearman": 0.726323,
+        "cosine_pearson": 0.832801,
+        "cosine_spearman": 0.726343,
+        "manhattan_pearson": 0.78659,
+        "manhattan_spearman": 0.722683,
+        "euclidean_pearson": 0.790134,
+        "euclidean_spearman": 0.726336,
+        "main_score": 0.726343,
+        "hf_subset": "default",
+        "languages": [
+          "eng-Latn"
+        ]
+      }
+    ]
+  },
+  "evaluation_time": 32.550267696380615,
+  "kg_co2_emissions": null
+}root@d80bf65b0eb6:/app#

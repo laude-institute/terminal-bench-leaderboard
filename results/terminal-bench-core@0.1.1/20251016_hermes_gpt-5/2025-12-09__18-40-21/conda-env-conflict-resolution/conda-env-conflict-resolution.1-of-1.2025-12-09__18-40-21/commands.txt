@@ -1,0 +1,49 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'ls -la /app\n'
+'ls -la /app/project\n'
+"sed -n '1,200p' /app/project/environment.yml\n"
+"sed -n '1,200p' /app/project/test_imports.py\n"
+'conda --version\n'
+'which conda\n'
+'conda info --envs\n'
+'cp /app/project/environment.yml /app/project/environment.orig.yml\n'
+"python3 - <<'PY'\nimport yaml, sys\np = '/app/project/environment.yml'\nwith open(p) as f:\n    data = yaml.safe_load(f)\n# Ensure name is datasci\ndata['name'] = 'datasci'\n# Normalize channels: prioritize conda-forge, defaults, pytorch\nchannels = data.get('channels', [])\n# Deduplicate and enforce order\npreferred = ['conda-forge','defaults','pytorch']\nnew_channels = []\nfor ch in preferred:\n    if ch in channels:\n        new_channels.append(ch)\n# Add any other existing channels to the end\nfor ch in channels:\n    if ch not in new_channels:\n        new_channels.append(ch)\nif not new_channels:\n    new_channels = preferred\ndata['channels'] = new_channels\ndeps = data.get('dependencies', [])\n# Split conda deps and pip deps\nconda_deps = []\npip_deps = []\nfor d in deps:\n    if isinstance(d, dict) and 'pip' in d:\n        pip_deps.extend(d['pip'])\n    else:\n        conda_deps.append(d)\n# Remove CUDA-related packages from conda deps to avoid conflicts\ncuda_pkgs = {'cudatoolkit','cudnn','cuda','pytorch-cuda','tensorflow-gpu'}\nconda_deps = [d for d in conda_deps if not any((isinstance(d,str) and d.split('=')[0].strip()==pk) for pk in cuda_pkgs)]\n# Adjust NumPy/SciPy versions for compatibility\n# Detect existing pins\ndef dep_name(d):\n    return d.split('=')[0].strip() if isinstance(d,str) else None\nnumpy_idx = next((i for i,d in enumerate(conda_deps) if isinstance(d,str) and dep_name(d)=='numpy'), None)\nscipy_idx = next((i for i,d in enumerate(conda_deps) if isinstance(d,str) and dep_name(d)=='scipy'), None)\n# Choose compatible versions: numpy 1.21.* and scipy 1.7.* for wide compatibility\ndesired_numpy = 'numpy=1.21.*'\ndesired_scipy = 'scipy=1.7.*'\nif numpy_idx is not None:\n    conda_deps[numpy_idx] = desired_numpy\nelse:\n    conda_deps.append(desired_numpy)\nif scipy_idx is not None:\n    conda_deps[scipy_idx] = desired_scipy\nelse:\n    conda_deps.append(desired_scipy)\n# Ensure python version compatible with TF 2.8 and Torch 1.12 (Python 3.8 or 3.9)\npy_idx = next((i for i,d in enumerate(conda_deps) if isinstance(d,str) and dep_name(d)=='python'), None)\ndesired_python = 'python=3.9'\nif py_idx is not None:\n    conda_deps[py_idx] = desired_python\nelse:\n    conda_deps.insert(0, desired_python)\n# Move TensorFlow and PyTorch to pip for CPU-only wheels\ndef remove_pkg(conda_list, name):\n    return [d for d in conda_list if not (isinstance(d,str) and dep_name(d)==name)]\nconda_deps = remove_pkg(conda_deps, 'tensorflow')\nconda_deps = remove_pkg(conda_deps, 'pytorch')\nconda_deps = remove_pkg(conda_deps, 'torch')\nconda_deps = remove_pkg(conda_deps, 'torchvision')\nconda_deps = remove_pkg(conda_deps, 'torchaudio')\n# Ensure basic build tools\nif not any(isinstance(d,str) and dep_name(d)=='pip' for d in conda_deps):\n    conda_deps.append('pip')\n# Prepare pip deps with CPU-only versions\n# Remove any existing torch/tensorflow pins in pip deps first\npip_deps = [d for d in pip_deps if not any(d.startswith(x) for x in ['tensorflow','torch','torchvision','torchaudio'])]\npip_deps.extend([\n    'tensorflow==2.8.0',\n    'torch==1.12.1',\n    'torchvision==0.13.1',\n    'torchaudio==0.12.1'\n])\n# Reassemble dependencies\ndata['dependencies'] = conda_deps + ([{'pip': pip_deps}] if pip_deps else [])\nwith open(p, 'w') as f:\n    yaml.safe_dump(data, f, sort_keys=False)\nprint('Updated environment.yml written.')\nPY\n"
+"sed -n '1,200p' /app/project/environment.yml\n"
+'conda env create -n datasci -f /app/project/environment.yml\n'
+''
+'source /opt/conda/etc/profile.d/conda.sh\n'
+'conda activate datasci\n'
+'python -V\n'
+"python - <<'PY'\nimport sys\nprint('Python:',sys.version)\nimport numpy, scipy, tensorflow, torch, torchvision, torchaudio\nprint('numpy', numpy.__version__)\nprint('scipy', scipy.__version__)\nprint('tensorflow', tensorflow.__version__)\nprint('torch', torch.__version__)\nprint('torchvision', torchvision.__version__)\nprint('torchaudio', torchaudio.__version__)\nPY\n"
+'python /app/project/test_imports.py\n'
+"sed -n '1,200p' /app/project/environment.yml\n"
+'cp -f /app/project/environment.yml /app/project/environment.orig.yml\n'
+'printf "name: datasci\\nchannels:\\n  - conda-forge\\n  - defaults\\ndependencies:\\n  - python=3.9\\n  - numpy=1.21.*\\n  - scipy=1.7.*\\n  - pandas=1.4.0\\n  - scikit-learn=1.0.2\\n  - pip\\n  - pip:\\n      - tensorflow==2.8.0\\n      - torch==1.12.1\\n      - torchvision==0.13.1\\n      - torchaudio==0.12.1\\n      - transformers==4.18.0\\n" > /app/project/environment.yml\n'
+"sed -n '1,200p' /app/project/environment.yml\n"
+'conda env remove -n datasci -y\n'
+'conda env create -f /app/project/environment.yml\n'
+'source /opt/conda/etc/profile.d/conda.sh\n'
+'conda activate datasci\n'
+'python -V\n'
+'python /app/project/test_imports.py\n'
+''
+'conda info --envs\n'
+'source /opt/conda/etc/profile.d/conda.sh\n'
+'conda activate datasci\n'
+'python -V\n'
+'python /app/project/test_imports.py\n'
+':\n'
+'conda info --envs\n'
+'source /opt/conda/etc/profile.d/conda.sh\n'
+'conda activate datasci\n'
+'python -V\n'
+'python /app/project/test_imports.py\n'
+'printf "name: datasci\\nchannels:\\n  - conda-forge\\n  - defaults\\ndependencies:\\n  - python=3.9\\n  - numpy=1.21.*\\n  - scipy=1.7.*\\n  - pandas=1.4.0\\n  - scikit-learn=1.0.2\\n  - pip\\n  - pip:\\n      - tensorflow==2.8.0\\n      - torch==1.12.1\\n      - torchvision==0.13.1\\n      - torchaudio==0.12.1\\n      - transformers==4.18.0\\n      - protobuf==3.20.3\\n" > /app/project/environment.yml\n'
+'python -m pip install --no-cache-dir -U protobuf==3.20.3\n'
+'python /app/project/test_imports.py\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

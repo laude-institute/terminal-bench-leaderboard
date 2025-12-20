@@ -1,0 +1,110 @@
+root@c6fcac13cbb8:/app# cat > scraper.py << 'PY'
+> from bs4 import BeautifulSoup
+> import requests
+> import pandas as pd
+>
+>
+> def parse_price(text):
+>     t = text.strip().replace('$', '').replace(',', '')
+>     try:
+>         return float(t)
+>     except:
+>         return None
+>
+>
+> def parse_rating(text):
+>     try:
+>         part = text.split(':', 1)[1].strip()
+>         val = part.split('/', 1)[0].strip()
+>         return float(val)
+>     except:
+>         return None
+>
+>
+> def parse_year(text):
+>     try:
+>         part = text.split(':', 1)[1].strip()
+>         return int(part)
+>     except:
+>         return None
+>
+>
+> def clean_author(text):
+>     t = text.strip()
+>     if t.lower().startswith('by '):
+>         t = t[3:].strip()
+>     return t
+>
+>
+> def scrape(url):
+>     resp = requests.get(url, timeout=10)
+>     resp.raise_for_status()
+>     soup = BeautifulSoup(resp.text, 'html.parser')
+>     books = []
+>     for div in soup.select('div.book'):
+>         title = div.select_one('div.book-title')
+>         author = div.select_one('div.book-author')
+>         year = div.select_one('span.book-year')
+>         rating = div.select_one('span.book-rating')
+>         price = div.select_one('span.book-price')
+>         data = {
+>             'title': title.get_text(strip=True) if title else None,
+>             'author': clean_author(author.get_text()) if author else None,
+>             'year': parse_year(year.get_text()) if year else None,
+>             'rating': parse_rating(rating.get_text()) if rating else None,
+>             'price': parse_price(price.get_text()) if price else None,
+>         }
+>         books.append(data)
+>     return books
+>
+>
+> def save_csv(books, path):
+>     df = pd.DataFrame(books, columns=['title', 'author', 'year', 'rating', 'price'])
+>     df.to_csv(path, index=False)
+>     return df
+>
+>
+> def create_report(df, path):
+>     total = len(df)
+>     avg_price = float(df['price'].mean()) if total else 0.0
+>     highest_title = ''
+>     highest_rating = None
+>     if total and df['rating'].notna().any():
+>         idx = df['rating'].idxmax()
+>         highest_title = str(df.loc[idx, 'title'])
+>         highest_rating = float(df.loc[idx, 'rating'])
+>     with open(path, 'w') as f:
+>         f.write(f'Total number of books scraped: {total}\n')
+>         f.write(f'Average book price: ${avg_price:.2f}\n')
+>         if highest_title:
+>             f.write(f'Highest rated book: {highest_title} ({highest_rating}/5)\n')
+>         else:
+>             f.write('Highest rated book: N/A\n')
+>
+>
+> def main():
+>     url = 'http://server:8000'
+>     books = scrape(url)
+>     df = save_csv(books, 'books.csv')
+>     create_report(df, 'report.txt')
+>
+>
+> if __name__ == '__main__':
+>     main()
+> PY
+root@c6fcac13cbb8:/app# chmod +x scraper.py
+root@c6fcac13cbb8:/app# python3 scraper.py
+root@c6fcac13cbb8:/app# ls -l books.csv report.txt
+-rw-r--r-- 1 root root 345 Dec 10 03:17 books.csv
+-rw-r--r-- 1 root root 110 Dec 10 03:17 report.txt
+root@c6fcac13cbb8:/app# head -n 5 books.csv
+title,author,year,rating,price
+The Great Gatsby,F. Scott Fitzgerald,1925,4.2,12.99
+To Kill a Mockingbird,Harper Lee,1960,4.8,14.99
+1984,George Orwell,1949,4.6,11.99
+Pride and Prejudice,Jane Austen,1813,4.5,9.99
+root@c6fcac13cbb8:/app# cat report.txt
+Total number of books scraped: 7
+Average book price: $13.85
+Highest rated book: To Kill a Mockingbird (4.8/5)
+root@c6fcac13cbb8:/app#

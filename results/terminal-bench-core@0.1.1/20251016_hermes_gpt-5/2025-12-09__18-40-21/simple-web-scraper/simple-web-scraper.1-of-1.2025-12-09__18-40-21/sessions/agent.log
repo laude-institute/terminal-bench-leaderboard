@@ -1,0 +1,118 @@
+[?2004hroot@c6fcac13cbb8:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@c6fcac13cbb8:/app# clear
+[?2004l[H[J[3J[?2004hroot@c6fcac13cbb8:/app# cat > scraper.py << 'PY'
+[?2004l[?2004h> from bs4 import BeautifulSoup
+[?2004l[?2004h> import requests
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def parse_price(text):
+[?2004l[?2004h>     t = text.strip().replace('$', '').replace(',', '')
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         return float(t)
+[?2004l[?2004h>     except:
+[?2004l[?2004h>         return None
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def parse_rating(text):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         part = text.split(':', 1)[1].strip()
+[?2004l[?2004h>         val = part.split('/', 1)[0].strip()
+[?2004l[?2004h>         return float(val)
+[?2004l[?2004h>     except:
+[?2004l[?2004h>         return None
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def parse_year(text):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         part = text.split(':', 1)[1].strip()
+[?2004l[?2004h>         return int(part)
+[?2004l[?2004h>     except:
+[?2004l[?2004h>         return None
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def clean_author(text):
+[?2004l[?2004h>     t = text.strip()
+[?2004l[?2004h>     if t.lower().startswith('by '):
+[?2004l[?2004h>         t = t[3:].strip()
+[?2004l[?2004h>     return t
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def scrape(url):
+[?2004l[?2004h>     resp = requests.get(url, timeout=10)
+[?2004l[?2004h>     resp.raise_for_status()
+[?2004l[?2004h>     soup = BeautifulSoup(resp.text, 'html.parser')
+[?2004l[?2004h>     books = []
+[?2004l[?2004h>     for div in soup.select('div.book'):
+[?2004l[?2004h>         title = div.select_one('div.book-title')
+[?2004l[?2004h>         author = div.select_one('div.book-author')
+[?2004l[?2004h>         year = div.select_one('span.book-year')
+[?2004l[?2004h>         rating = div.select_one('span.book-rating')
+[?2004l[?2004h>         price = div.select_one('span.book-price')
+[?2004l[?2004h>         data = {
+[?2004l[?2004h>             'title': title.get_text(strip=True) if title else None,
+[?2004l[?2004h>             'author': clean_author(author.get_text()) if author else None,
+[?2004l[?2004h>             'year': parse_year(year.get_text()) if year else None,
+[?2004l[?2004h>             'rating': parse_rating(rating.get_text()) if rating else None,
+[?2004l[?2004h>             'price': parse_price(price.get_text()) if price else None,
+[?2004l[?2004h>         }
+[?2004l[?2004h>         books.append(data)
+[?2004l[?2004h>     return books
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def save_csv(books, path):
+[?2004l[?2004h>     df = pd.DataFrame(books, columns=['title', 'author', 'year', 'rating', 'price'])
+[?2004l[?2004h>     df.to_csv(path, index=False)
+[?2004l[?2004h>     return df
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def create_report(df, path):
+[?2004l[?2004h>     total = len(df)
+[?2004l[?2004h>     avg_price = float(df['price'].mean()) if total else 0.0
+[?2004l[?2004h>     highest_title = ''
+[?2004l[?2004h>     highest_rating = None
+[?2004l[?2004h>     if total and df['rating'].notna().any():
+[?2004l[?2004h>         idx = df['rating'].idxmax()
+[?2004l[?2004h>         highest_title = str(df.loc[idx, 'title'])
+[?2004l[?2004h>         highest_rating = float(df.loc[idx, 'rating'])
+[?2004l[?2004h>     with open(path, 'w') as f:
+[?2004l[?2004h>         f.write(f'Total number of books scraped: {total}\n')
+[?2004l[?2004h>         f.write(f'Average book price: ${avg_price:.2f}\n')
+[?2004l[?2004h>         if highest_title:
+[?2004l[?2004h>             f.write(f'Highest rated book: {highest_title} ({highest_rating}/5)\n')
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             f.write('Highest rated book: N/A\n')
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     url = 'http://server:8000'
+[?2004l[?2004h>     books = scrape(url)
+[?2004l[?2004h>     df = save_csv(books, 'books.csv')
+[?2004l[?2004h>     create_report(df, 'report.txt')
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@c6fcac13cbb8:/app# chmod +x scraper.py
+[?2004l[?2004hroot@c6fcac13cbb8:/app# python3 scraper.py
+[?2004l[?2004hroot@c6fcac13cbb8:/app# ls -l books.csv report.txt
+[?2004l-rw-r--r-- 1 root root 345 Dec 10 03:17 books.csv
+-rw-r--r-- 1 root root 110 Dec 10 03:17 report.txt
+[?2004hroot@c6fcac13cbb8:/app# head -n 5 books.csv
+[?2004ltitle,author,year,rating,price
+The Great Gatsby,F. Scott Fitzgerald,1925,4.2,12.99
+To Kill a Mockingbird,Harper Lee,1960,4.8,14.99
+1984,George Orwell,1949,4.6,11.99
+Pride and Prejudice,Jane Austen,1813,4.5,9.99
+[?2004hroot@c6fcac13cbb8:/app# cat report.txt
+[?2004lTotal number of books scraped: 7
+Average book price: $13.85
+Highest rated book: To Kill a Mockingbird (4.8/5)
+[?2004hroot@c6fcac13cbb8:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@c6fcac13cbb8:/app# 

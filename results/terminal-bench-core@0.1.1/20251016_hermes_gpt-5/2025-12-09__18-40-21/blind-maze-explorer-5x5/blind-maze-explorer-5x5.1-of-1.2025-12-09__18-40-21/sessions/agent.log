@@ -1,0 +1,782 @@
+[?2004hroot@0514f4298f5f:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@0514f4298f5f:/app# clear
+[?2004l[H[J[3J[?2004hroot@0514f4298f5f:/app# ls -la
+[?2004ltotal 16
+drwxr-xr-x 1 root root 4096 Dec  9 22:36 .
+drwxr-xr-x 1 root root 4096 Dec  9 22:36 ..
+-rwxrwxr-x 1 root root   80 Nov  9 09:38 maze_game.sh
+drwxr-xr-x 2 root root 4096 Nov  9 09:38 tests
+[?2004hroot@0514f4298f5f:/app# cat > explore_maze.py << 'PYEOF'
+[?2004l_path = '/app/maze_map.txt'
+    with open(out_path, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+    print(f'Map written to {out_path}')
+    print(f'Dimensions: {max_y - min_y + 1} rows x {max_x - min_x + 1} cols')
+    print(f'Open cells: {len(open_cells)}; Walls: {len(walls)}; Exit: {exit_pos}')
+    return out_path
+
+if __name__ == '__main__':
+    try:
+        p = explore()
+        print('Done')
+    except Exception as e:
+        print('Error:', e)
+        sys.exit(1)
+PYEOF
+[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import subprocess, sys, time
+[?2004l[?2004h> 
+[?2004l[?2004h> DIRS = {'N': (0, -1), 'S': (0, 1), 'E': (1, 0), 'W': (-1, 0)}
+[?2004l[?2004h> OPP = {'N':'S','S':'N','E':'W','W':'E'}
+[?2004l[?2004h> 
+[?2004l[?2004h> def spawn():
+[?2004l[?2004h>     return subprocess.Popen(['./maze_game.sh'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_response(proc, timeout=5.0):
+[?2004l[?2004h>     start = time.time()
+[?2004l[?2004h>     while True:
+[?2004l[?2004h>         if time.time() - start > timeout:
+[?2004l[?2004h>             raise TimeoutError('No response from maze within timeout')
+[?2004l[?2004h>         line = proc.stdout.readline()
+[?2004l[?2004h>         if not line:
+[?2004l[?2004h>             if proc.poll() is not None:
+[?2004l[?2004h>                 raise RuntimeError('Maze process ended unexpectedly')
+[?2004l[?2004h>             time.sleep(0.01)
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         s = line.strip()
+[?2004l[?2004h>         if not s:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         parts = [p.strip() for p in s.split('&')]
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             if p in ('hit wall','moved','reached exit'):
+[?2004l[?2004h>                 return p
+[?2004l[?2004h>         # Otherwise continue reading
+[?2004l[?2004h> 
+[?2004l[?2004h> def send_move(proc, d):
+[?2004l[?2004h>     proc.stdin.write(f"move {d}\n")
+[?2004l[?2004h>     proc.stdin.flush()
+[?2004l[?2004h>     return read_response(proc)
+[?2004l[?2004h> 
+[?2004l[?2004h> def explore():
+[?2004l[?2004h>     proc = spawn()
+[?2004l[?2004h>     open_cells = set()
+[?2004l[?2004h>     walls = set()
+[?2004l[?2004h>     S = (0,0)
+[?2004l[?2004h>     current = S
+[?2004l[?2004h>     open_cells.add(S)
+[?2004l[?2004h>     exit_pos = None
+[?2004l[?2004h>     sys.setrecursionlimit(10000)
+[?2004l[?2004h>     order = ['N','E','S','W']
+[?2004l[?2004h> 
+[?2004l[?2004h>     def dfs(pos):
+[?2004l[?2004h>         nonlocal current, exit_pos
+[?2004l[?2004h>         for d in order:
+[?2004l[?2004h>             dx, dy = DIRS[d]
+[?2004l[?2004h>             nb = (pos[0] + dx, pos[1] + dy)
+[?2004l[?2004h>             if nb in open_cells or nb in walls:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             resp = send_move(proc, d)
+[?2004l[?2004h>             if resp == 'hit wall':
+[?2004l[?2004h>                 walls.add(nb)
+[?2004l[?2004h>             elif resp in ('moved','reached exit'):
+[?2004l[?2004h>                 if resp == 'reached exit':
+[?2004l[?2004h>                     exit_pos = nb
+[?2004l[?2004h>                 open_cells.add(nb)
+[?2004l[?2004h>                 current = nb
+[?2004l[?2004h>                 dfs(nb)
+[?2004l[?2004h>                 back = send_move(proc, OPP[d])
+[?2004l[?2004h>                 if back == 'hit wall':
+[?2004l[?2004h>                     raise RuntimeError('Unexpected wall when moving back')
+[?2004l[?2004h>                 current = pos
+[?2004l[?2004h>         # pos fully explored
+[?2004l[?2004h> 
+[?2004l[?2004h>     dfs(S)
+[?2004l[?2004h>     # Exit game before writing file
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         proc.stdin.close()
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         pass
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         proc.wait(timeout=2.0)
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             proc.terminate()
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             pass
+[?2004l[?2004h> 
+[?2004l[?2004h>     all_cells = open_cells.union(walls)
+[?2004l[?2004h>     min_x = min(x for x, y in all_cells)
+[?2004l[?2004h>     max_x = max(x for x, y in all_cells)
+[?2004l[?2004h>     min_y = min(y for x, y in all_cells)
+[?2004l[?2004h>     max_y = max(y for x, y in all_cells)
+[?2004l[?2004h> 
+[?2004l[?2004h>     lines = []
+[?2004l[?2004h>     for y in range(min_y, max_y + 1):
+[?2004l[?2004h>         row = []
+[?2004l[?2004h>         for x in range(min_x, max_x + 1):
+[?2004l[?2004h>             p = (x, y)
+[?2004l[?2004h>             if p == S:
+[?2004l[?2004h>                 row.append('S')
+[?2004l[?2004h>             elif exit_pos is not None and p == exit_pos:
+[?2004l[?2004h>                 row.append('E')
+[?2004l[?2004h>             elif p in walls:
+[?2004l[?2004h>                 row.append('#')
+[?2004l[?2004h>             elif p in open_cells:
+[?2004l[?2004h>                 row.append(' ')
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 row.append('#')
+[?2004l[?2004h>         lines.append(''.join(row))
+[?2004l[?2004h>     out_path = '/app/maze_map.txt'
+[?2004l[?2004h>     with open(out_path, 'w') as f:
+[?2004l[?2004h>         f.write('\n'.join(lines) + '\n')
+[?2004l[?2004h>     print(f'Map written to {out_path}')
+[?2004l[?2004h>     print(f'Dimensions: {max_y - min_y + 1} rows x {max_x - min_x + 1} cols')
+[?2004l[?2004h>     print(f'Open cells: {len(open_cells)}; Walls: {len(walls)}; Exit: {exit_pos}')
+[?2004l[?2004h>     return out_path
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         p = explore()
+[?2004l[?2004h>         print('Done')
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         print('Error:', e)
+[?2004l[?2004h>         sys.exit(1)
+[?2004l[?2004h> PYEOF
+[?2004l[?2004hroot@0514f4298f5f:/app# chmod +x explore_maze.py
+[?2004l[?2004hroot@0514f4298f5f:/app# python3 explore_maze.py
+[?2004lls -l /app/maze_map.txt
+head -n 10 /app/maze_map.txt
+wc -l -c /app/maze_map.txt
+^CTraceback (most recent call last):
+  File [35m"/app/explore_maze.py"[0m, line [35m114[0m, in [35m<module>[0m
+    p = explore()
+  File [35m"/app/explore_maze.py"[0m, line [35m68[0m, in [35mexplore[0m
+    [31mdfs[0m[1;31m(S)[0m
+    [31m~~~[0m[1;31m^^^[0m
+  File [35m"/app/explore_maze.py"[0m, line [35m53[0m, in [35mdfs[0m
+    resp = send_move(proc, d)
+  File [35m"/app/explore_maze.py"[0m, line [35m33[0m, in [35msend_move[0m
+    return read_response(proc)
+  File [35m"/app/explore_maze.py"[0m, line [35m15[0m, in [35mread_response[0m
+    line = proc.stdout.readline()
+[1;35mKeyboardInterrupt[0m
+
+[?2004hroot@0514f4298f5f:/app# sed -n '1,200p' explore_maze.py
+[?2004l#!/usr/bin/env python3
+import subprocess, sys, time
+
+DIRS = {'N': (0, -1), 'S': (0, 1), 'E': (1, 0), 'W': (-1, 0)}
+OPP = {'N':'S','S':'N','E':'W','W':'E'}
+
+def spawn():
+    return subprocess.Popen(['./maze_game.sh'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+
+def read_response(proc, timeout=5.0):
+    start = time.time()
+    while True:
+        if time.time() - start > timeout:
+            raise TimeoutError('No response from maze within timeout')
+        line = proc.stdout.readline()
+        if not line:
+            if proc.poll() is not None:
+                raise RuntimeError('Maze process ended unexpectedly')
+            time.sleep(0.01)
+            continue
+        s = line.strip()
+        if not s:
+            continue
+        parts = [p.strip() for p in s.split('&')]
+        for p in parts:
+            if p in ('hit wall','moved','reached exit'):
+                return p
+        # Otherwise continue reading
+
+def send_move(proc, d):
+    proc.stdin.write(f"move {d}\n")
+    proc.stdin.flush()
+    return read_response(proc)
+
+def explore():
+    proc = spawn()
+    open_cells = set()
+    walls = set()
+    S = (0,0)
+    current = S
+    open_cells.add(S)
+    exit_pos = None
+    sys.setrecursionlimit(10000)
+    order = ['N','E','S','W']
+
+    def dfs(pos):
+        nonlocal current, exit_pos
+        for d in order:
+            dx, dy = DIRS[d]
+            nb = (pos[0] + dx, pos[1] + dy)
+            if nb in open_cells or nb in walls:
+                continue
+            resp = send_move(proc, d)
+            if resp == 'hit wall':
+                walls.add(nb)
+            elif resp in ('moved','reached exit'):
+                if resp == 'reached exit':
+                    exit_pos = nb
+                open_cells.add(nb)
+                current = nb
+                dfs(nb)
+                back = send_move(proc, OPP[d])
+                if back == 'hit wall':
+                    raise RuntimeError('Unexpected wall when moving back')
+                current = pos
+        # pos fully explored
+
+    dfs(S)
+    # Exit game before writing file
+    try:
+        proc.stdin.close()
+    except Exception:
+        pass
+    try:
+        proc.wait(timeout=2.0)
+    except Exception:
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+
+    all_cells = open_cells.union(walls)
+    min_x = min(x for x, y in all_cells)
+    max_x = max(x for x, y in all_cells)
+    min_y = min(y for x, y in all_cells)
+    max_y = max(y for x, y in all_cells)
+
+    lines = []
+    for y in range(min_y, max_y + 1):
+        row = []
+        for x in range(min_x, max_x + 1):
+            p = (x, y)
+            if p == S:
+                row.append('S')
+            elif exit_pos is not None and p == exit_pos:
+                row.append('E')
+            elif p in walls:
+                row.append('#')
+            elif p in open_cells:
+                row.append(' ')
+            else:
+                row.append('#')
+        lines.append(''.join(row))
+    out_path = '/app/maze_map.txt'
+    with open(out_path, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+    print(f'Map written to {out_path}')
+    print(f'Dimensions: {max_y - min_y + 1} rows x {max_x - min_x + 1} cols')
+    print(f'Open cells: {len(open_cells)}; Walls: {len(walls)}; Exit: {exit_pos}')
+    return out_path
+
+if __name__ == '__main__':
+    try:
+        p = explore()
+        print('Done')
+    except Exception as e:
+        print('Error:', e)
+        sys.exit(1)
+[?2004hroot@0514f4298f5f:/app# cat > explore_maze.py << 'PYEOF'
+[?2004l
+                current = pos
+
+    dfs(S)
+
+    # exit the game
+    try:
+        proc.stdin.close()
+    except Exception:
+        pass
+    try:
+        proc.wait(timeout=2.0)
+    except Exception:
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+
+    # Build map
+    all_cells = open_cells.union(walls)
+    min_x = min(x for x, y in all_cells)
+    max_x = max(x for x, y in all_cells)
+    min_y = min(y for x, y in all_cells)
+    max_y = max(y for x, y in all_cells)
+
+    lines = []
+    for y in range(min_y, max_y + 1):
+        row = []
+        for x in range(min_x, max_x + 1):
+            p = (x, y)
+            if p == S:
+                row.append('S')
+            elif exit_pos is not None and p == exit_pos:
+                row.append('E')
+            elif p in walls:
+                row.append('#')
+            elif p in open_cells:
+                row.append(' ')
+            else:
+                row.append('#')
+        lines.append(''.join(row))
+
+    out_path = '/app/maze_map.txt'
+    with open(out_path, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+
+    print(f'Map written to {out_path}')
+    print(f'Dimensions: {max_y - min_y + 1} rows x {max_x - min_x + 1} cols')
+    print(f'Open cells: {len(open_cells)}; Walls: {len(walls)}; Exit: {exit_pos}')
+    return out_path
+
+if __name__ == '__main__':
+    try:
+        p = explore()
+        print('Done')
+    except Exception as e:
+        print('Error:', e)
+        sys.exit(1)
+PYEOF
+[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import subprocess, sys, time
+[?2004l[?2004h> 
+[?2004l[?2004h> DIRS = {'N': (0, -1), 'S': (0, 1), 'E': (1, 0), 'W': (-1, 0)}
+[?2004l[?2004h> OPP = {'N':'S','S':'N','E':'W','W':'E'}
+[?2004l[?2004h> 
+[?2004l[?2004h> def spawn():
+[?2004l[?2004h>     return subprocess.Popen(['./maze_game.sh'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_response(proc, timeout=5.0):
+[?2004l[?2004h>     start = time.time()
+[?2004l[?2004h>     while True:
+[?2004l[?2004h>         if time.time() - start > timeout:
+[?2004l[?2004h>             raise TimeoutError('No response from maze within timeout')
+[?2004l[?2004h>         line = proc.stdout.readline()
+[?2004l[?2004h>         if not line:
+[?2004l[?2004h>             if proc.poll() is not None:
+[?2004l[?2004h>                 raise RuntimeError('Maze process ended unexpectedly')
+[?2004l[?2004h>             time.sleep(0.01)
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         s = line.strip()
+[?2004l[?2004h>         if not s:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         parts = [p.strip() for p in s.split('&')]
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             if p in ('hit wall','moved','reached exit'):
+[?2004l[?2004h>                 return p
+[?2004l[?2004h>         # keep reading if non-status text
+[?2004l[?2004h> 
+[?2004l[?2004h> def send_move(proc, d):
+[?2004l[?2004h>     proc.stdin.write(f"move {d}\n")
+[?2004l[?2004h>     proc.stdin.flush()
+[?2004l[?2004h>     return read_response(proc)
+[?2004l[?2004h> 
+[?2004l[?2004h> def explore():
+[?2004l[?2004h>     proc = spawn()
+[?2004l[?2004h>     open_cells = set()
+[?2004l[?2004h>     walls = set()
+[?2004l[?2004h>     S = (0,0)
+[?2004l[?2004h>     current = S
+[?2004l[?2004h>     open_cells.add(S)
+[?2004l[?2004h>     exit_pos = None
+[?2004l[?2004h>     sys.setrecursionlimit(100000)
+[?2004l[?2004h>     order = ['N','E','S','W']
+[?2004l[?2004h> 
+[?2004l[?2004h>     def dfs(pos):
+[?2004l[?2004h>         nonlocal current, exit_pos
+[?2004l[?2004h>         for d in order:
+[?2004l[?2004h>             dx, dy = DIRS[d]
+[?2004l[?2004h>             nb = (pos[0] + dx, pos[1] + dy)
+[?2004l[?2004h>             if nb in open_cells or nb in walls:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             resp = send_move(proc, d)
+[?2004l[?2004h>             if resp == 'hit wall':
+[?2004l[?2004h>                 walls.add(nb)
+[?2004l[?2004h>             elif resp in ('moved','reached exit'):
+[?2004l[?2004h>                 if resp == 'reached exit':
+[?2004l[?2004h>                     exit_pos = nb
+[?2004l[?2004h>                 open_cells.add(nb)
+[?2004l[?2004h>                 current = nb
+[?2004l[?2004h>                 dfs(nb)
+[?2004l[?2004h>                 back = send_move(proc, OPP[d])
+[?2004l[?2004h>                 if back == 'hit wall':
+[?2004l[?2004h>                     raise RuntimeError('Unexpected wall when moving back')
+[?2004l[?2004h>                 current = pos
+[?2004l[?2004h> 
+[?2004l[?2004h>     dfs(S)
+[?2004l[?2004h> 
+[?2004l[?2004h>     # exit the game
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         proc.stdin.close()
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         pass
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         proc.wait(timeout=2.0)
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             proc.terminate()
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             pass
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Build map
+[?2004l[?2004h>     all_cells = open_cells.union(walls)
+[?2004l[?2004h>     min_x = min(x for x, y in all_cells)
+[?2004l[?2004h>     max_x = max(x for x, y in all_cells)
+[?2004l[?2004h>     min_y = min(y for x, y in all_cells)
+[?2004l[?2004h>     max_y = max(y for x, y in all_cells)
+[?2004l[?2004h> 
+[?2004l[?2004h>     lines = []
+[?2004l[?2004h>     for y in range(min_y, max_y + 1):
+[?2004l[?2004h>         row = []
+[?2004l[?2004h>         for x in range(min_x, max_x + 1):
+[?2004l[?2004h>             p = (x, y)
+[?2004l[?2004h>             if p == S:
+[?2004l[?2004h>                 row.append('S')
+[?2004l[?2004h>             elif exit_pos is not None and p == exit_pos:
+[?2004l[?2004h>                 row.append('E')
+[?2004l[?2004h>             elif p in walls:
+[?2004l[?2004h>                 row.append('#')
+[?2004l[?2004h>             elif p in open_cells:
+[?2004l[?2004h>                 row.append(' ')
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 row.append('#')
+[?2004l[?2004h>         lines.append(''.join(row))
+[?2004l[?2004h> 
+[?2004l[?2004h>     out_path = '/app/maze_map.txt'
+[?2004l[?2004h>     with open(out_path, 'w') as f:
+[?2004l[?2004h>         f.write('\n'.join(lines) + '\n')
+[?2004l[?2004h> 
+[?2004l[?2004h>     print(f'Map written to {out_path}')
+[?2004l[?2004h>     print(f'Dimensions: {max_y - min_y + 1} rows x {max_x - min_x + 1} cols')
+[?2004l[?2004h>     print(f'Open cells: {len(open_cells)}; Walls: {len(walls)}; Exit: {exit_pos}')
+[?2004l[?2004h>     return out_path
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         p = explore()
+[?2004l[?2004h>         print('Done')
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         print('Error:', e)
+[?2004l[?2004h>         sys.exit(1)
+[?2004l[?2004h> PYEOF
+[?2004l[?2004hroot@0514f4298f5f:/app# chmod +x explore_maze.py
+[?2004l[?2004hroot@0514f4298f5f:/app# python3 explore_maze.py
+[?2004lls -l /app/maze_map.txt
+head -n 20 /app/maze_map.txt
+wc -l -c /app/maze_map.txt
+^CTraceback (most recent call last):
+  File [35m"/app/explore_maze.py"[0m, line [35m117[0m, in [35m<module>[0m
+    p = explore()
+  File [35m"/app/explore_maze.py"[0m, line [35m67[0m, in [35mexplore[0m
+    [31mdfs[0m[1;31m(S)[0m
+    [31m~~~[0m[1;31m^^^[0m
+  File [35m"/app/explore_maze.py"[0m, line [35m53[0m, in [35mdfs[0m
+    resp = send_move(proc, d)
+  File [35m"/app/explore_maze.py"[0m, line [35m33[0m, in [35msend_move[0m
+    return read_response(proc)
+  File [35m"/app/explore_maze.py"[0m, line [35m15[0m, in [35mread_response[0m
+    line = proc.stdout.readline()
+[1;35mKeyboardInterrupt[0m
+
+[?2004hroot@0514f4298f5f:/app# 
+[?2004l[?2004hroot@0514f4298f5f:/app# pkill -f explore_maze.py || true
+[?2004lbash: pkill: command not found
+[?2004hroot@0514f4298f5f:/app# pkill -f maze_game.sh || true
+[?2004lbash: pkill: command not found
+[?2004hroot@0514f4298f5f:/app# sed -n '1,200p' maze_game.sh
+[?2004l#!/bin/bash
+
+# Run the protected maze server 
+python3 /protected/maze_server.py [?2004hroot@0514f4298f5f:/app# printf 'move N\n' | ./maze_game.sh
+[?2004lWelcome to the Blind Maze Explorer!
+You start at position 'S'. Use 'move N/S/E/W' commands to navigate.
+You can also use batch commands like 'move N & E', 'move S & S & W'
+Type 'exit' to quit the game.
+> hit wall
+> [?2004hroot@0514f4298f5f:/app# printf 'move N & E\n' | ./maze_game.sh
+[?2004lWelcome to the Blind Maze Explorer!
+You start at position 'S'. Use 'move N/S/E/W' commands to navigate.
+You can also use batch commands like 'move N & E', 'move S & S & W'
+Type 'exit' to quit the game.
+> hit wall & hit wall
+> [?2004hroot@0514f4298f5f:/app# cat > explore_maze.py << 'PYEOF'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import subprocess, sys, time, select
+[?2004l[?2004h> 
+[?2004l[?2004h> DIRS = {'N': (0, -1), 'S': (0, 1), 'E': (1, 0), 'W': (-1, 0)}
+[?2004l[?2004h> OPP = {'N':'S','S':'N','E':'W','W':'E'}
+[?2004l[?2004h> 
+[?2004l[?2004h> def spawn():
+[?2004l[?2004h>     return subprocess.Popen(['./maze_game.sh'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=0)
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_response(proc, timeout=5.0):
+[?2004l[?2004h>     start = time.time()
+[?2004l[?2004h>     buf = ''
+[?2004l[?2004h>     f = proc.stdout
+[?2004l[?2004h>     opts = ['reached exit','hit wall','moved']
+[?2004l[?2004h>     while time.time() - start < timeout:
+[?2004l[?2004h>         r, _, _ = select.select([f], [], [], 0.1)
+[?2004l[?2004h>         if r:
+[?2004l[?2004h>             ch = f.read(1)
+[?2004l[?2004h>             if not ch:
+[?2004l[?2004h>                 if proc.poll() is not None:
+[?2004l[?2004h>                     raise RuntimeError('Maze process ended unexpectedly')
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             buf += ch
+[?2004l[?2004h>             for opt in opts:
+[?2004l[?2004h>                 if opt in buf:
+[?2004l[?2004h>                     return opt
+[?2004l[?2004h>     raise TimeoutError('No response from maze within timeout; buffer=' + repr(buf))
+[?2004l[?2004h> 
+[?2004l[?2004h> def send_move(proc, d):
+[?2004l[?2004h>     proc.stdin.write(f"move {d}\n")
+[?2004l[?2004h>     proc.stdin.flush()
+[?2004l[?2004h>     return read_response(proc)
+[?2004l[?2004h> 
+[?2004l[?2004h> def explore():
+[?2004l[?2004h>     proc = spawn()
+[?2004l[?2004h>     open_cells = set()
+[?2004l[?2004h>     walls = set()
+[?2004l[?2004h>     S = (0,0)
+[?2004l[?2004h>     current = S
+[?2004l[?2004h>     open_cells.add(S)
+[?2004l[?2004h>     exit_pos = None
+[?2004l[?2004h>     sys.setrecursionlimit(100000)
+[?2004l[?2004h>     order = ['N','E','S','W']
+[?2004l[?2004h> 
+[?2004l[?2004h>     def dfs(pos):
+[?2004l[?2004h>         nonlocal current, exit_pos
+[?2004l[?2004h>         for d in order:
+[?2004l[?2004h>             dx, dy = DIRS[d]
+[?2004l[?2004h>             nb = (pos[0] + dx, pos[1] + dy)
+[?2004l[?2004h>             if nb in open_cells or nb in walls:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             resp = send_move(proc, d)
+[?2004l[?2004h>             if resp == 'hit wall':
+[?2004l[?2004h>                 walls.add(nb)
+[?2004l[?2004h>             elif resp in ('moved','reached exit'):
+[?2004l[?2004h>                 if resp == 'reached exit':
+[?2004l[?2004h>                     exit_pos = nb
+[?2004l[?2004h>                 open_cells.add(nb)
+[?2004l[?2004h>                 current = nb
+[?2004l[?2004h>                 dfs(nb)
+[?2004l[?2004h>                 back = send_move(proc, OPP[d])
+[?2004l[?2004h>                 if back == 'hit wall':
+[?2004l[?2004h>                     raise RuntimeError('Unexpected wall when moving back')
+[?2004l[?2004h>                 current = pos
+[?2004l[?2004h> 
+[?2004l[?2004h>     dfs(S)
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Exit game before writing file
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         proc.stdin.close()
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         pass
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         proc.wait(timeout=2.0)
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             proc.terminate()
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             pass
+[?2004l[?2004h> 
+[?2004l[?2004h>     all_cells = open_cells.union(walls)
+[?2004l[?2004h>     min_x = min(x for x, y in all_cells)
+[?2004l[?2004h>     max_x = max(x for x, y in all_cells)
+[?2004l[?2004h>     min_y = min(y for x, y in all_cells)
+[?2004l[?2004h>     max_y = max(y for x, y in all_cells)
+[?2004l[?2004h> 
+[?2004l[?2004h>     lines = []
+[?2004l[?2004h>     for y in range(min_y, max_y + 1):
+[?2004l[?2004h>         row = []
+[?2004l[?2004h>         for x in range(min_x, max_x + 1):
+[?2004l[?2004h>             p = (x, y)
+[?2004l[?2004h>             if p == S:
+[?2004l[?2004h>                 row.append('S')
+[?2004l[?2004h>             elif exit_pos is not None and p == exit_pos:
+[?2004l[?2004h>                 row.append('E')
+[?2004l[?2004h>             elif p in walls:
+[?2004l[?2004h>                 row.append('#')
+[?2004l[?2004h>             elif p in open_cells:
+[?2004l[?2004h>                 row.append(' ')
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 row.append('#')
+[?2004l[?2004h>         lines.append(''.join(row))
+[?2004l[?2004h> 
+[?2004l[?2004h>     out_path = '/app/maze_map.txt'
+[?2004l[?2004h>     with open(out_path, 'w') as f:
+[?2004l[?2004h>         f.write('\n'.join(lines) + '\n')
+[?2004l[?2004h> 
+[?2004l[?2004h>     print(f'Map written to {out_path}')
+[?2004l[?2004h>     print(f'Dimensions: {max_y - min_y + 1} rows x {max_x - min_x + 1} cols')
+[?2004l[?2004h>     print(f'Open cells: {len(open_cells)}; Walls: {len(walls)}; Exit: {exit_pos}')
+[?2004l[?2004h>     return out_path
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         p = explore()
+[?2004l[?2004h>         print('Done')
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         print('Error:', e)
+[?2004l[?2004h>         sys.exit(1)
+[?2004l[?2004h> PYEOF
+[?2004l[?2004hroot@0514f4298f5f:/app# chmod +x explore_maze.py
+[?2004l[?2004hroot@0514f4298f5f:/app# python3 explore_maze.py
+[?2004lError: No response from maze within timeout; buffer="Welcome to the Blind Maze Explorer!\nYou start at position 'S'. Use 'move N/S/E/W' commands to navigate.\nYou can also use batch commands like 'move N & E', 'move S & S & W'\nType 'exit' to quit the game.\n> h"
+[?2004hroot@0514f4298f5f:/app# ls -l /app/maze_map.txt
+[?2004lls: cannot access '/app/maze_map.txt': No such file or directory
+[?2004hroot@0514f4298f5f:/app# head -n 20 /app/maze_map.txt
+[?2004lhead: cannot open '/app/maze_map.txt' for reading: No such file or directory
+[?2004hroot@0514f4298f5f:/app# wc -l -c /app/maze_map.txt
+[?2004lwc: /app/maze_map.txt: No such file or directory
+[?2004hroot@0514f4298f5f:/app# cat > explore_maze.py << 'PYEOF'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import subprocess, sys, time
+[?2004l[?2004h> 
+[?2004l[?2004h> DIRS = {'N': (0, -1), 'S': (0, 1), 'E': (1, 0), 'W': (-1, 0)}
+[?2004l[?2004h> OPP = {'N':'S','S':'N','E':'W','W':'E'}
+[?2004l[?2004h> 
+[?2004l[?2004h> def spawn():
+[?2004l[?2004h>     return subprocess.Popen(['./maze_game.sh'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+[?2004l[?2004h> 
+[?2004l[?2004h> def read_response(proc, timeout=15.0):
+[?2004l[?2004h>     start = time.time()
+[?2004l[?2004h>     tokens = {'hit wall','moved','reached exit'}
+[?2004l[?2004h>     while True:
+[?2004l[?2004h>         if time.time() - start > timeout:
+[?2004l[?2004h>             raise TimeoutError('No response from maze within timeout')
+[?2004l[?2004h>         line = proc.stdout.readline()
+[?2004l[?2004h>         if not line:
+[?2004l[?2004h>             if proc.poll() is not None:
+[?2004l[?2004h>                 raise RuntimeError('Maze process ended unexpectedly')
+[?2004l[?2004h>             time.sleep(0.01)
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         s = line.strip()
+[?2004l[?2004h>         if not s:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if s.startswith('>'):
+[?2004l[?2004h>             s = s[1:].strip()
+[?2004l[?2004h>         parts = [p.strip() for p in s.split('&')]
+[?2004l[?2004h>         for p in parts:
+[?2004l[?2004h>             if p in tokens:
+[?2004l[?2004h>                 return p
+[?2004l[?2004h>         # otherwise ignore non-status lines and keep reading
+[?2004l[?2004h> 
+[?2004l[?2004h> def send_move(proc, d):
+[?2004l[?2004h>     proc.stdin.write(f"move {d}\n")
+[?2004l[?2004h>     proc.stdin.flush()
+[?2004l[?2004h>     return read_response(proc)
+[?2004l[?2004h> 
+[?2004l[?2004h> def explore():
+[?2004l[?2004h>     proc = spawn()
+[?2004l[?2004h>     open_cells = set()
+[?2004l[?2004h>     walls = set()
+[?2004l[?2004h>     S = (0,0)
+[?2004l[?2004h>     current = S
+[?2004l[?2004h>     open_cells.add(S)
+[?2004l[?2004h>     exit_pos = None
+[?2004l[?2004h>     sys.setrecursionlimit(100000)
+[?2004l[?2004h>     order = ['N','E','S','W']
+[?2004l[?2004h> 
+[?2004l[?2004h>     def dfs(pos):
+[?2004l[?2004h>         nonlocal current, exit_pos
+[?2004l[?2004h>         for d in order:
+[?2004l[?2004h>             dx, dy = DIRS[d]
+[?2004l[?2004h>             nb = (pos[0] + dx, pos[1] + dy)
+[?2004l[?2004h>             if nb in open_cells or nb in walls:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             resp = send_move(proc, d)
+[?2004l[?2004h>             if resp == 'hit wall':
+[?2004l[?2004h>                 walls.add(nb)
+[?2004l[?2004h>             elif resp in ('moved','reached exit'):
+[?2004l[?2004h>                 if resp == 'reached exit':
+[?2004l[?2004h>                     exit_pos = nb
+[?2004l[?2004h>                 open_cells.add(nb)
+[?2004l[?2004h>                 current = nb
+[?2004l[?2004h>                 dfs(nb)
+[?2004l[?2004h>                 back = send_move(proc, OPP[d])
+[?2004l[?2004h>                 if back == 'hit wall':
+[?2004l[?2004h>                     raise RuntimeError('Unexpected wall when moving back')
+[?2004l[?2004h>                 current = pos
+[?2004l[?2004h> 
+[?2004l[?2004h>     dfs(S)
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Exit game before writing file
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         proc.stdin.close()
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         pass
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         proc.wait(timeout=2.0)
+[?2004l[?2004h>     except Exception:
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             proc.terminate()
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             pass
+[?2004l[?2004h> 
+[?2004l[?2004h>     all_cells = open_cells.union(walls)
+[?2004l[?2004h>     min_x = min(x for x, y in all_cells)
+[?2004l[?2004h>     max_x = max(x for x, y in all_cells)
+[?2004l[?2004h>     min_y = min(y for x, y in all_cells)
+[?2004l[?2004h>     max_y = max(y for x, y in all_cells)
+[?2004l[?2004h> 
+[?2004l[?2004h>     lines = []
+[?2004l[?2004h>     for y in range(min_y, max_y + 1):
+[?2004l[?2004h>         row = []
+[?2004l[?2004h>         for x in range(min_x, max_x + 1):
+[?2004l[?2004h>             p = (x, y)
+[?2004l[?2004h>             if p == S:
+[?2004l[?2004h>                 row.append('S')
+[?2004l[?2004h>             elif exit_pos is not None and p == exit_pos:
+[?2004l[?2004h>                 row.append('E')
+[?2004l[?2004h>             elif p in walls:
+[?2004l[?2004h>                 row.append('#')
+[?2004l[?2004h>             elif p in open_cells:
+[?2004l[?2004h>                 row.append(' ')
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 row.append('#')
+[?2004l[?2004h>         lines.append(''.join(row))
+[?2004l[?2004h> 
+[?2004l[?2004h>     out_path = '/app/maze_map.txt'
+[?2004l[?2004h>     with open(out_path, 'w') as f:
+[?2004l[?2004h>         f.write('\n'.join(lines) + '\n')
+[?2004l[?2004h> 
+[?2004l[?2004h>     print(f'Map written to {out_path}')
+[?2004l[?2004h>     print(f'Dimensions: {max_y - min_y + 1} rows x {max_x - min_x + 1} cols')
+[?2004l[?2004h>     print(f'Open cells: {len(open_cells)}; Walls: {len(walls)}; Exit: {exit_pos}')
+[?2004l[?2004h>     return out_path
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         p = explore()
+[?2004l[?2004h>         print('Done')
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         print('Error:', e)
+[?2004l[?2004h>         sys.exit(1)
+[?2004l[?2004h> PYEOF
+[?2004l[?2004hroot@0514f4298f5f:/app# chmod +x explore_maze.py
+[?2004l[?2004hroot@0514f4298f5f:/app# python3 explore_maze.py
+[?2004lMap written to /app/maze_map.txt
+Dimensions: 5 rows x 5 cols
+Open cells: 7; Walls: 13; Exit: (-2, 1)
+Done
+[?2004hroot@0514f4298f5f:/app# ls -l /app/maze_map.txt
+[?2004l-rw-r--r-- 1 root root 30 Dec  9 22:44 /app/maze_map.txt
+[?2004hroot@0514f4298f5f:/app# head -n 20 /app/maze_map.txt
+[?2004l#####
+# #S#
+#E# #
+#   #
+#####
+[?2004hroot@0514f4298f5f:/app# wc -l -c /app/maze_map.txt
+[?2004l 5 30 /app/maze_map.txt
+[?2004hroot@0514f4298f5f:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@0514f4298f5f:/app# 

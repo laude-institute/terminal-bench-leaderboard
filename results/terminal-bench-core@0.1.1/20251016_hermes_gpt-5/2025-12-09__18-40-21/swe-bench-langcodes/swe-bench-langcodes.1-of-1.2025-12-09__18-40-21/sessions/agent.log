@@ -1,0 +1,306 @@
+[?2004hroot@32978a24b51a:/app/langcodes# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@32978a24b51a:/app/langcodes# clear
+[?2004l[H[J[3J[?2004hroot@32978a24b51a:/app/langcodes# ls -la
+[?2004ltotal 108
+drwxr-xr-x 1 root root  4096 Dec 10 02:33 .
+drwxr-xr-x 1 root root  4096 Dec 10 02:33 ..
+drwxr-xr-x 1 root root  4096 Dec 10 02:33 .git
+drwxr-xr-x 1 root root  4096 Dec 10 02:33 .github
+-rw-r--r-- 1 root root   172 Dec 10 02:33 .gitignore
+-rw-r--r-- 1 root root   343 Dec 10 02:33 .mailmap
+-rw-r--r-- 1 root root  1090 Dec 10 02:33 LICENSE.txt
+-rw-r--r-- 1 root root 28786 Dec 10 02:33 README.md
+-rw-r--r-- 1 root root   581 Dec 10 02:33 SECURITY.md
+drwxr-xr-x 3 root root  4096 Dec 10 02:33 docs
+-rw-r--r-- 1 root root   761 Dec 10 02:33 example.py
+drwxr-xr-x 1 root root  4096 Dec 10 02:33 langcodes
+-rw-r--r-- 1 root root  1345 Dec 10 02:33 pyproject.toml
+-rw-r--r-- 1 root root   114 Dec 10 02:33 renovate.json
+-rw-r--r-- 1 root root   183 Dec 10 02:33 tox.ini
+[?2004hroot@32978a24b51a:/app/langcodes# git status
+[?2004lOn branch main
+nothing to commit, working tree clean
+[?2004hroot@32978a24b51a:/app/langcodes# python3 -V
+[?2004lPython 3.9.25
+[?2004hroot@32978a24b51a:/app/langcodes# grep -n "class Language" -n langcodes/__init__.py
+[?2004l48:class Language:
+[?2004hroot@32978a24b51a:/app/langcodes# grep -n "def __hash__" langcodes/__init__.py
+[?2004l1503:    def __hash__(self) -> int:
+[?2004hroot@32978a24b51a:/app/langcodes# nl -ba langcodes/__init__.py | sed -n '1480,1520p'
+[?2004l  1480	
+  1481	    def _searchable_form(self) -> 'Language':
+  1482	        """
+  1483	        Convert a parsed language tag so that the information it contains is in
+  1484	        the best form for looking up information in the CLDR.
+  1485	        """
+  1486	        if self._searchable is not None:
+  1487	            return self._searchable
+  1488	
+  1489	        self._searchable = (
+  1490	            self._filter_attributes({'language', 'script', 'territory'})
+  1491	            .simplify_script()
+  1492	            .prefer_macrolanguage()
+  1493	        )
+  1494	        return self._searchable
+  1495	
+  1496	    def __eq__(self, other):
+  1497	        if self is other:
+  1498	            return True
+  1499	        if not isinstance(other, Language):
+  1500	            return False
+  1501	        return self._str_tag == other._str_tag
+  1502	
+  1503	    def __hash__(self) -> int:
+  1504	        return hash(id(self))
+  1505	
+  1506	    def __getitem__(self, key: str) -> Optional[Union[str, List[str]]]:
+  1507	        if key in self.ATTRIBUTES:
+  1508	            return getattr(self, key)
+  1509	        else:
+  1510	            raise KeyError(key)
+  1511	
+  1512	    def __contains__(self, key: str) -> bool:
+  1513	        return key in self.ATTRIBUTES and getattr(self, key)
+  1514	
+  1515	    def __repr__(self) -> str:
+  1516	        items = []
+  1517	        for attr in self.ATTRIBUTES:
+  1518	            if getattr(self, attr):
+  1519	                value = getattr(self, attr)
+  1520	                items.append(f'{attr}={value!r}')
+[?2004hroot@32978a24b51a:/app/langcodes# python3 - << 'PY'
+[?2004l[?2004h> from langcodes import Language
+[?2004l[?2004h> import pickle
+[?2004l[?2004h> 
+[?2004l[?2004h> # Check equality/hash consistency before change
+[?2004l[?2004h> print('Same object id?', id(Language.get('en')) == id(Language.get('en')))
+[?2004l[?2004h> print('Same hash?', hash(Language.get('en')) == hash(Language.get('en')))
+[?2004l[?2004h> 
+[?2004l[?2004h> obj = Language.get('en')
+[?2004l[?2004h> with open('test_file', 'wb') as f:
+[?2004l[?2004h>     pickle.dump(obj, f)
+[?2004l[?2004h> with open('test_file', 'rb') as f:
+[?2004l[?2004h>     loaded = pickle.load(f)
+[?2004l[?2004h> print('Loaded is same id?', id(loaded) == id(Language.get('en')))
+[?2004l[?2004h> print('Loaded has same hash?', hash(loaded) == hash(Language.get('en')))
+[?2004l[?2004h> PY
+[?2004lSame object id? True
+Same hash? True
+Loaded is same id? False
+Loaded has same hash? False
+[?2004hroot@32978a24b51a:/app/langcodes# python3 - << 'PY'
+[?2004l[?2004h> import re, sys
+[?2004l[?2004h> from pathlib import Path
+[?2004l[?2004h> p = Path('langcodes/__init__.py')
+[?2004l[?2004h> src = p.read_text()
+[?2004l[?2004h> # Replace the __hash__ method body to return hash(self._str_tag)
+[?2004l[?2004h> src_new = re.sub(
+[?2004l[?2004h>     r"(\n\s*def\s+__hash__\s*\(self\)\s*->\s*int:\s*\n\s*)([\s\S]*?)(\n\s*def\s+)",
+[?2004l[?2004h>     lambda m: f"{m.group(1)}    return hash(self._str_tag)\n\n{m.group(3)}",
+[?2004l[?2004h>     src,
+[?2004l[?2004h>     count=1
+[?2004l[?2004h> )
+[?2004l[?2004h> if src == src_new:
+[?2004l[?2004h>     print('No change applied: __hash__ method not found or already patched.', file=sys.stderr)
+[?2004l[?2004h> else:
+[?2004l[?2004h>     p.write_text(src_new)
+[?2004l[?2004h>     print('Patched __hash__ to return hash(self._str_tag)')
+[?2004l[?2004h> PY
+[?2004lPatched __hash__ to return hash(self._str_tag)
+[?2004hroot@32978a24b51a:/app/langcodes# git diff -- langcodes/__init__.py | sed -n '1,200p'
+[?2004ldiff --git a/langcodes/__init__.py b/langcodes/__init__.py
+index 4d87463..fa4f0ae 100644
+--- a/langcodes/__init__.py
++++ b/langcodes/__init__.py
+@@ -1501,7 +1501,9 @@ class Language:
+         return self._str_tag == other._str_tag
+ 
+     def __hash__(self) -> int:
+-        return hash(id(self))
++            return hash(self._str_tag)
++
++
+ 
+     def __getitem__(self, key: str) -> Optional[Union[str, List[str]]]:
+         if key in self.ATTRIBUTES:
+[?2004hroot@32978a24b51a:/app/langcodes# python3 - << 'PY'
+[?2004l[?2004h> from langcodes import Language
+[?2004l[?2004h> import pickle
+[?2004l[?2004h> 
+[?2004l[?2004h> # Check equality/hash consistency after change
+[?2004l[?2004h> print('Same object id?', id(Language.get('en')) == id(Language.get('en')))
+[?2004l[?2004h> print('Same hash?', hash(Language.get('en')) == hash(Language.get('en')))
+[?2004l[?2004h> 
+[?2004l[?2004h> obj = Language.get('en')
+[?2004l[?2004h> with open('test_file', 'wb') as f:
+[?2004l[?2004h>     pickle.dump(obj, f)
+[?2004l[?2004h> with open('test_file', 'rb') as f:
+[?2004l[?2004h>     loaded = pickle.load(f)
+[?2004l[?2004h> print('Loaded is same id?', id(loaded) == id(Language.get('en')))
+[?2004l[?2004h> print('Loaded has same hash?', hash(loaded) == hash(Language.get('en')))
+[?2004l[?2004h> PY
+[?2004lSame object id? True
+Same hash? True
+Loaded is same id? False
+Loaded has same hash? True
+[?2004hroot@32978a24b51a:/app/langcodes# pytest -q
+[?2004lbash: pytest: command not found
+[?2004hroot@32978a24b51a:/app/langcodes# git add langcodes/__init__.py
+[?2004l[?2004hroot@32978a24b51a:/app/langcodes# git commit -m "Fix Language.__hash__ to be consistent with __eq__ by hashing _str_tag; ensures stable hashes across instances and after pickling"
+[?2004lAuthor identity unknown
+
+*** Please tell me who you are.
+
+Run
+
+  git config --global user.email "you@example.com"
+  git config --global user.name "Your Name"
+
+to set your account's default identity.
+Omit --global to set the identity only in this repository.
+
+fatal: unable to auto-detect email address (got 'root@32978a24b51a.(none)')
+[?2004hroot@32978a24b51a:/app/langcodes# nl -ba langcodes/__init__.py | sed -n '1496,1512p'
+[?2004l  1496	    def __eq__(self, other):
+  1497	        if self is other:
+  1498	            return True
+  1499	        if not isinstance(other, Language):
+  1500	            return False
+  1501	        return self._str_tag == other._str_tag
+  1502	
+  1503	    def __hash__(self) -> int:
+  1504	            return hash(self._str_tag)
+  1505	
+  1506	
+  1507	
+  1508	    def __getitem__(self, key: str) -> Optional[Union[str, List[str]]]:
+  1509	        if key in self.ATTRIBUTES:
+  1510	            return getattr(self, key)
+  1511	        else:
+  1512	            raise KeyError(key)
+[?2004hroot@32978a24b51a:/app/langcodes# python3 - << 'PY'
+[?2004l[?2004h> import re
+[?2004l[?2004h> from pathlib import Path
+[?2004l[?2004h> p = Path('langcodes/__init__.py')
+[?2004l[?2004h> src = p.read_text()
+[?2004l[?2004h> pattern = re.compile(r"\n([ \t]*)def\s+__hash__\s*\(self\)\s*->\s*int:\s*\n(?:[ \t]*[^\n]*\n)*(?:[ \t]*\n)*([ \t]*)def\s+__getitem__")
+[?2004l[?2004h> match = pattern.search(src)
+[?2004l[?2004h> if match:
+[?2004l[?2004h>     indent_hash = match.group(1)
+[?2004l[?2004h>     indent_next = match.group(2)
+[?2004l[?2004h>     replacement = f"\n{indent_hash}def __hash__(self) -> int:\n{indent_hash}    return hash(self._str_tag)\n\n{indent_next}def __getitem__"
+[?2004l[?2004h>     src_new = src[:match.start()] + replacement + src[match.end():]
+[?2004l[?2004h>     p.write_text(src_new)
+[?2004l[?2004h>     print('Cleaned __hash__ method formatting')
+[?2004l[?2004h> else:
+[?2004l[?2004h>     print('Pattern not found; no changes applied')
+[?2004l[?2004h> PY
+[?2004lgit diff -- langcodes/__init__.py | sed -n '1,100p'
+python3 - << 'PY'
+from langcodes import Language
+import pickle
+print('Same object id?', id(Language.get('en')) == id(Language.get('en')))
+print('Same hash?', hash(Language.get('en')) == hash(Language.get('en')))
+obj = Language.get('en')
+with open('test_file', 'wb') as f:
+    pickle.dump(obj, f)
+with open('test_file', 'rb') as f:
+    loaded = pickle.load(f)
+print('Loaded is same id?', id(loaded) == id(Language.get('en')))
+print('Loaded has same hash?', hash(loaded) == hash(Language.get('en')))
+PY
+git config user.name "Automation"
+git config user.email "automation@example.com"
+git add langcodes/__init__.py
+git commit -m "Fix Language.__hash__ to hash _str_tag for consistency with __eq__; ensures stable hashes across instances and after pickling"
+nl -ba langcodes/__init__.py | sed -n '1490,1515p'
+python3 - << 'PY'
+from pathlib import Path
+import re
+p = Path('langcodes/__init__.py')
+s = p.read_text()
+lines = s.splitlines(keepends=True)
+start = None
+for i, line in enumerate(lines):
+    if re.match(r'^\s*def\s+__hash__\s*\(self\)\s*->\s*int\s*:', line):
+        start = i
+        break
+if start is None:
+    print('No __hash__ found')
+else:
+    indent = re.match(r'^(\s*)', lines[start]).group(1)
+    end = start + 1
+    while end < len(lines):
+        if lines[end].startswith(indent) and re.match(r'^\s*def\s+\w', lines[end]):
+            break
+        end += 1
+    new_block = [f"{indent}def __hash__(self) -> int:\n", f"{indent}    return hash(self._str_tag)\n", "\n"]
+    lines[start:end] = new_block
+    p.write_text(''.join(lines))
+    print(f'Patched __hash__ block lines {start+1}-{end}')
+PY
+git diff -- langcodes/__init__.py | sed -n '1,120p'
+python3 - << 'PY'
+from langcodes import Language
+import pickle
+print('Same object id?', id(Language.get('en')) == id(Language.get('en')))
+print('Same hash?', hash(Language.get('en')) == hash(Language.get('en')))
+obj = Language.get('en')
+with open('test_file', 'wb') as f:
+    pickle.dump(obj, f)
+with open('test_file', 'rb') as f:
+    loaded = pickle.load(f)
+print('Loaded is same id?', id(loaded) == id(Language.get('en')))
+print('Loaded has same hash?', hash(loaded) == hash(Language.get('en')))
+PY
+git config user.name "Automation"
+git config user.email "automation@example.com"
+git add langcodes/__init__.py
+git commit -m "Fix Language.__hash__ to hash _str_tag for consistency with __eq__, ensuring stable hashes across instances and after pickling"
+git --no-pager log --oneline -n 1
+nl -ba langcodes/__init__.py | sed -n '1490,1515p'
+python3 - << 'PY'
+from pathlib import Path
+import re
+p = Path('langcodes/__init__.py')
+s = p.read_text()
+lines = s.splitlines(keepends=True)
+start = None
+for i, line in enumerate(lines):
+    if re.match(r'^\s*def\s+__hash__\s*\(self\)\s*->\s*int\s*:', line):
+        start = i
+        break
+if start is None:
+    print('No __hash__ found')
+else:
+    indent = re.match(r'^(\s*)', lines[start]).group(1)
+    end = start + 1
+    while end < len(lines):
+        if lines[end].startswith(indent) and re.match(r'^\s*def\s+\w', lines[end]):
+            break
+        end += 1
+    new_block = [f"{indent}def __hash__(self) -> int:\n", f"{indent}    return hash(self._str_tag)\n", "\n"]
+    lines[start:end] = new_block
+    p.write_text(''.join(lines))
+    print(f'Patched __hash__ block lines {start+1}-{end}')
+PY
+git diff -- langcodes/__init__.py | sed -n '1,120p'
+python3 - << 'PY'
+from langcodes import Language
+import pickle
+print('Same object id?', id(Language.get('en')) == id(Language.get('en')))
+print('Same hash?', hash(Language.get('en')) == hash(Language.get('en')))
+obj = Language.get('en')
+with open('test_file', 'wb') as f:
+    pickle.dump(obj, f)
+with open('test_file', 'rb') as f:
+    loaded = pickle.load(f)
+print('Loaded is same id?', id(loaded) == id(Language.get('en')))
+print('Loaded has same hash?', hash(loaded) == hash(Language.get('en')))
+PY
+git config user.name "Automation"
+git config user.email "automation@example.com"
+git add langcodes/__init__.py
+git commit -m "Fix Language.__hash__ to hash _str_tag for consistency 

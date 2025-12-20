@@ -1,0 +1,1440 @@
+root@3e645689496f:/app# python3 - << 'PY'
+> import sys, json, os
+> print('Checking Python version:', sys.version)
+> PY
+Checking Python version: 3.13.1 (main, Jan 14 2025, 02:51:49) [GCC 12.2.0]
+root@3e645689496f:/app# pip -q install --no-input --upgrade datasets transformers huggingface_hub tokenizers
+python3 - << 'PY'
+from huggingface_hub import hf_hub_download
+import os, textwrap
+repo = 'open-thoughts/OpenThoughts-114k'
+readme_path = hf_hub_download(repo_id=repo, filename='README.md')
+print('README path:', readme_path)
+with open(readme_path, 'r', encoding='utf-8', errors='ignore') as f:
+    readme = f.read()
+# Print first 4000 chars to inspect
+print(readme[:4000])
+PY
+python3 - << 'PY'
+from datasets import get_dataset_config_names, get_dataset_split_names, load_dataset
+repo = 'open-thoughts/OpenThoughts-114k'
+try:
+    configs = get_dataset_config_names(repo)
+    print('Configs:', configs)
+except Exception as e:
+    print('get_dataset_config_names error:', e)
+    configs = []
+try:
+    print('Default split names:', get_dataset_split_names(repo))
+except Exception as e:
+    print('get_dataset_split_names error:', e)
+# Load small head to inspect features
+ds = load_dataset(repo, split='train', streaming=True)
+first = next(iter(ds))
+print('Sample keys:', list(first.keys()))
+for k,v in first.items():
+    if isinstance(v, str):
+        print(f'Field {k} (len={len(v)}):', v[:200].replace('\n',' '))
+    else:
+        print(f'Field {k}:', type(v), v)
+PY
+python3 - << 'PY'
+import re
+from huggingface_hub import hf_hub_download
+from datasets import load_dataset
+from transformers import AutoTokenizer
+repo = 'open-thoughts/OpenThoughts-114k'
+# Decide target text field and domain key by heuristics + README hints
+# Load README for guidance
+readme_path = hf_hub_download(repo_id=repo, filename='README.md')
+with open(readme_path, 'r', encoding='utf-8', errors='ignore') as f:
+    readme = f.read()
+print('Parsing README to guess field/domain...')
+field = None
+domain_key = None
+# Naive guesses from common dataset schemas
+candidates = ['thought', 'cot', 'response', 'answer', 'output', 'text', 'content']
+domain_candidates = ['domain', 'category', 'topic', 'subject']
+# Peek at streaming sample to find keys
+sample = next(iter(load_dataset(repo, split='train', streaming=True)))
+keys = list(sample.keys())
+print('Available keys:', keys)
+for dk in domain_candidates:
+    if dk in keys:
+        domain_key = dk
+        break
+for c in candidates:
+    if c in keys:
+        field = c
+        break
+# If both prompt and response exist and README mentions thoughts, prefer 'thought' or 'cot'
+if ('thought' in keys) and field != 'thought':
+    field = 'thought'
+# Fall back to 'response' if no dedicated thought
+if field is None:
+    for alt in ['response', 'output', 'text', 'content']:
+        if alt in keys:
+            field = alt
+            break
+# Some datasets use 'instruction' and 'response', we might count only the 'thought' per README; we'll refine below
+# Try to detect if science domain is a config
+science_is_config = False
+try:
+    from datasets import get_dataset_config_names
+    cfgs = get_dataset_config_names(repo)
+    science_is_config = ('science' in cfgs)
+    print('Configs:', cfgs)
+except Exception as e:
+    print('Config check error:', e)
+print('Initial guess - field:', field, 'domain_key:', domain_key, 'science_is_config:', science_is_config)
+# Inspect README text for hints
+if re.search(r'\bscience\b', readme, re.I):
+    lines = [l for l in readme.splitlines() if re.search(r'(?i)domain|science|token', l)]
+    print('README hints around domain/science/token:')
+    for l in lines[:30]:
+        print('  ', l)
+# Initialize tokenizer
+model_id = 'Qwen/Qwen2.5-1.5B-Instruct'
+from transformers import AutoTokenizer
+tok = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+# Build iterator over examples restricted to science domain
+if science_is_config:
+    ds = load_dataset(repo, name='science', split='train', streaming=True)
+else:
+    ds = load_dataset(repo, split='train', streaming=True)
+    if domain_key is None:
+        # Try to infer domain key by examining sample for likely value containing 'science'
+        domain_key = None
+        for k in keys:
+            v = sample.get(k)
+            if isinstance(v, str) and 'science' in v.lower():
+                domain_key = k
+                break
+    if domain_key is None:
+        print('EWARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly ren
+dering your system unusable.It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you
+know what you are doing and want to suppress this warning.
+
+[notice] A new release of pip is available: 24.3.1 -> 25.3
+[notice] To update, run: pip install --upgrade pip
+root@3e645689496f:/app# python3 - << 'PY'
+> from huggingface_hub import hf_hub_download
+> import os, textwrap
+> repo = 'open-thoughts/OpenThoughts-114k'
+> readme_path = hf_hub_download(repo_id=repo, filename='README.md')
+> print('README path:', readme_path)
+> with open(readme_path, 'r', encoding='utf-8', errors='ignore') as f:
+>     readme = f.read()
+> # Print first 4000 chars to inspect
+> print(readme[:4000])
+> PY
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/utils/_http.py", line 402, in hf_raise_for_status
+    response.raise_for_status()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/site-packages/requests/models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 401 Client Error: Unauthorized for url: https://huggingface.co/open-thoughts/OpenThoughts-114k/resolve/main/README.md
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<stdin>", line 4, in <module>
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/utils/_validators.py", line 114, in _inner_fn
+    return fn(*args, **kwargs)
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 1007, in hf_hub_download
+    return _hf_hub_download_to_cache_dir(
+        # Destination
+    ...<14 lines>...
+        force_download=force_download,
+    )
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 1114, in _hf_hub_download_to_cache_dir
+    _raise_on_head_call_error(head_call_error, force_download, local_files_only)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 1655, in _raise_on_head_call_error
+    raise head_call_error
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 1543, in _get_metadata_or_catch_error
+    metadata = get_hf_file_metadata(
+        url=url, proxies=proxies, timeout=etag_timeout, headers=headers, token=token, endpoint=endpoint
+    )
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/utils/_validators.py", line 114, in _inner_fn
+    return fn(*args, **kwargs)
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 1460, in get_hf_file_metadata
+    r = _request_wrapper(
+        method="HEAD",
+    ...<5 lines>...
+        timeout=timeout,
+    )
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 283, in _request_wrapper
+    response = _request_wrapper(
+        method=method,
+    ...<2 lines>...
+        **params,
+    )
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 307, in _request_wrapper
+    hf_raise_for_status(response)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/utils/_http.py", line 452, in hf_raise_for_status
+    raise _format(RepositoryNotFoundError, message, response) from e
+huggingface_hub.errors.RepositoryNotFoundError: 401 Client Error. (Request ID: Root=1-6938b92a-0e4c614439d2856834bde01c;0e16397a-48cb-4768-a971-bac1ce0296f2)
+
+Repository Not Found for url: https://huggingface.co/open-thoughts/OpenThoughts-114k/resolve/main/README.md.
+Please make sure you specified the correct `repo_id` and `repo_type`.
+If you are trying to access a private or gated repo, make sure you are authenticated. For more details, see https://huggingface.co/docs/huggingface_hub/authenti
+cation
+Invalid username or password.
+root@3e645689496f:/app# python3 - << 'PY'
+> from datasets import get_dataset_config_names, get_dataset_split_names, load_dataset
+> repo = 'open-thoughts/OpenThoughts-114k'
+> try:
+>     configs = get_dataset_config_names(repo)
+>     print('Configs:', configs)
+> except Exception as e:
+>     print('get_dataset_config_names error:', e)
+>     configs = []
+> try:
+>     print('Default split names:', get_dataset_split_names(repo))
+> except Exception as e:
+>     print('get_dataset_split_names error:', e)
+> # Load small head to inspect features
+> ds = load_dataset(repo, split='train', streaming=True)
+> first = next(iter(ds))
+> print('Sample keys:', list(first.keys()))
+> for k,v in first.items():
+>     if isinstance(v, str):
+>         print(f'Field {k} (len={len(v)}):', v[:200].replace('\n',' '))
+>     else:
+>         print(f'Field {k}:', type(v), v)
+> PY
+README.md: 8.96kB [00:00, 34.0MB/s]
+Configs: ['default', 'metadata']
+Default split names: ['train']
+Sample keys: ['system', 'conversations']
+Field system (len=1312): Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the final
+ precise and accurate solutions. This requires engaging in a comp
+Field conversations: <class 'list'> [{'from': 'user', 'value': 'Generate an executable Python function generated from the given prompt. The function should take
+ stdin as input and print the output. Simply call the function after the definition.The Chef likes to stay in touch with his staff. So, the Chef, the head serve
+r, and the sous-chef all carry two-way transceivers so they can stay in constant contact. Of course, these transceivers have a limited range so if two are too f
+ar apart, they cannot communicate directly.\n\n\nThe Chef invested in top-of-the-line transceivers which have a few advanced features. One is that even if two p
+eople cannot talk directly because they are out of range, if there is another transceiver that is close enough to both, then the two transceivers can still comm
+unicate with each other using the third transceiver as an intermediate device.\n\n\nThere has been a minor emergency in the Chef\'s restaurant\nand he needs to
+communicate with both the head server and the sous-chef right away. Help the Chef determine if it is possible for all three people to communicate with each othe
+r, even if two must communicate through the third because they are too far apart.\n\n\nInput\n\nThe first line contains a single positive integer T ≤ 100 indica
+ting the number of test cases to follow. The first line of each test case contains a positive integer R ≤ 1,000 indicating that two transceivers can communicate
+ directly without an intermediate transceiver if they are at most R meters away from each other. The remaining three lines of the test case describe the current
+ locations of the Chef, the head server, and the sous-chef, respectively. Each such line contains two integers X,Y (at most 10,000 in absolute value) indicating
+ that the respective person is located at position X,Y.\n\n\nOutput\n\nFor each test case you are to output a single line containing a single string. If it is p
+ossible for all three to communicate then you should output "yes". Otherwise, you should output "no".\n\n\nTo be clear, we say that two transceivers are close e
+nough to communicate directly if the length of the straight line connecting their X,Y coordinates is at most R.\n\n\nExample\n\nInput:\n3\n1\n0 1\n0 0\n1 0\n2\n
+0 1\n0 0\n1 0\n2\n0 0\n0 2\n2 1\n\n\nOutput:\nyes\nyes\nno\n'}, {'from': 'assistant', 'value': '<|begin_of_thought|>\n\nOkay, let\'s see. I need to solve this p
+roblem where three people (Chef, head server, sous-chef) have transceivers that can communicate directly if within R meters. If not, but there\'s a third person
+ acting as a bridge, then they can still communicate. The goal is to check if all three can communicate with each other, possibly through the third.\n\nHmm. So
+for each test case, given R and three points, determine if the three form a connected graph where each pair is either directly connected (distance <= R) or conn
+ected via the third.\n\nWait, but how exactly? Let\'s think. The communication can go through one intermediary. So all three must be in a chain where each conse
+cutive pair is within R, or perhaps any two are connected via a path through the third.\n\nWait, the problem says: if two can\'t talk directly but there\'s a th
+ird that is close enough to both, then they can communicate through that third. So the communication graph must be connected. But the three people can form a tr
+iangle where each is connected to the others directly, or there\'s a central node that connects the other two.\n\nSo the condition is that all three can communi
+cate with each other, possibly through one another. So the overall structure must allow for any two of them to communicate, either directly or via the third.\n\
+nBut how do I model this? Let\'s think in terms of possible scenarios where the three can communicate:\n\nCase 1: All three are pairwise within R. Then yes.\n\n
+Case 2: Two pairs are within R. For example, Chef to head server is within R, head server to sous-chef is within R. Then Chef and sous-chef can communicate thro
+ugh the head server. So all three can communicate.\n\nCase 3: Only one pair is within R, but the third is connected to both via that pair. Wait, no. For example
+, Chef and head server are within R. Chef and sous-chef are not. Head server and sous-chef are not. Then can the sous-chef communicate with Chef through the hea
+d server? Well, sous-chef would need to be within R of the head server, but that\'s not the case here. Wait, no. So if the head server is connected to Chef (dis
+tance <= R), and sous-chef is connected to the head server (distance <= R), then yes. But if the sous-chef is connected to neither, but connected via the Chef a
+nd head server? No. Wait, no. Because if the sous-chef is only connected to the Chef, but the Chef is connected to the head server, then sous-chef can communica
+te with the head server via Chef. But all three would need to form a connected graph.\n\nWait, perhaps the correct approach is to model the three points as a gr
+aph where edges exist between pairs if their distance is <= R. Then, check if the graph is connected. If the graph is connected, then all three can communicate.
+\n\nYes, that\'s right. Because if the graph is connected, then all nodes are reachable via some path. For three nodes, the possible connected graphs are:\n\n-
+All three nodes connected directly (triangle).\n- A chain (A connected to B, B connected to C). Then A and C can communicate via B.\n\nSo for the problem, we ne
+ed to check if the three points form a connected graph in this sense.\n\nSo the steps for each test case would be:\n\n1. Calculate the pairwise distances betwee
+n all three points.\n2. For each pair, determine if the distance is <= R. If yes, that pair is connected.\n3. Then check if the graph formed by these edges is c
+onnected. If yes, output \'yes\', else \'no\'.\n\nBut how to check if the graph is connected with three nodes?\n\nWell, for three nodes, the graph is connected
+if there\'s at least two edges such that all three are connected. For example:\n\nIf there are two edges (A-B and B-C), then connected. If all three have edges
+(A-B, B-C, A-C), connected. If two edges (A-B and A-C), connected.\n\nAlternatively, if there\'s at least two edges and they form a connected structure. So anot
+her approach is to check if all three are reachable via the edges.\n\nBut with three nodes, perhaps it\'s easier to check all possible conditions.\n\nAlternativ
+ely, for three nodes, the graph is connected if:\n\nEither all three are connected (each pair has an edge), or there are two edges that connect all three (like
+a chain), or any two edges that form a connected graph.\n\nWait, in three nodes, the graph is connected if:\n\n- There are at least two edges, and the edges for
+m a path that connects all three.\n\nAlternatively, the connected graph can be checked by seeing if any one node can reach the other two via the edges.\n\nBut p
+erhaps for three nodes, it\'s easier to check all possible possibilities.\n\nSo possible scenarios where the graph is connected:\n\n1. All three pairs have dist
+ance <= R. So all three edges exist. Then yes.\n\n2. Exactly two edges exist, and they form a chain. For example, A connected to B, B connected to C. Then A can
+ reach C via B. So yes.\n\n3. Exactly one edge exists. Then only two nodes are connected, the third is isolated. So the graph is disconnected. So no.\n\n4. If t
+wo edges exist but not forming a chain, like A connected to B, A connected to C. Then the graph is connected. Because B and C can communicate through A.\n\nSo i
+n this case, if any two of the three pairs are connected, and there exists a third node that connects to at least one of them, then the graph is connected.\n\nW
+ait, no. Let\'s think: if A is connected to B and A is connected to C, then B can reach C through A. So the graph is connected.\n\nSo for three nodes, the graph
+ is connected if the number of edges is >=2, and the edges are such that all three are connected. Which for three nodes, if there are two edges, then it\'s poss
+ible to have a connected graph.\n\nSo the possible conditions for the graph to be connected are:\n\n- There are at least two edges, and all three nodes are conn
+ected via those edges.\n\nWhich can be checked by:\n\nEither:\n\n- All three nodes are connected via their edges (i.e., the edges form a triangle or a chain).\n
+\nAlternatively, for three nodes, the graph is connected if there exists a path between every pair of nodes. But with three nodes, that\'s possible if the graph
+ is a triangle, a chain, or any two edges.\n\nWait, perhaps the easiest way is to check if all three nodes are in the same connected component.\n\nHow to comput
+e that for three nodes?\n\nWell, let\'s see. For three nodes, there are three possible pairs: AB, BC, CA.\n\nWe can represent the edges as a graph, then check i
+f all three nodes are reachable from each other.\n\nBut for three nodes, the connectedness can be determined by checking if the union of the edges connects all
+three.\n\nBut maybe it\'s easier to consider the possible cases:\n\nCase 1: All three pairs are within R. Then connected.\n\nCase 2: Exactly two pairs are withi
+n R. Then check if the two edges form a connected graph.\n\nFor example, if AB and BC are connected: then the graph is connected.\n\nIf AB and AC are connected:
+ then the graph is connected (since B and C can communicate via A).\n\nIf AB and CA are connected: same as above.\n\nCase 3: Exactly one pair is within R. Then
+the third node is disconnected, so no.\n\nCase 4: None of the pairs are within R. Then no.\n\nSo for the code, perhaps the steps are:\n\nFor each test case:\n\n
+1. Read R.\n\n2. Read the three points (A, B, C).\n\n3. Compute the pairwise distances between A-B, B-C, C-A.\n\n4. For each pair, determine if the distance is
+<= R. So check AB <= R, BC <= R, CA <= R.\n\n5. Now, check if the three nodes form a connected graph.\n\nThe connected graph is possible if:\n\nEither:\n\n- All
+ three pairs are connected (AB, BC, CA all <= R). Then yes.\n\nOR\n\n- Any two pairs are connected, and they share a common node (so forming a triangle or a cha
+in). For example, AB and BC connected (sharing B), AB and AC connected (sharing A), etc.\n\nOR\n\n- All three can communicate through a central node. For exampl
+e, AB and AC are connected (A is the central node), so B and C can communicate via A. So in this case, the graph is connected.\n\nAlternatively, if two pairs ar
+e connected and those two pairs share a node (so the central node), then the graph is connected.\n\nSo for two edges:\n\nIf two edges share a common node (like
+AB and AC), then connected.\n\nIf the two edges are AB and BC, then connected (chain).\n\nBut if two edges are AB and CA, then it\'s possible. Wait, AB is betwe
+en A and B. CA is between C and A. So A is connected to both B and C. So B and C can communicate via A. So yes.\n\nSo any two edges in the three-node graph will
+ form a connected graph, because with three nodes, two edges must share at least one node (since there are three possible edges). Wait, no. For example, AB and
+BC: two edges, share B. AB and AC: two edges, share A. AB and CA: AB is A-B, CA is C-A. So A is connected to B and C. So all three are connected.\n\nBut what if
+ two edges are AB and CD (but CD is not part of our three nodes). Wait, no, the three nodes are A, B, C. So any two edges must be between pairs of these three.\
+n\nSo, in three nodes, any two edges will form a connected graph. Because in three nodes, two edges can\'t form two separate edges that are not connected. Let m
+e think: for example, if the edges are AB and BC: connected. If edges are AB and AC: connected. What if edges are AB and CD? Not possible. So in three nodes, tw
+o edges will always form a connected graph. Because the two edges have to connect two pairs, but given that there are three nodes, two edges must form a chain o
+r a fork.\n\nWait, three nodes, two edges. The possible combinations are:\n\n- AB and BC: forms a chain A-B-C. Connected.\n\n- AB and AC: forms a fork (A connec
+ted to B and C). B and C can communicate via A. Connected.\n\n- AB and CD: but CD is not a pair of the three nodes. So no, that\'s not possible.\n\nSo yes, for
+three nodes, if there are two edges, the graph is connected. So the graph is connected if there are two or three edges.\n\nWait, what if there are two edges bet
+ween AB and BC: yes, connected. If two edges between AB and AC: connected. If two edges between AB and BC: connected. So yes, any two edges in three nodes will
+form a connected graph.\n\nSo the condition is:\n\nIf the number of edges (each edge is a pair with distance <= R) is >= 2, then the graph is connected.\n\nOR\n
+\nIf the graph has two edges, then connected.\n\nWait, but what about three nodes with two edges: AB and BC. So A is connected to B, B connected to C. Then the
+graph is connected. So yes.\n\nIf two edges are AB and CD (but that\'s not possible here). So in our problem, the three nodes are A, B, C. So any two edges must
+ be between two of these three.\n\nSo, the conclusion is that for three nodes, the graph is connected if:\n\nThe number of edges (edges where distance <= R) is
+>= 2.\n\nWait, no. Wait, if two edges are AB and BC, then yes. If two edges are AB and AC, then yes. But what if two edges are AB and CD (but CD is not part of
+the nodes). So for our problem, since the nodes are A, B, C, the edges can only be AB, BC, CA.\n\nSo, for three nodes, if there are two edges, the graph is conn
+ected.\n\nBecause any two edges must connect all three nodes. For example:\n\nAB and BC: A connected to B connected to C. All three connected.\n\nAB and AC: A i
+s connected to B and C, so B and C can communicate through A.\n\nAB and CA: same as AB and AC.\n\nBC and CA: B connected to C connected to A. So all three conne
+cted.\n\nSo in all cases, two edges in three nodes form a connected graph.\n\nSo the condition for the graph being connected is:\n\nIf the number of edges (AB,
+BC, CA) with distance <= R is >= 2.\n\nOR if there\'s at least one edge that connects all three.\n\nWait, but what if there\'s exactly two edges, but they are A
+B and BC. Then all three are connected. If there are two edges AB and AC, then all three are connected.\n\nSo the conclusion is that for three nodes, the graph
+is connected if the number of edges (distance <= R) is >= 2, OR there exists at least two edges that form a connected structure.\n\nWait, but with two edges, it
+\'s always connected. So in that case, the answer is yes.\n\nBut what if there\'s only one edge? Then two nodes are connected, the third is not. So the graph is
+ disconnected.\n\nSo the possible scenarios where the answer is \'yes\' are:\n\nEither:\n\n- All three are connected (three edges).\n\nOR\n\n- Two edges (so two
+ pairs are connected, but in any configuration).\n\nOR\n\n- One edge and another edge that connects the third via the other. Wait, no. If there\'s only one edge
+, then the third node is isolated.\n\nSo the answer is \'yes\' if:\n\nThe three nodes form a connected graph, which for three nodes is equivalent to:\n\nAt leas
+t two of the three possible edges exist.\n\nOR\n\nOne of the nodes is connected to both of the other two, even if those two are not connected directly.\n\nWait,
+ no. Because if node A is connected to B and C (two edges), but B and C are not connected. Then all three can communicate via A. So in this case, the graph is c
+onnected. So two edges (AB and AC) are sufficient.\n\nSo yes, the code can check if the number of edges is >=2. Because two edges in three nodes will form a con
+nected graph.\n\nWait, but what about if two edges are AB and BC. Then that\'s two edges, and the graph is connected. If two edges are AB and AC, the graph is c
+onnected. So any two edges in three nodes will form a connected graph.\n\nSo the condition is: if the number of edges (distance <= R) is >=2, then output \'yes\
+'. Otherwise, output \'no\'.\n\nWait, but there\'s another possibility. Suppose that all three pairs are not connected (all distances > R). Then output \'no\'.\
+n\nIf exactly one edge exists, then two nodes are connected, third is isolated. So output \'no\'.\n\nIf two edges exist, output \'yes\'.\n\nIf three edges exist
+, output \'yes\'.\n\nSo the logic is:\n\ncount = number of pairs with distance <= R.\n\nif count >= 2: output \'yes\'\n\nelse: output \'no\'\n\nIs that correct?
+\n\nWait, let\'s test with the examples.\n\nFirst example input:\n\n3\n1\n0 1\n0 0\n1 0\n\nSo R=1.\n\nPoints:\n\nChef is (0,1), head server (0,0), sous-chef (1,
+0).\n\nCompute distances:\n\nChef to head: sqrt((0-0)^2 + (1-0)^2) = 1. So <=1. So edge exists.\n\nHead to sous-chef: sqrt( (0-1)^2 + (0-0)^2 ) = 1. Edge exists
+.\n\nSous-chef to Chef: sqrt( (0-1)^2 + (1-0)^2 ) = sqrt(2) ≈1.414>1. So edge does not exist.\n\nSo edges are AB and BC (count=2). So count >=2 → output yes.\n\
+nWhich matches the first test case\'s output.\n\nSecond test case:\n\nR=2.\n\nSame points.\n\nChef to head: 1 <=2 → edge exists.\n\nHead to sous-chef: 1 <=2 → e
+dge exists.\n\nSous-chef to Chef: sqrt(2) ≈1.414 <=2 → yes. So three edges. Count=3 → output yes. Which matches the sample.\n\nThird test case:\n\nR=2.\n\nChef
+at (0,0), head at (0,2), sous-chef at (2,1).\n\nCompute distances:\n\nChef to head: sqrt( (0-0)^2 + (0-2)^2 ) = 2 → which is <=2. Edge exists.\n\nHead to sous-c
+hef: sqrt( (0-2)^2 + (2-1)^2 ) = sqrt(4+1)=sqrt(5)≈2.236>2 → no edge.\n\nSous-chef to Chef: sqrt( (0-2)^2 + (0-1)^2 ) = sqrt(4+1) = sqrt(5) >2 → no edge.\n\nSo
+edges are AB. Count=1. So output no. Which matches the third test case.\n\nSo the logic seems to work.\n\nAnother test case: two edges. Suppose Chef is connecte
+d to head and sous-chef. Then count=2. So output yes.\n\nAnother case: two edges. Suppose Chef connected to head, and sous-chef connected to Chef. Then count=2.
+ Output yes.\n\nSo the code can check whether the number of edges (distance <= R) is at least two. If yes, output yes. Else, no.\n\nBut wait, what if two edges
+are AB and AC. Then count=2. Output yes.\n\nYes. Because A can act as a bridge between B and C.\n\nSo the code can proceed as follows:\n\nFor each test case:\n\
+n1. Read R.\n\n2. Read three points.\n\n3. Compute the three pairwise distances.\n\n4. For each pair, check if distance <= R. Increment count for each such pair
+.\n\n5. If count >=2, output yes. Else, no.\n\nBut wait, is there any case where count >=2 but the graph is not connected?\n\nWait, suppose there are two edges,
+ but they are AB and CD (but CD is not part of the nodes). But that\'s impossible here. All edges are between the three nodes.\n\nSo with three nodes, two edges
+ will always form a connected graph. So the count >=2 implies the graph is connected.\n\nSo yes, the code can be written as:\n\nif number of edges (pairs with d
+istance <= R) >=2 → yes else no.\n\nBut wait, let\'s think of a case where there are two edges, but the third node is not connected to either.\n\nWait, for exam
+ple:\n\nThree nodes A, B, C.\n\nEdges AB and BC. So A is connected to B, B connected to C. So all three are connected. So yes.\n\nAnother example: edges AB and
+AC. So A is connected to B and C. So all three are connected.\n\nSo no way to have two edges and a disconnected graph.\n\nThus, the code can safely check if the
+ count of edges (pairs with distance <= R) is >=2. If yes, output yes, else no.\n\nSo the code can be written as:\n\nFor each test case:\n\nCalculate the three
+pairwise distances.\n\nCheck each pair.\n\nIf two or more pairs have distance <= R → yes.\n\nElse → no.\n\nSo that\'s the approach.\n\nNow, code steps:\n\nRead
+T test cases.\n\nFor each test case:\n\nRead R.\n\nRead three lines, each line has X and Y for Chef, head, sous-chef.\n\nCompute the three pairs: Chef-head, hea
+d-sous, sous-chef.\n\nFor each pair, compute the distance squared, compare to R squared (to avoid floating point operations).\n\nWait, but the problem says the
+distance should be <= R. So for example, if the distance is exactly R, it\'s allowed.\n\nSo for each pair (x1,y1) and (x2,y2):\n\ndx = x1 - x2\n\ndy = y1 - y2\n
+\ndistance squared is dx*dx + dy*dy.\n\nIf distance squared <= R*R → yes for that pair.\n\nSo this avoids floating point inaccuracies.\n\nSo code steps:\n\nFor
+each pair:\n\nCalculate dx = x1 - x2\n\ndy = y1 - y2\n\ndist_sq = dx*dx + dy*dy\n\nif dist_sq <= R_squared (R is given, so R_squared = R*R)\n\nThen count +=1.\n
+\nThen, if the total count >=2 → yes else no.\n\nSo code in Python:\n\nRead T.\n\nFor each T times:\n\nRead R.\n\nRead three lines for the three points.\n\nComp
+ute all three pairs.\n\nCheck how many pairs have distance squared <= R^2.\n\nIf >=2 → yes else no.\n\nWait, but the three pairs are Chef and head, head and sou
+s, sous and Chef.\n\nWait, the three pairs are:\n\nChef (A) and head (B) → AB.\n\nHead (B) and sous (C) → BC.\n\nSous (C) and Chef (A) → CA.\n\nSo for each test
+ case, three pairs.\n\nSo code:\n\nRead T.\n\nFor each T:\n\nR = int(input())\n\nA = list(map(int, input().split()))\nB = list(map(int, input().split()))\nC = l
+ist(map(int, input().split()))\n\ncount = 0\n\n# AB\ndx = A[0] - B[0]\ndy = A[1] - B[1]\ndist_sq_ab = dx*dx + dy*dy\nif dist_sq_ab <= R*R:\n    count +=1\n\n# B
+C\ndx = B[0] - C[0]\ndy = B[1] - C[1]\ndist_sq_bc = dx*dx + dy*dy\nif dist_sq_bc <= R*R:\n    count +=1\n\n# CA\ndx = C[0] - A[0]\ndy = C[1] - A[1]\ndist_sq_ca
+= dx*dx + dy*dy\nif dist_sq_ca <= R*R:\n    count +=1\n\nif count >=2:\n    print("yes")\nelse:\n    print("no")\n\nWait, but what if two pairs are connected, b
+ut not all three. For example, AB and BC are connected, but CA is not. So count is 2 → yes. Which is correct.\n\nAnother example: AB and AC are connected. So co
+unt is 2 → yes. Then, all three can communicate through A.\n\nYes.\n\nAnother case: all three pairs are connected. Count is 3 → yes.\n\nSo this code should hand
+le all cases.\n\nTesting the sample input:\n\nSample input:\n\n3\n1\n0 1 → A\n0 0 → B\n1 0 → C\n\nFor AB: (0-0)^2 + (1-0)^2 = 1 → 1 <= 1 → yes. count=1.\n\nBC:
+(0-1)^2 + (0-0)^2 → 1 → yes. count=2.\n\nCA: (0-1)^2 + (1-0)^2 → 2 → 2>1 → no. So count is 2 → yes.\n\nSample output is yes.\n\nSecond test case:\n\nR=2.\n\nSam
+e points.\n\nAB: 1 <=4 → yes. count=1.\n\nBC: 1 <=4 → yes. count=2.\n\nCA: 2 <=4 → yes. count=3 → yes.\n\nThird test case:\n\nR=2.\n\nA (0,0), B(0,2), C(2,1).\n
+\nAB: (0-0)^2 + (0-2)^2 =4 → 4 <=4 → yes. count=1.\n\nBC: (0-2)^2 + (2-1)^2 →4+1=5>4 → no.\n\nCA: (2-0)^2 + (1-0)^2 =4+1=5>4 → no. So count=1 → output no.\n\nWh
+ich matches the sample.\n\nSo this code should work.\n\nNow, code structure:\n\nThe function needs to read from stdin and print the output. So the code can be w
+ritten as:\n\nRead T.\n\nLoop T times:\n\nRead R.\n\nRead three lines for the three points.\n\nCompute the three distances squared.\n\nCheck how many are <= R s
+quared.\n\nIf count >=2 → yes, else no.\n\nThus, the code can be written as a function that reads input and outputs as per the problem.\n\nSo the code would loo
+k like:\n\ndef main():\n    import sys\n    input = sys.stdin.read().split()\n    ptr = 0\n    T = int(input[ptr])\n    ptr +=1\n    for _ in range(T):\n
+ R = int(input[ptr])\n        ptr +=1\n        A = list(map(int, input[ptr:ptr+2]))\n        ptr +=2\n        B = list(map(int, input[ptr:ptr+2]))\n        ptr
++=2\n        C = list(map(int, input[ptr:ptr+2]))\n        ptr +=2\n        count = 0\n        # AB\n        dx = A[0] - B[0]\n        dy = A[1] - B[1]\n
+ if dx*dx + dy*dy <= R*R:\n            count +=1\n        # BC\n        dx = B[0] - C[0]\n        dy = B[1] - C[1]\n        if dx*dx + dy*dy <= R*R:\n
+  count +=1\n        # CA\n        dx = C[0] - A[0]\n        dy = C[1] - A[1]\n        if dx*dx + dy*dy <= R*R:\n            count +=1\n        print("yes" if c
+ount >=2 else "no")\n\nmain()\n\nBut the problem says that the function should take stdin as input and print the output. So the code reads from stdin, processes
+, and prints.\n\nYes.\n\nThis should handle all cases correctly.\n\nAnother test case: where two pairs are connected but through a third.\n\nFor example:\n\nR=5
+.\n\nA (0,0), B (0,5), C (0,10).\n\nAB distance is 5 → yes.\n\nBC distance is5 → yes.\n\nCA distance is10 → no.\n\nCount is 2 → output yes. So all three can com
+municate through B.\n\nSo the code works.\n\nAnother test case where only one edge exists:\n\nR=5.\n\nA (0,0), B (0,6), C (0,5).\n\nAB distance 6>5 → no.\n\nBC
+distance 1 → yes.\n\nCA distance 5 → yes.\n\nSo count is 2 → yes. Because BC and CA are connected. So B and C are connected, C and A are connected. So B can rea
+ch A via C.\n\nThus, the code works.\n\n<|end_of_thought|>\n\n<|begin_of_solution|>\n\nTo solve this problem, we need to determine if three people (Chef, head s
+erver, and sous-chef) can communicate with each other using transceivers that have a limited range. Communication can be direct if they are within the range or
+indirect via another person acting as an intermediary.\n\n### Approach\n1. **Input Reading**: Read the number of test cases and for each test case, read the max
+imum communication range (R) and the coordinates of the three people.\n2. **Distance Calculation**: For each pair of people, calculate the squared distance betw
+een their coordinates to avoid floating-point inaccuracies.\n3. **Check Communication**: Determine how many pairs can communicate directly by comparing their sq
+uared distance with \\( R^2 \\).\n4. **Connected Graph Check**: If at least two pairs can communicate directly, the three people form a connected graph either d
+irectly or through an intermediary, allowing all to communicate.\n\n### Solution Code\n```python\ndef main():\n    import sys\n    input = sys.stdin.read().spli
+t()\n    ptr = 0\n    T = int(input[ptr])\n    ptr += 1\n    for _ in range(T):\n        R = int(input[ptr])\n        ptr += 1\n        A = list(map(int, input[
+ptr:ptr+2]))\n        ptr += 2\n        B = list(map(int, input[ptr:ptr+2]))\n        ptr += 2\n        C = list(map(int, input[ptr:ptr+2]))\n        ptr += 2\n
+        count = 0\n        \n        # Check Chef to Head Server\n        dx = A[0] - B[0]\n        dy = A[1] - B[1]\n        if dx * dx + dy * dy <= R * R:\n
+          count += 1\n        \n        # Check Head Server to Sous-Chef\n        dx = B[0] - C[0]\n        dy = B[1] - C[1]\n        if dx * dx + dy * dy <= R
+* R:\n            count += 1\n        \n        # Check Sous-Chef to Chef\n        dx = C[0] - A[0]\n        dy = C[1] - A[1]\n        if dx * dx + dy * dy <= R
+ * R:\n            count += 1\n        \n        print("yes" if count >= 2 else "no")\n\nmain()\n```\n\n### Explanation\n- **Reading Input**: The input is read
+all at once and split into a list for efficient processing.\n- **Distance Calculation**: For each pair of points (Chef-Head, Head-Sous, Sous-Chef), the squared
+distance is computed and compared against \\( R^2 \\).\n- **Communication Check**: The count of valid direct communication pairs is determined. If this count is
+ 2 or more, it ensures that all three can communicate either directly or through an intermediary, thus printing "yes". Otherwise, it prints "no".\n\nThis approa
+ch efficiently checks the necessary conditions using integer arithmetic to avoid precision issues, ensuring correctness and optimal performance.\n\n<|end_of_sol
+ution|>'}]
+Fatal Python error: PyGILState_Release: auto-releasing thread-state, but no thread-state for this thread
+Python runtime state: finalizing (tstate=0x000078df934f3a70)
+
+Aborted (core dumped)
+root@3e645689496f:/app# python3 - << 'PY'
+> import re
+> from huggingface_hub import hf_hub_download
+> from datasets import load_dataset
+> from transformers import AutoTokenizer
+> repo = 'open-thoughts/OpenThoughts-114k'
+> # Decide target text field and domain key by heuristics + README hints
+> # Load README for guidance
+> readme_path = hf_hub_download(repo_id=repo, filename='README.md')
+> with open(readme_path, 'r', encoding='utf-8', errors='ignore') as f:
+>     readme = f.read()
+> print('Parsing README to guess field/domain...')
+> field = None
+> domain_key = None
+> # Naive guesses from common dataset schemas
+> candidates = ['thought', 'cot', 'response', 'answer', 'output', 'text', 'content']
+> domain_candidates = ['domain', 'category', 'topic', 'subject']
+> # Peek at streaming sample to find keys
+> sample = next(iter(load_dataset(repo, split='train', streaming=True)))
+> keys = list(sample.keys())
+> print('Available keys:', keys)
+> for dk in domain_candidates:
+>     if dk in keys:
+>         domain_key = dk
+>         break
+> for c in candidates:
+>     if c in keys:
+>         field = c
+>         break
+> # If both prompt and response exist and README mentions thoughts, prefer 'thought' or 'cot'
+> if ('thought' in keys) and field != 'thought':
+>     field = 'thought'
+> # Fall back to 'response' if no dedicated thought
+> if field is None:
+>     for alt in ['response', 'output', 'text', 'content']:
+>         if alt in keys:
+>             field = alt
+>             break
+> # Some datasets use 'instruction' and 'response', we might count only the 'thought' per README; we'll refine below
+> # Try to detect if science domain is a config
+> science_is_config = False
+> try:
+>     from datasets import get_dataset_config_names
+>     cfgs = get_dataset_config_names(repo)
+>     science_is_config = ('science' in cfgs)
+>     print('Configs:', cfgs)
+> except Exception as e:
+>     print('Config check error:', e)
+> print('Initial guess - field:', field, 'domain_key:', domain_key, 'science_is_config:', science_is_config)
+> # Inspect README text for hints
+> if re.search(r'\bscience\b', readme, re.I):
+>     lines = [l for l in readme.splitlines() if re.search(r'(?i)domain|science|token', l)]
+>     print('README hints around domain/science/token:')
+>     for l in lines[:30]:
+>         print('  ', l)
+> # Initialize tokenizer
+> model_id = 'Qwen/Qwen2.5-1.5B-Instruct'
+> from transformers import AutoTokenizer
+> tok = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+> # Build iterator over examples restricted to science domain
+> if science_is_config:
+>     ds = load_dataset(repo, name='science', split='train', streaming=True)
+> else:
+>     ds = load_dataset(repo, split='train', streaming=True)
+>     if domain_key is None:
+>         # Try to infer domain key by examining sample for likely value containing 'science'
+>         domain_key = None
+>         for k in keys:
+>             v = sample.get(k)
+>             if isinstance(v, str) and 'science' in v.lower():
+>                 domain_key = k
+>                 break
+>     if domain_key is None:
+>         print('ERROR: Could not identify domain key; attempting to search any field containing science and filter...')
+>     def science_filter(ex):
+>         if domain_key and isinstance(ex.get(domain_key), str):
+>             return ex[domain_key].lower() == 'science'
+>         # Fallback: if any string field equals/contains 'science'
+>         for k,v in ex.items():
+>             if isinstance(v, str) and v.strip().lower() == 'science':
+>                 return True
+>         return False
+>     ds = (ex for ex in ds if science_filter(ex))
+> # Decide text building function according to README hints
+> def build_text(ex):
+>     # Prefer 'thought' if present; else use response/output/text
+>     if 'thought' in ex and isinstance(ex['thought'], str) and ex['thought'].strip():
+>         return ex['thought']
+>     for k in ['cot', 'response', 'output', 'text', 'content', 'answer']:
+>         if k in ex and isinstance(ex[k], str) and ex[k].strip():
+>             return ex[k]
+>     # As last resort, join all string fields
+>     parts = []
+>     for k,v in ex.items():
+>         if isinstance(v, str):
+>             parts.append(f'{k}: {v}')
+>     return '\n'.join(parts)
+> # Iterate and sum token counts
+> import itertools
+> count = 0
+> seen = 0
+> for ex in ds:
+>     text = build_text(ex)
+>     if not text:
+>         continue
+>     # Tokenize without adding special tokens unless tokenizer requires it
+>     ids = tok(text, add_special_tokens=False)['input_ids']
+>     count += len(ids)
+>     seen += 1
+>     if seen % 1000 == 0:
+>         print('Processed', seen, 'examples; tokens so far:', count)
+> print('TOTAL_EXAMPLES:', seen)
+> print('TOTAL_TOKENS:', count)
+> # Write to /app/answer.txt
+> with open('/app/answer.txt', 'w') as f:
+>     f.write(str(count))
+> print('Wrote /app/answer.txt')
+> PY
+None of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/utils/_http.py", line 402, in hf_raise_for_status
+    response.raise_for_status()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/site-packages/requests/models.py", line 1026, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 401 Client Error: Unauthorized for url: https://huggingface.co/open-thoughts/OpenThoughts-114k/resolve/main/README.md
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<stdin>", line 8, in <module>
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/utils/_validators.py", line 114, in _inner_fn
+    return fn(*args, **kwargs)
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 1007, in hf_hub_download
+    return _hf_hub_download_to_cache_dir(
+        # Destination
+    ...<14 lines>...
+        force_download=force_download,
+    )
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 1114, in _hf_hub_download_to_cache_dir
+    _raise_on_head_call_error(head_call_error, force_download, local_files_only)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 1655, in _raise_on_head_call_error
+    raise head_call_error
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 1543, in _get_metadata_or_catch_error
+    metadata = get_hf_file_metadata(
+        url=url, proxies=proxies, timeout=etag_timeout, headers=headers, token=token, endpoint=endpoint
+    )
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/utils/_validators.py", line 114, in _inner_fn
+    return fn(*args, **kwargs)
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 1460, in get_hf_file_metadata
+    r = _request_wrapper(
+        method="HEAD",
+    ...<5 lines>...
+        timeout=timeout,
+    )
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 283, in _request_wrapper
+    response = _request_wrapper(
+        method=method,
+    ...<2 lines>...
+        **params,
+    )
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/file_download.py", line 307, in _request_wrapper
+    hf_raise_for_status(response)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/usr/local/lib/python3.13/site-packages/huggingface_hub/utils/_http.py", line 452, in hf_raise_for_status
+    raise _format(RepositoryNotFoundError, message, response) from e
+huggingface_hub.errors.RepositoryNotFoundError: 401 Client Error. (Request ID: Root=1-6938b935-0c37898c719416ee31086e12;caa25599-ef11-4716-9bdd-6c963db05f30)
+
+Repository Not Found for url: https://huggingface.co/open-thoughts/OpenThoughts-114k/resolve/main/README.md.
+Please make sure you specified the correct `repo_id` and `repo_type`.
+If you are trying to access a private or gated repo, make sure you are authenticated. For more details, see https://huggingface.co/docs/huggingface_hub/authenti
+cation
+Invalid username or password.
+root@3e645689496f:/app# cat /app/answer.txt
+cat: /app/answer.txt: No such file or directory
+root@3e645689496f:/app# python3 - << 'PY'
+                    for tk in ['text','content','thought','cot','response','output','answer','value']:
+                            if tk in item and isinstance(item[tk], str) and item[tk].strip():
+                                return item[tk]
+    # 2) Look into generic containers like 'thoughts' or 'responses'
+    for container_key in ['thoughts','responses','outputs','models','contents']:
+        if container_key in ex:
+            cont = ex[container_key]
+            # list of dicts with 'model' or 'source'
+            if isinstance(cont, list):
+                for item in cont:
+                    if isinstance(item, dict):
+                        model_name = str(item.get('model') or item.get('source') or '').lower()
+                        if 'deepseek' in model_name:
+                            for tk in ['text','content','thought','cot','response','output','answer','value']:
+                                if tk in item and isinstance(item[tk], str) and item[tk].strip():
+                                    return item[tk]
+            if isinstance(cont, dict):
+                # maybe keyed by model name
+                for k,v in cont.items():
+                    if 'deepseek' in str(k).lower():
+                        if isinstance(v, str) and v.strip():
+                            return v
+                        if isinstance(v, dict):
+                            for tk in ['text','content','thought','cot','response','output','answer','value']:
+                                if tk in v and isinstance(v[tk], str) and v[tk].strip():
+                                    return v[tk]
+    # 3) Fallback: specific likely keys
+    for k in ['deepseek','deepseek_thought','deepseek_r1','deepseek_cot','r1_thought']:
+        if k in ex and isinstance(ex[k], str) and ex[k].strip():
+            return ex[k]
+    return None
+
+# Inspect DeepSeek text presence in peek samples
+present = 0
+for i,s in enumerate(samples):
+    t = extract_deepseek_text(s)
+    print(f'sample[{i}] deepseek_text_len:', (len(t) if isinstance(t,str) else None))
+> from datasets import load_dataset
+> from transformers import AutoTokenizer
+> import itertools
+> import sys
+>
+> repo = 'open-thoughts/OpenThoughts-114k'
+> print('Loading dataset (streaming)...', flush=True)
+> ds_stream = load_dataset(repo, split='train', streaming=True)
+>
+> # Peek at a few samples to infer schema
+> samples = []
+> for i, ex in enumerate(ds_stream):
+>     samples.append(ex)
+>     if i >= 9:
+>         break
+> print('Collected', len(samples), 'samples for schema inference')
+> if not samples:
+>     print('No samples found; exiting')
+>     sys.exit(1)
+>
+> keys = set().union(*[set(s.keys()) for s in samples])
+> print('Top-level keys:', sorted(keys))
+>
+> # Try to detect domain key
+> domain_key = None
+> for cand in ['domain','category','topic','subject','field','discipline']:
+>     if cand in keys:
+>         domain_key = cand
+>         break
+>
+> # Collect observed domain values from the peeks
+> domain_values = set()
+> if domain_key:
+>     for s in samples:
+>         v = s.get(domain_key)
+>         if isinstance(v, str):
+>             domain_values.add(v)
+> print('domain_key:', domain_key, 'observed_domain_values:', sorted(domain_values))
+>
+> # Detect DeepSeek field(s)
+> deepseek_fields = [k for k in keys if 'deepseek' in k.lower()]
+> print('DeepSeek-related top-level fields:', deepseek_fields)
+>
+> # Heuristic extractor for DeepSeek text
+>
+> def extract_deepseek_text(ex):
+>     # 1) Direct field containing 'deepseek'
+>     for k in list(ex.keys()):
+>         if 'deepseek' in k.lower():
+>             v = ex[k]
+>             if isinstance(v, str) and v.strip():
+>                 return v
+>             if isinstance(v, dict):
+>                 # try common text keys
+>                 for tk in ['text','content','thought','cot','response','output','answer','value']:
+>                     if tk in v and isinstance(v[tk], str) and v[tk].strip():
+>                         return v[tk]
+>             if isinstance(v, list):
+>                 for item in v:
+>                     if isinstance(item, str) and item.strip():
+>                         return item
+>                     if isinstance(item, dict):
+>                         for tk in ['text','content','thought','cot','response','output','answer','value']:
+>                             if tk in item and isinstance(item[tk], str) and item[tk].strip():
+>                                 return item[tk]
+>     # 2) Look into generic containers like 'thoughts' or 'responses'
+>     for container_key in ['thoughts','responses','outputs','models','contents']:
+>         if container_key in ex:
+>             cont = ex[container_key]
+>             # list of dicts with 'model' or 'source'
+>             if isinstance(cont, list):
+>                 for item in cont:
+>                     if isinstance(item, dict):
+>                         model_name = str(item.get('model') or item.get('source') or '').lower()
+>                         if 'deepseek' in model_name:
+>                             for tk in ['text','content','thought','cot','response','output','answer','value']:
+>                                 if tk in item and isinstance(item[tk], str) and item[tk].strip():
+>                                     return item[tk]
+>             if isinstance(cont, dict):
+>                 # maybe keyed by model name
+>                 for k,v in cont.items():
+>                     if 'deepseek' in str(k).lower():
+>                         if isinstance(v, str) and v.strip():
+>                             return v
+>                         if isinstance(v, dict):
+>                             for tk in ['text','content','thought','cot','response','output','answer','value']:
+>                                 if tk in v and isinstance(v[tk], str) and v[tk].strip():
+>                                     return v[tk]
+>     # 3) Fallback: specific likely keys
+>     for k in ['deepseek','deepseek_thought','deepseek_r1','deepseek_cot','r1_thought']:
+>         if k in ex and isinstance(ex[k], str) and ex[k].strip():
+>             return ex[k]
+>     return None
+>
+> # Inspect DeepSeek text presence in peek samples
+> present = 0
+> for i,s in enumerate(samples):
+>     t = extract_deepseek_text(s)
+>     print(f'sample[{i}] deepseek_text_len:', (len(t) if isinstance(t,str) else None))
+>     if t:
+>         present += 1
+> print('DeepSeek text present in', present, 'of', len(samples), 'peek samples')
+>
+> # Prepare tokenizer
+> print('Loading tokenizer...')
+> tok = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+>
+> # Recreate stream for full iteration
+> full_stream = load_dataset(repo, split='train', streaming=True)
+>
+> # Choose science matcher
+> science_vals = set(['science','scientific','sci'])
+>
+> def is_science(v):
+>     if isinstance(v, str):
+>         lv = v.strip().lower()
+>         if lv in science_vals:
+>             return True
+>         # common variants
+>         return lv in ['science','scientific reasoning','natural science','stem','physics','chemistry','biology','science (general)']
+>     return False
+>
+> count = 0
+> seen = 0
+> sci_seen = 0
+> missing_ds = 0
+>
+> for ex in full_stream:
+>     # Filter by science domain if we know the domain key; otherwise try fuzzy match searching any field str equals 'science'
+>     in_science = False
+>     if domain_key:
+>         in_science = is_science(ex.get(domain_key))
+>     else:
+>         for k,v in ex.items():
+>             if isinstance(v, str) and v.strip().lower() == 'science':
+>                 in_science = True
+>                 break
+>     if not in_science:
+>         seen += 1
+>         if seen % 5000 == 0:
+>             print('Scanned', seen, 'examples; sci_seen', sci_seen, 'tokens', count)
+>         continue
+>
+>     sci_seen += 1
+>     text = extract_deepseek_text(ex)
+>     if not text:
+>         missing_ds += 1
+>         if sci_seen % 1000 == 0:
+>             print('SCI examples:', sci_seen, 'missing_deepseek:', missing_ds, 'tokens:', count)
+>         continue
+>
+>     ids = tok(text, add_special_tokens=False)['input_ids']
+>     count += len(ids)
+>
+>     if sci_seen % 500 == 0:
+>         print('SCI examples:', sci_seen, 'tokens so far:', count)
+>
+> print('DONE')
+> print('TOTAL_SCI_EXAMPLES:', sci_seen)
+> print('MISSING_DEEPSEEK_IN_SCI:', missing_ds)
+> print('TOTAL_TOKENS:', count)
+>
+> with open('/app/answer.txt','w') as f:
+>     f.write(str(count))
+> print('Wrote /app/answer.txt')
+> PY
+None of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+Loading dataset (streaming)...
+Collected 10 samples for schema inference
+Top-level keys: ['conversations', 'system']
+domain_key: None observed_domain_values: []
+DeepSeek-related top-level fields: []
+sample[0] deepseek_text_len: None
+sample[1] deepseek_text_len: None
+sample[2] deepseek_text_len: None
+sample[3] deepseek_text_len: None
+sample[4] deepseek_text_len: None
+sample[5] deepseek_text_len: None
+sample[6] deepseek_text_len: None
+sample[7] deepseek_text_len: None
+sample[8] deepseek_text_len: None
+sample[9] deepseek_text_len: None
+DeepSeek text present in 0 of 10 peek samples
+Loading tokenizer...
+tokenizer_config.json: 7.30kB [00:00, 14.2MB/s]
+vocab.json: 2.78MB [00:00, 18.5MB/s]
+merges.txt: 1.67MB [00:00, 12.1MB/s]
+tokenizer.json: 7.03MB [00:00, 22.1MB/s]
+Scanned 5000 examples; sci_seen 0 tokens 0
+Scanned 10000 examples; sci_seen 0 tokens 0
+Scanned 15000 examples; sci_seen 0 tokens 0
+Scanned 20000 examples; sci_seen 0 tokens 0
+Scanned 25000 examples; sci_seen 0 tokens 0
+Scanned 30000 examples; sci_seen 0 tokens 0
+Scanned 35000 examples; sci_seen 0 tokens 0
+Scanned 40000 examples; sci_seen 0 tokens 0
+cat /app/answer.txt
+Scanned 45000 examples; sci_seen 0 tokens 0
+Scanned 50000 examples; sci_seen 0 tokens 0
+Scanned 55000 examples; sci_seen 0 tokens 0
+Scanned 60000 examples; sci_seen 0 tokens 0
+Scanned 65000 examples; sci_seen 0 tokens 0
+Scanned 70000 examples; sci_seen 0 tokens 0
+Scanned 75000 examples; sci_seen 0 tokens 0
+Scanned 80000 examples; sci_seen 0 tokens 0
+Scanned 85000 examples; sci_seen 0 tokens 0
+Scanned 90000 examples; sci_seen 0 tokens 0
+Scanned 95000 examples; sci_seen 0 tokens 0
+Scanned 100000 examples; sci_seen 0 tokens 0
+Scanned 105000 examples; sci_seen 0 tokens 0
+Scanned 110000 examples; sci_seen 0 tokens 0
+DONE
+TOTAL_SCI_EXAMPLES: 0
+MISSING_DEEPSEEK_IN_SCI: 0
+TOTAL_TOKENS: 0
+Wrote /app/answer.txt
+root@3e645689496f:/app# cat /app/answer.txt
+0root@3e645689496f:/app# python3 - << 'PY'
+> from huggingface_hub import hf_hub_download
+> repo='open-thoughts/OpenThoughts-114k'
+> readme_path = hf_hub_download(repo_id=repo, filename='README.md', repo_type='dataset')
+> print('README path:', readme_path)
+> with open(readme_path, 'r', encoding='utf-8', errors='ignore') as f:
+>     text = f.read()
+> # Print first 300 lines and lines mentioning domain/science/deepseek/schema
+> lines = text.splitlines()
+> print('--- README HEAD (first 200 lines) ---')
+> for i,l in enumerate(lines[:200]):
+>     print(f'{i+1:03d}:', l)
+> print('--- README HINTS (domain/science/deepseek/schema/fields) ---')
+> for l in lines:
+>     lo=l.lower()
+>     if any(k in lo for k in ['domain','science','deepseek','schema','field','conversations','system']):
+>         print(l)
+> PY
+README path: /root/.cache/huggingface/hub/datasets--open-thoughts--OpenThoughts-114k/snapshots/bd093c3994fd54d2390985b66988ddf282a55eb6/README.md
+--- README HEAD (first 200 lines) ---
+001: ---
+002: dataset_info:
+003: - config_name: default
+004:   features:
+005:   - name: system
+006:     dtype: string
+007:   - name: conversations
+008:     list:
+009:     - name: from
+010:       dtype: string
+011:     - name: value
+012:       dtype: string
+013:   splits:
+014:   - name: train
+015:     num_bytes: 2635015668
+016:     num_examples: 113957
+017:   download_size: 1078777193
+018:   dataset_size: 2635015668
+019: - config_name: metadata
+020:   features:
+021:   - name: problem
+022:     dtype: string
+023:   - name: deepseek_reasoning
+024:     dtype: string
+025:   - name: deepseek_solution
+026:     dtype: string
+027:   - name: ground_truth_solution
+028:     dtype: string
+029:   - name: domain
+030:     dtype: string
+031:   - name: source
+032:     dtype: string
+033:   - name: test_cases
+034:     dtype: string
+035:   - name: starter_code
+036:     dtype: string
+037:   splits:
+038:   - name: train
+039:     num_bytes: 5525214077.699433
+040:     num_examples: 113957
+041:   download_size: 2469729724
+042:   dataset_size: 5525214077.699433
+043: configs:
+044: - config_name: default
+045:   data_files:
+046:   - split: train
+047:     path: data/train-*
+048: - config_name: metadata
+049:   data_files:
+050:   - split: train
+051:     path: metadata/train-*
+052: tags:
+053: - curator
+054: - synthetic
+055: license: apache-2.0
+056: ---
+057:
+058: <p align="center">
+059:     <img src="open_thoughts.png" width="50%">
+060: </p>
+061:
+062: > [!NOTE]
+063: > We have released a paper for OpenThoughts! See our paper [here](https://arxiv.org/abs/2506.04178).
+064:
+065: <a href="https://github.com/bespokelabsai/curator/">
+066:  <img src="https://huggingface.co/datasets/bespokelabs/Bespoke-Stratos-17k/resolve/main/made_with_curator.png" alt="Made with Curator" width=200px>
+067: </a>
+068:
+069: # Open-Thoughts-114k
+070:
+071: ## Dataset Description
+072:
+073: - **Homepage:** https://www.open-thoughts.ai/
+074: - **Repository:** https://github.com/open-thoughts/open-thoughts
+075: - **Point of Contact:** [Open Thoughts Team](contact@open-thoughts.ai)
+076:
+077: Open synthetic reasoning dataset with 114k high-quality examples covering math, science, code, and puzzles!
+078:
+079: Inspect the content with rich formatting with [Curator Viewer](https://curator.bespokelabs.ai/datasets/1389c194254c4ead96daaf145505c3d1).
+080:
+081: ### Available Subsets
+082:
+083: **default** subset containing ready-to-train data used to finetune the [OpenThinker-7B](https://huggingface.co/open-thoughts/OpenThinker-7B) and [OpenThink
+er-32B](https://huggingface.co/open-thoughts/OpenThinker-32B) models:
+084: ```
+085: ds = load_dataset("open-thoughts/OpenThoughts-114k", split="train")
+086: ```
+087: **metadata** subset containing extra columns used in dataset construction:
+088: - `problem`
+089: - `ground_truth_solution`
+090: - `deepseek_reasoning`
+091: - `deepseek_solution`
+092: - `domain`
+093: - `source`
+094: - `test_cases` (code only)
+095: - `starter_code`(code only)
+096:
+097: ```
+098: ds = load_dataset("open-thoughts/OpenThoughts-114k", "metadata", split="train")
+099: ```
+100:
+101: # OpenThinker Models
+102:
+103: The numbers reported in the tables below are evaluated with our open-source tool [Evalchemy](https://github.com/mlfoundations/Evalchemy).
+104:
+105: |                             | AIME24   | MATH500 | GPQA-Diamond | LCBv2 Easy  | LCBv2 Medium  | LCBv2 Hard  | LCBv2 All  |
+106: | --------------------------- | -------- | ------- | ------------ | ----------- | ------------- | ----------- | ---------- |
+107: | [OpenThinker-32B](https://huggingface.co/open-thoughts/OpenThinker-32B)             | 66       | 90.6    | 61.6         | 95.1        | 70.9          | 2
+6.8        | 68.9       |
+108: | [OpenThinker-7B](https://huggingface.co/open-thoughts/OpenThinker-7B)              | 31.3     | 83.0    | 42.4         | 75.3        | 28.6          | 6.
+5         | 39.9       |
+109: | Bespoke-Stratos-7B          | 22.7     | 79.6    | 38.9         | 71.4        | 25.2          | 0.8         | 35.8       |
+110: | DeepSeek-R1-Distill-Qwen-7B | 60       | 88.2    | 46.9         | 79.7        | 45.1          | 14.6        | 50.1       |
+111: | gpt-4o-0513                 | 8.7      | 75.8    | 46.5         | 87.4        | 42.7          | 8.9         | 50.5       |
+112: | o1-mini                     | 64       | 85.6    | 60           | 92.8        | 74.7          | 39.8        | 72.8       |
+113:
+114: We are fully open-source. Our [model weights](https://huggingface.co/open-thoughts), [datasets](https://huggingface.co/open-thoughts), [data generation cod
+e](https://github.com/open-thoughts/open-thoughts), [evaluation code](https://github.com/mlfoundations/Evalchemy), and [training code](https://github.com/hiyoug
+a/LLaMA-Factory) are all publicly available.
+115:
+116: |  | Open Weights | Open Data | Open Code |
+117: |--|--------------|-----------| --------- |
+118: |OpenThinker-32B|✅|[✅](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k)|[✅](https://github.com/open-thoughts/open-thoughts) |
+119: |OpenThinker-7B|✅|[✅](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k)|[✅](https://github.com/open-thoughts/open-thoughts) |
+120: |Bespoke-Stratos-7B|✅|[✅](https://huggingface.co/datasets/bespokelabs/Bespoke-Stratos-17k)|[✅](https://github.com/bespokelabsai/curator/tree/main/exampl
+es/bespoke-stratos-data-generation)|
+121: |DeepSeek-R1-Distill models|✅|❌|❌|
+122: |OpenAI/Gemini|❌|❌|❌|❌|
+123:
+124: We are actively working towards improving the dataset, so please stay tuned!
+125:
+126: # Data Curation Recipe
+127:
+128: Code
+129: - [BAAI/TACO](https://huggingface.co/datasets/BAAI/TACO)
+130: - [codeparrot/apps](https://huggingface.co/datasets/codeparrot/apps)
+131: - [deepmind/code_contests](https://huggingface.co/datasets/deepmind/code_contests)
+132: - [MatrixStudio/Codeforces-Python-Submissions](https://huggingface.co/datasets/MatrixStudio/Codeforces-Python-Submissions)
+133:
+134: Math
+135: - [AI-MO/NuminaMath-CoT](https://huggingface.co/datasets/AI-MO/NuminaMath-CoT)
+136:
+137: Science
+138: - [camel-ai/chemistry](https://huggingface.co/datasets/camel-ai/chemistry)
+139: - [camel-ai/biology](https://huggingface.co/datasets/camel-ai/biology)
+140: - [camel-ai/physics](https://huggingface.co/datasets/camel-ai/physics)
+141:
+142: Puzzle
+143: - [INK-USC/riddle_sense](https://huggingface.co/datasets/INK-USC/riddle_sense)
+144:
+145: Using a curated mix of the datasets above, we generate reasoning traces from DeepSeek-R1 and verify correctness to construct the final dataset.
+146:
+147: ![diagram](diagram.png)
+148:
+149: The full code for the data generation pipeline is publicly available [in our github repo](https://github.com/open-thoughts/open-thoughts).
+150:
+151:
+152: # Links
+153: - 📝 [OpenThoughts Paper](https://arxiv.org/abs/2506.04178)
+154: - 📊 [OpenThinker-32B Blog Post](https://www.open-thoughts.ai/blog/scale)
+155: - 📊 [Measuing Reasoning with Evalchemy Blog Post](https://www.open-thoughts.ai/blog/measure)
+156: - 📊 [Open Thoughts Launch Blog Post](https://www.open-thoughts.ai/blog/launch)
+157: - 💻 [Open Thoughts GitHub Repository](https://github.com/open-thoughts/open-thoughts)
+158: - 🧠 [OpenThoughts-114k dataset](https://huggingface.co/datasets/open-thoughts/OpenThoughts-114k) - this dataset.
+159: - 🤖 [OpenThinker-32B model](https://huggingface.co/open-thoughts/OpenThinker-32B)
+160: - 🤖 [OpenThinker-7B model](https://huggingface.co/open-thoughts/OpenThinker-7B)
+161: - 📊 [Bespoke-Stratos Blog Post](https://www.bespokelabs.ai/blog/bespoke-stratos-the-unreasonable-effectiveness-of-reasoning-distillation)
+162: - 🧠 [Bespoke-Stratos-17k dataset](https://huggingface.co/datasets/bespokelabs/Bespoke-Stratos-17k)
+163: - 🤖 [Bespoke-Stratos-32B model](https://huggingface.co/bespokelabs/Bespoke-Stratos-32B)
+164: - 🤖 [Bespoke-Stratos-7B model](https://huggingface.co/bespokelabs/Bespoke-Stratos-7B)
+165: - 💻 [Curator Viewer](https://curator.bespokelabs.ai/datasets/1389c194254c4ead96daaf145505c3d1)
+166:
+167: ## Visualization
+168: Inspect the content with rich formatting with [Curator Viewer](https://curator.bespokelabs.ai/datasets/1389c194254c4ead96daaf145505c3d1)
+169:
+170: All 114k examples, clustered by semantic similarity, can be explored in [Nomic Atlas](https://atlas.nomic.ai/data/nomic/openthoughts-114k/map).
+171:
+172: <a href="https://atlas.nomic.ai/data/nomic/openthoughts-114k/map">
+173:   <img src="https://cdn-uploads.huggingface.co/production/uploads/630bfb6b86b8b9904c35f4d1/d7TjezV6R3OnIDlEVL1Rl.png" alt="Nomic Atlas Open-Thoughts-114k M
+ap" width="35%"/>
+174: </a>
+175:
+176: # Citation
+177: ```
+178: @misc{guha2025openthoughtsdatarecipesreasoning,
+179:   title={OpenThoughts: Data Recipes for Reasoning Models},
+180:   author={Etash Guha and Ryan Marten and Sedrick Keh and Negin Raoof and Georgios Smyrnis and Hritik Bansal and Marianna Nezhurina and Jean Mercat and Trun
+g Vu and Zayne Sprague and Ashima Suvarna and Benjamin Feuer and Liangyu Chen and Zaid Khan and Eric Frankel and Sachin Grover and Caroline Choi and Niklas Muen
+nighoff and Shiye Su and Wanjia Zhao and John Yang and Shreyas Pimpalgaonkar and Kartik Sharma and Charlie Cheng-Jie Ji and Yichuan Deng and Sarah Pratt and Viv
+ek Ramanujan and Jon Saad-Falcon and Jeffrey Li and Achal Dave and Alon Albalak and Kushal Arora and Blake Wulfe and Chinmay Hegde and Greg Durrett and Sewoong
+Oh and Mohit Bansal and Saadia Gabriel and Aditya Grover and Kai-Wei Chang and Vaishaal Shankar and Aaron Gokaslan and Mike A. Merrill and Tatsunori Hashimoto a
+nd Yejin Choi and Jenia Jitsev and Reinhard Heckel and Maheswaran Sathiamoorthy and Alexandros G. Dimakis and Ludwig Schmidt},
+181:   year={2025},
+182:   eprint={2506.04178},
+183:   archivePrefix={arXiv},
+184:   primaryClass={cs.LG},
+185:   url={https://arxiv.org/abs/2506.04178},
+186: }
+187: ```
+--- README HINTS (domain/science/deepseek/schema/fields) ---
+  - name: system
+  - name: conversations
+  - name: deepseek_reasoning
+  - name: deepseek_solution
+  - name: domain
+Open synthetic reasoning dataset with 114k high-quality examples covering math, science, code, and puzzles!
+- `deepseek_reasoning`
+- `deepseek_solution`
+- `domain`
+| DeepSeek-R1-Distill-Qwen-7B | 60       | 88.2    | 46.9         | 79.7        | 45.1          | 14.6        | 50.1       |
+|DeepSeek-R1-Distill models|✅|❌|❌|
+Science
+Using a curated mix of the datasets above, we generate reasoning traces from DeepSeek-R1 and verify correctness to construct the final dataset.
+root@3e645689496f:/app# python3 - << 'PY'
+> from datasets import load_dataset, get_dataset_config_names
+> repo='open-thoughts/OpenThoughts-114k'
+> try:
+>     cfgs = get_dataset_config_names(repo)
+>     print('CONFIGS:', cfgs)
+> except Exception as e:
+>     print('config error:', e)
+> print('Loading a few samples (streaming)...')
+> ds = load_dataset(repo, split='train', streaming=True)
+> samples=[]
+> for i,ex in enumerate(ds):
+>     samples.append(ex)
+>     if i>=2:
+>         break
+> for idx,ex in enumerate(samples):
+>     print('SAMPLE', idx)
+>     print('Keys:', list(ex.keys()))
+>     sys_field = ex.get('system')
+>     if isinstance(sys_field,str):
+>         print('system len:', len(sys_field))
+>         print('system head:', sys_field[:400].replace('\n',' '))
+>     conv = ex.get('conversations')
+>     print('conversations type:', type(conv), 'len:', (len(conv) if isinstance(conv,list) else None))
+>     if isinstance(conv,list):
+>         for j,msg in enumerate(conv[:6]):
+>             if isinstance(msg,dict):
+>                 keys=list(msg.keys())
+>                 print(f'  msg[{j}] keys:', keys)
+>                 # common meta
+>                 meta = {k:msg.get(k) for k in ['role','from','name','source','model','type'] if k in msg}
+>                 print('   meta:', {k:v for k,v in meta.items()})
+>                 content = None
+>                 for ck in ['content','text','value']:
+>                     if ck in msg and isinstance(msg[ck],str):
+>                         content = msg[ck]
+>                         break
+>                 if content:
+>                     print('   content head:', content[:160].replace('\n',' '))
+>             else:
+>                 print(f'  msg[{j}] non-dict type:', type(msg))
+> PY
+CONFIGS: ['default', 'metadata']
+Loading a few samples (streaming)...
+SAMPLE 0
+Keys: ['system', 'conversations']
+system len: 1312
+system head: Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the final precise and
+ accurate solutions. This requires engaging in a comprehensive cycle of analysis, summarizing, exploration, reassessment, reflection, backtracing, and iteration
+ to develop well-considered thinking process. Please structure your response into two main se
+conversations type: <class 'list'> len: 2
+  msg[0] keys: ['from', 'value']
+   meta: {'from': 'user'}
+   content head: Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply ca
+ll the function a
+  msg[1] keys: ['from', 'value']
+   meta: {'from': 'assistant'}
+   content head: <|begin_of_thought|>  Okay, let's see. I need to solve this problem where three people (Chef, head server, sous-chef) have transceivers that ca
+n communicate dir
+SAMPLE 1
+Keys: ['system', 'conversations']
+system len: 1312
+system head: Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the final precise and
+ accurate solutions. This requires engaging in a comprehensive cycle of analysis, summarizing, exploration, reassessment, reflection, backtracing, and iteration
+ to develop well-considered thinking process. Please structure your response into two main se
+conversations type: <class 'list'> len: 2
+  msg[0] keys: ['from', 'value']
+   meta: {'from': 'user'}
+   content head: Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply ca
+ll the function a
+  msg[1] keys: ['from', 'value']
+   meta: {'from': 'assistant'}
+   content head: <|begin_of_thought|>  Okay, let's tackle this problem. So the task is to compute the GCD of two numbers, A and B. But here's the catch: A is a
+regular integer (
+SAMPLE 2
+Keys: ['system', 'conversations']
+system len: 1312
+system head: Your role as an assistant involves thoroughly exploring questions through a systematic long thinking process before providing the final precise and
+ accurate solutions. This requires engaging in a comprehensive cycle of analysis, summarizing, exploration, reassessment, reflection, backtracing, and iteration
+ to develop well-considered thinking process. Please structure your response into two main se
+conversations type: <class 'list'> len: 2
+  msg[0] keys: ['from', 'value']
+   meta: {'from': 'user'}
+   content head: Generate an executable Python function generated from the given prompt. The function should take stdin as input and print the output. Simply ca
+ll the function a
+  msg[1] keys: ['from', 'value']
+   meta: {'from': 'assistant'}
+   content head: <|begin_of_thought|>  Okay, I need to solve this problem where I have to find the number of balanced substrings in a given string of 4s and 7s.
+ Let's see what t
+Fatal Python error: PyGILState_Release: thread state 0x7e8b90002b60 must be current when releasing
+Python runtime state: finalizing (tstate=0x00007e8c44950a70)
+
+Thread 0x00007e8c44193b80 (most recent call first):
+  <no Python frame>
+Aborted (core dumped)
+root@3e645689496f:/app# python3 - << 'PY'
+> import re
+> from datasets import load_dataset
+> from transformers import AutoTokenizer
+>
+> repo='open-thoughts/OpenThoughts-114k'
+>
+> def extract_domain_from_system(s):
+>     if not isinstance(s,str):
+>         return None
+>     lower = s.lower()
+>     # JSON-like: "domain": "science"
+>     m = re.search(r'"domain"\s*:\s*"([^"]+)"', s, flags=re.I)
+>     if m:
+>         return m.group(1).strip()
+>     # Plain: Domain: Science
+>     m = re.search(r'\bdomain\s*[:=-]\s*([A-Za-z /()-]+)', s, flags=re.I)
+>     if m:
+>         return m.group(1).strip()
+>     # Category/Topic
+>     m = re.search(r'\b(category|topic)\s*[:=-]\s*([A-Za-z /()-]+)', s, flags=re.I)
+>     if m:
+>         return m.group(2).strip()
+>     return None
+>
+> # Identify conversation message as deepseek
+>
+> def is_deepseek_msg(msg):
+>     if not isinstance(msg, dict):
+>         return False
+>     for k in ['model','source','name','from','author']:
+>         v = msg.get(k)
+>         if isinstance(v,str) and 'deepseek' in v.lower():
+>             return True
+>     # sometimes model info embedded in content header
+>     content = None
+>     for ck in ['content','text','value']:
+>         if isinstance(msg.get(ck), str):
+>             content = msg[ck]
+>             break
+>     if isinstance(content,str) and 'deepseek' in content.lower()[:200]:
+>         return True
+>     return False
+>
+> # Extract thought text from content; prefer <think> ... </think>
+>
+> def extract_thought_text(content):
+>     if not isinstance(content,str):
+>         return None
+>     m = re.search(r'<think>(.*?)</think>', content, flags=re.S|re.I)
+>     if m:
+>         return m.group(1)
+>     # DeepSeek often uses <｜thinking｜> style or similar unicode bars
+>     m = re.search(r'[<⟨\[]\s*(?:think|thinking)\s*[>⟩\]](.*?)[<⟨\[]\s*/\s*(?:think|thinking)\s*[>⟩\]]', content, flags=re.S|re.I)
+>     if m:
+>         return m.group(1)
+>     # If no tags, return whole content
+>     return content
+>
+> print('Loading tokenizer...')
+> tok = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+>
+> print('Streaming dataset...')
+> ds = load_dataset(repo, split='train', streaming=True)
+>
+> science_alias = set([
+>     'science','scientific','scientific reasoning','natural science','stem','physics','chemistry','biology','earth science','life science','physical science'
+> ])
+>
+> def is_science_domain(name):
+>     if not isinstance(name,str):
+>         return False
+>     n = name.strip().lower()
+>     if n in science_alias:
+>         return True
+>     # Allow startswith 'science - '
+>     return n.startswith('science')
+>
+> count = 0
+> sci_examples = 0
+> checked = 0
+>
+> for ex in ds:
+>     checked += 1
+>     sys_field = ex.get('system')
+>     domain = extract_domain_from_system(sys_field)
+>     if not is_science_domain(domain):
+>         # also check if any string field equals 'science'
+>         sci = False
+>         for k,v in ex.items():
+>             if isinstance(v,str) and v.strip().lower()=='science':
+>                 sci=True; break
+>         if not sci:
+>             continue
+>     sci_examples += 1
+>     conv = ex.get('conversations')
+>     if not isinstance(conv, list):
+>         continue
+>     for msg in conv:
+>         if not is_deepseek_msg(msg):
+>             continue
+>         content = None
+>         for ck in ['content','text','value']:
+>             if isinstance(msg.get(ck),str):
+>                 content = msg[ck]; break
+>         if not content:
+>             continue
+>         thought = extract_thought_text(content)
+>         if not thought:
+>             continue
+>         ids = tok(thought, add_special_tokens=False)['input_ids']
+>         count += len(ids)
+>     if sci_examples % 200 == 0:
+>         print('SCI examples processed:', sci_examples, 'Total tokens:', count, 'Checked:', checked)
+>
+> print('DONE. SCI examples:', sci_examples, 'Checked:', checked, 'TOTAL_TOKENS:', count)
+> with open('/app/answer.txt','w') as f:
+>     f.write(str(count))
+> print('Wrote /app/answer.txt')
+> PY
+None of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+Loading tokenizer...
+Streaming dataset...
+cat /app/answer.txt
+cat /app/answer.txt
+python3 - << 'PY'
+from datasets import load_dataset
+repo='open-thoughts/OpenThoughts-114k'
+ds = load_dataset(repo, 'metadata', split='train', streaming=True)
+samples=[]
+for i,ex in enumerate(ds):
+    samples.append(ex)
+    if i>=2:
+        break
+for i,ex in enumerate(samples):
+    print('SAMPLE', i, 'keys:', list(ex.keys()))
+    print('domain:', ex.get('domain'))
+    dr = ex.get('deepseek_reasoning')
+    print('deepseek_reasoning len:', (len(dr) if isinstance(dr,str) else None))
+    ds = ex.get('deepseek_solution')
+    print('deepseek_solution len:', (len(ds) if isinstance(ds,str) else None))
+PY
+DONE. SCI examples: 0 Checked: 113957 TOTAL_TOKENS: 0
+Wrote /app/answer.txt
+root@3e645689496f:/app# cat /app/answer.txt
+0root@3e645689496f:/app# cat /app/answer.txt
+0root@3e645689496f:/app# python3 - << 'PY'
+> from datasets import load_dataset
+> repo='open-thoughts/OpenThoughts-114k'
+> ds = load_dataset(repo, 'metadata', split='train', streaming=True)
+> samples=[]
+> for i,ex in enumerate(ds):
+>     samples.append(ex)
+>     if i>=2:
+>         break
+> for i,ex in enumerate(samples):
+>     print('SAMPLE', i, 'keys:', list(ex.keys()))
+>     print('domain:', ex.get('domain'))
+>     dr = ex.get('deepseek_reasoning')
+>     print('deepseek_reasoning len:', (len(dr) if isinstance(dr,str) else None))
+>     ds = ex.get('deepseek_solution')
+>     print('deepseek_solution len:', (len(ds) if isinstance(ds,str) else None))
+> PY
+python3 - << 'PY'
+from datasets import load_dataset
+from transformers import AutoTokenizer
+repo='open-thoughts/OpenThoughts-114k'
+print('Loading tokenizer...')
+tok = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+print('Streaming metadata split...')
+ds = load_dataset(repo, 'metadata', split='train', streaming=True)
+count = 0
+sci = 0
+seen = 0
+missing = 0
+for ex in ds:
+    seen += 1
+    dom = ex.get('domain')
+    if not isinstance(dom,str) or dom.strip().lower()!='science':
+        continue
+    sci += 1
+    text = ex.get('deepseek_reasoning') or ''
+    if not isinstance(text,str) or not text.strip():
+        missing += 1
+        if sci % 1000 == 0:
+            print('SCI:', sci, 'TOK:', count, 'MISSING:', missing, 'SEEN:', seen)
+        continue
+    ids = tok(text, add_special_tokens=False)['input_ids']
+    count += len(ids)
+    if sci % 500 == 0:
+        print('SCI:', sci, 'TOK:', count, 'MISSING:', missing, 'SEEN:', seen)
+print('DONE SCI:', sci, 'TOTAL_TOKENS:', count, 'MISSING:', missing, 'SEEN:', seen)
+with open('/app/answer.txt','w') as f:
+    f.write(str(count))
+print('Wrote /app/answer.txt')
+PY
+SAMPLE 0 keys: ['problem', 'deepseek_reasoning', 'deepseek_solution', 'ground_truth_solution', 'domain', 'source', 'test_cases', 'starter_code']
+domain: math
+deepseek_reasoning len: 41079
+deepseek_solution len: 1575
+SAMPLE 1 keys: ['problem', 'deepseek_reasoning', 'deepseek_solution', 'ground_truth_solution', 'domain', 'source', 'test_cases', 'starter_code']
+domain: math
+deepseek_reasoning len: 10084
+deepseek_solution len: 1618
+SAMPLE 2 keys: ['problem', 'deepseek_reasoning', 'deepseek_solution', 'ground_truth_solution', 'domain', 'source', 'test_cases', 'starter_code']
+domain: math
+deepseek_reasoning len: 36128
+deepseek_solution len: 1559
+cat /app/answer.txt
+cat /app/answer.txt
+python3 - << 'PY'
+from datasets import load_dataset
+from transformers import AutoTokenizer
+repo='open-thoughts/OpenThoughts-114k'
+print('Loading tokenizer...', flush=True)
+tok = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+print('Streaming metadata split...', flush=True)
+ds = load_dataset(repo, 'metadata', split='train', streaming=True)
+count = 0
+sci = 0
+seen = 0
+missing = 0
+batch = []
+B = 16
+for ex in ds:
+    seen += 1
+    dom = ex.get('domain')
+    if isinstance(dom, str) and dom.strip().lower() == 'science':
+        text = ex.get('deepseek_reasoning')
+        if isinstance(text, str) and text.strip():
+            batch.append(text)
+            sci += 1
+        else:
+            missing += 1
+        if len(batch) >= B:
+            enc = tok(batch, add_special_tokens=False)
+            ids_list = enc['input_ids'] if isinstance(enc, dict) else [e['input_ids'] for e in enc]
+            for ids in ids_list:
+                count += len(ids)
+            batch = []
+            if sci % 200 == 0:
+                print('SCI:', sci, 'TOK:', count, 'SEEN:', seen, flush=True)
+if batch:
+    enc = tok(batch, add_special_tokens=False)
+    ids_list = enc['input_ids'] if isinstance(enc, dict) else [e['input_ids'] for e in enc]
+    for ids in ids_list:
+        count += len(ids)
+print('DONE SCI:', sci, 'TOTAL_TOKENS:', count, 'MISSING:', missing, 'SEEN:', seen)
+with open('/app/answer.txt','w') as f:
+    f.write(str(count))
+print('Wrote /app/answer.txt', flush=True)
+PY
+cat /app/answer.txt
+cat /app/answer.txt
+python3 - << 'PY'
+from datasets import load_dataset
+from transformers import AutoTokenizer
+repo='open-thoughts/OpenThoughts-114k'
+print('Loading tokenizer...', flush=True)
+tok = AutoTokenizer.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct', trust_remote_code=True)
+print('Streaming metadata split...', flush=True)
+ds = load_dataset(repo, 'metadata', split='train', streaming=True)
+count = 0
+sci = 0
+seen = 0
+missing = 0
+batch = []
+B = 16
+for ex in ds:
+    seen += 1
+    dom = ex.get('domain')
+    if isinstance(dom, str) and dom.strip().lower() == 'science':
+        text = ex.get('deepseek_reasoning')
+        if isinstance(text, str) and text.strip():
+            batch.append(text)
+            sci += 1
+        else:
+            missing += 1
+        if len(batch) >= B:
+            enc = tok(batch, add_special_tokens=False)
+            ids_list = enc['input_ids'] if isinstance(enc, dict) else [e['input_ids'] for e in enc]
+            for ids in ids_list:
+                count += len(ids)
+            batch = []
+            if sci % 200 == 0:
+                print('SCI:', sci, 'TOK:', count, 'SEEN:', seen, flush=True)
+if batch:
+    enc = tok(batch, add_special_tokens=False)
+    ids_list = enc['input_ids'] if isinstance(enc, dict) else [e['input_ids'] for e in enc]
+    for ids in ids_list:
+        count += len(ids)
+print('DONE SCI:', sci

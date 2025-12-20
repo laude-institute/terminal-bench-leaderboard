@@ -1,0 +1,233 @@
+root@76e008dc0888:/app# ls -la /app
+total 12
+drwxr-xr-x 1 root root 4096 Dec 10 03:50 .
+drwxr-xr-x 1 root root 4096 Dec 10 03:50 ..
+-rw-rw-r-- 1 root root 4096 Nov  9 09:38 trunc.db
+root@76e008dc0888:/app# file /app/trunc.db
+bash: file: command not found
+root@76e008dc0888:/app# sqlite3 --version
+bash: sqlite3: command not found
+root@76e008dc0888:/app# sqlite3 /app/trunc.db ".recover" > /app/recovered.sql
+bash: sqlite3: command not found
+root@76e008dc0888:/app# ls -la /app/recovered.sql
+-rw-r--r-- 1 root root 0 Dec 10 03:51 /app/recovered.sql
+root@76e008dc0888:/app# sqlite3 /app/recovered.db < /app/recovered.sql
+bash: sqlite3: command not found
+root@76e008dc0888:/app# sqlite3 /app/recovered.db ".tables"
+bash: sqlite3: command not found
+root@76e008dc0888:/app# sqlite3 /app/recovered.db "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;"
+bash: sqlite3: command not found
+root@76e008dc0888:/app# sqlite3 /app/recovered.db ".schema"
+bash: sqlite3: command not found
+root@76e008dc0888:/app# TABLES=$(sqlite3 /app/recovered.db "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
+bash: sqlite3: command not found
+root@76e008dc0888:/app# for t in $TABLES; do echo "Table: $t"; sqlite3 /app/recovered.db "PRAGMA table_info($t);"; done
+root@76e008dc0888:/app# TARGET_TABLE=$(sqlite3 /app/recovered.db "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND EXISTS (SEL
+ECT 1 FROM pragma_table_info(name) WHERE name='word') AND EXISTS (SELECT 1 FROM pragma_table_info(name) WHERE name='value') LIMIT 1;")
+bash: sqlite3: command not found
+root@76e008dc0888:/app# echo "Target table: $TARGET_TABLE"
+Target table:
+root@76e008dc0888:/app# if [ -n "$TARGET_TABLE" ]; then sqlite3 /app/recovered.db ".mode json" "SELECT json_group_array(json_object('word', word, 'value', value
+)) FROM $TARGET_TABLE;" > /app/recover.json; fi
+root@76e008dc0888:/app# if [ ! -s /app/recover.json ]; then if [ -n "$TARGET_TABLE" ]; then sqlite3 /app/recovered.db "SELECT '{\"word\": ' || quote(word) || ',
+ \"value\": ' || COALESCE(value, 0) || '}' FROM $TARGET_TABLE;" > /app/tmp_rows.txt; fi; fi
+root@76e008dc0888:/app# if [ ! -s /app/recover.json ] && [ -s /app/tmp_rows.txt ]; then printf "[\n" > /app/recover.json; sed 's/$/,/' /app/tmp_rows.txt | sed '
+$ s/,$//' >> /app/recover.json; printf "\n]\n" >> /app/recover.json; fi
+root@76e008dc0888:/app# if [ ! -s /app/recover.json ]; then echo "{}" > /app/recover.json; fi
+root@76e008dc0888:/app# ls -la /app/recover.json
+-rw-r--r-- 1 root root 3 Dec 10 03:51 /app/recover.json
+root@76e008dc0888:/app# head -n 5 /app/recover.json
+{}
+root@76e008dc0888:/app# cat /etc/os-release
+PRETTY_NAME="Ubuntu 24.04.2 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.2 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+root@76e008dc0888:/app# if command -v sqlite3 >/dev/null 2>&1; then echo "sqlite3 already installed"; else if command -v apt-get >/dev/null 2>&1; then export DE
+BIAN_FRONTEND=noninteractive; apt-get update; apt-get install -y sqlite3; elif command -v apk >/dev/null 2>&1; then apk update; apk add sqlite; elif command -v
+yum >/dev/null 2>&1; then yum -y install sqlite; elif command -v dnf >/dev/null 2>&1; then dnf -y install sqlite; else echo "No supported package manager found"
+; fi; fi
+Get:1 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+Get:2 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]
+Get:3 http://security.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [33.1 kB]
+Get:4 http://security.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [2796 kB]
+Get:5 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+Get:6 http://archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+Get:7 http://archive.ubuntu.com/ubuntu noble/main amd64 Packages [1808 kB]
+Get:8 http://security.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1182 kB]
+Get:9 http://security.ubuntu.com/ubuntu noble-security/main amd64 Packages [1701 kB]
+Get:10 http://archive.ubuntu.com/ubuntu noble/multiverse amd64 Packages [331 kB]
+Get:11 http://archive.ubuntu.com/ubuntu noble/restricted amd64 Packages [117 kB]
+Get:12 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages [19.3 MB]
+Get:13 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [2083 kB]
+Get:14 http://archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [2981 kB]
+Get:15 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1943 kB]
+Get:16 http://archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [35.9 kB]
+Get:17 http://archive.ubuntu.com/ubuntu noble-backports/main amd64 Packages [49.4 kB]
+Get:18 http://archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [34.3 kB]
+Fetched 35.0 MB in 5s (6950 kB/s)
+Reading package lists... Done
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+The following additional packages will be installed:
+  libsqlite3-0
+Suggested packages:
+  sqlite3-doc
+The following NEW packages will be installed:
+  sqlite3
+The following packages will be upgraded:
+  libsqlite3-0
+1 upgraded, 1 newly installed, 0 to remove and 35 not upgraded.
+Need to get 845 kB of archives.
+After this operation, 584 kB of additional disk space will be used.
+Get:1 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libsqlite3-0 amd64 3.45.1-1ubuntu2.5 [701 kB]
+Get:2 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 sqlite3 amd64 3.45.1-1ubuntu2.5 [144 kB]
+Fetched 845 kB in 1s (643 kB/s)
+debconf: delaying package configuration, since apt-utils is not installed
+(Reading database ... 6337 files and directories currently installed.)
+Preparing to unpack .../libsqlite3-0_3.45.1-1ubuntu2.5_amd64.deb ...
+Unpacking libsqlite3-0:amd64 (3.45.1-1ubuntu2.5) over (3.45.1-1ubuntu2.3) ...
+Selecting previously unselected package sqlite3.
+Preparing to unpack .../sqlite3_3.45.1-1ubuntu2.5_amd64.deb ...
+Unpacking sqlite3 (3.45.1-1ubuntu2.5) ...
+Setting up libsqlite3-0:amd64 (3.45.1-1ubuntu2.5) ...
+Setting up sqlite3 (3.45.1-1ubuntu2.5) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.4) ...
+root@76e008dc0888:/app# sqlite3 --version
+3.45.1 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257ccalt1 (64-bit)
+root@76e008dc0888:/app# rm -f /app/recovered.sql /app/recovered.db /app/tmp_rows.txt
+root@76e008dc0888:/app# sqlite3 /app/trunc.db ".recover" > /app/recovered.sql || true
+sql error: file is not a database (26)
+root@76e008dc0888:/app# if [ ! -s /app/recovered.sql ]; then echo "Recover empty, trying .dump"; sqlite3 /app/trunc.db ".dump" > /app/recovered.sql || true; fi
+root@76e008dc0888:/app# ls -la /app/recovered.sql
+-rw-r--r-- 1 root root 36 Dec 10 03:52 /app/recovered.sql
+root@76e008dc0888:/app# if [ -s /app/recovered.sql ]; then sqlite3 /app/recovered.db < /app/recovered.sql; fi
+root@76e008dc0888:/app# sqlite3 /app/recovered.db "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;"
+root@76e008dc0888:/app# TABLES=$(sqlite3 /app/recovered.db "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")
+root@76e008dc0888:/app# TARGET_TABLE=""; for t in $TABLES; do has_word=$(sqlite3 /app/recovered.db "SELECT 1 FROM pragma_table_info('$t') WHERE name='word' LIMI
+T 1;"); has_value=$(sqlite3 /app/recovered.db "SELECT 1 FROM pragma_table_info('$t') WHERE name='value' LIMIT 1;"); if [ -n "$has_word" ] && [ -n "$has_value" ]
+; then TARGET_TABLE="$t"; break; fi; done; echo "Target table: $TARGET_TABLE"
+Target table:
+root@76e008dc0888:/app# if [ -n "$TARGET_TABLE" ]; then sqlite3 /app/recovered.db "SELECT json_group_array(json_object('word', word, 'value', value)) FROM $TARG
+ET_TABLE;" > /app/recover.json; fi
+root@76e008dc0888:/app# if [ ! -s /app/recover.json ] && [ -n "$TARGET_TABLE" ]; then sqlite3 /app/recovered.db "SELECT '{\"word\": ' || quote(word) || ', \"val
+ue\": ' || COALESCE(value, 0) || '}' FROM $TARGET_TABLE;" > /app/tmp_rows.txt; printf "[\n" > /app/recover.json; sed 's/$/,/' /app/tmp_rows.txt | sed '$ s/,$//'
+ >> /app/recover.json; printf "\n]\n" >> /app/recover.json; fi
+root@76e008dc0888:/app# ls -la /app/recover.json
+-rw-r--r-- 1 root root 3 Dec 10 03:51 /app/recover.json
+root@76e008dc0888:/app# head -n 5 /app/recover.json
+{}
+root@76e008dc0888:/app# sed -n '1,200p' /app/recovered.sql
+BEGIN;
+PRAGMA writable_schema = on;
+root@76e008dc0888:/app# ls -la /app
+total 24
+drwxr-xr-x 1 root root 4096 Dec 10 03:52 .
+drwxr-xr-x 1 root root 4096 Dec 10 03:50 ..
+-rw-r--r-- 1 root root    3 Dec 10 03:51 recover.json
+-rw-r--r-- 1 root root    0 Dec 10 03:52 recovered.db
+-rw-r--r-- 1 root root   36 Dec 10 03:52 recovered.sql
+-rw-rw-r-- 1 root root 4096 Nov  9 09:38 trunc.db
+root@76e008dc0888:/app# python3 --version || true
+Python 3.12.3
+root@76e008dc0888:/app# if ! command -v python3 >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update; apt-get install -y python3-minimal;
+ fi
+root@76e008dc0888:/app# cat >/app/recover_extract.py << 'PY'
+> #!/usr/bin/env python3
+> import re, json
+> path = '/app/trunc.db'
+> out = '/app/recover.json'
+> with open(path, 'rb') as f:
+>     data = f.read()
+> s = data.decode('latin1', 'ignore')
+> pairs = {}
+> for m in re.finditer(r'testword([A-Za-z0-9]{2})', s):
+>     w = m.group(0)
+>     before = s[max(0, m.start()-128):m.start()]
+>     after = s[m.end():m.end()+128]
+>     nums_after = re.findall(r'([0-9]{1,10})', after)
+>     nums_before = re.findall(r'([0-9]{1,10})', before)
+>     val = None
+>     if nums_after:
+>         val = int(nums_after[0])
+>     elif nums_before:
+>         val = int(nums_before[-1])
+>     if val is not None and w not in pairs:
+>         pairs[w] = val
+> arr = [{'word': w, 'value': pairs[w]} for w in sorted(pairs)]
+> with open(out, 'w') as f:
+>     json.dump(arr, f)
+> PY
+root@76e008dc0888:/app# chmod +x /app/recover_extract.py
+root@76e008dc0888:/app# python3 /app/recover_extract.py
+root@76e008dc0888:/app# ls -la /app/recover.json
+-rw-r--r-- 1 root root 361 Dec 10 03:53 /app/recover.json
+root@76e008dc0888:/app# head -n 10 /app/recover.json
+[{"word": "testword00", "value": 1}, {"word": "testword01", "value": 0}, {"word": "testword02", "value": 1}, {"word": "testword03", "value": 2}, {"word": "testw
+ord04", "value": 3}, {"word": "testword05", "value": 2}, {"word": "testword06", "value": 52}, {"word": "testword07", "value": 6}, {"word": "testword08", "value"
+: 7}, {"word": "testword09", "value": 8}]root@76e008dc0888:/app# python3 -c "import re; s=open('/app/trunc.db','rb').read().decode('latin1','ignore'); print(len
+(list(re.finditer(r'testword([A-Za-z0-9]{2})', s))))"
+10
+root@76e008dc0888:/app# python3 -c "import json; import sys; print(len(json.load(open('/app/recover.json'))))" || true
+10
+root@76e008dc0888:/app# cat >/app/recover_extract2.py << 'PY'
+> #!/usr/bin/env python3
+> import re, json
+> path = '/app/trunc.db'
+> out = '/app/recover.json'
+> with open(path, 'rb') as f:
+>     data = f.read()
+> s = data.decode('latin1', 'ignore')
+> pairs = {}
+> for m in re.finditer(r'testword([A-Za-z0-9]{2})', s):
+>     w = m.group(0)
+>     start = m.start()
+>     end = m.end()
+>     before = s[max(0, start-2048):start]
+>     after = s[end:end+2048]
+>     val = None
+>     # Prefer explicit JSON-like value patterns
+>     m_after_json = re.search(r'"value"\s*:\s*(-?\d+)', after)
+>     m_before_json = None if m_after_json else re.search(r'"value"\s*:\s*(-?\d+)(?!.*"value"\s*:\s*-?\d+)', before)
+>     if m_after_json:
+>         val = int(m_after_json.group(1))
+>     elif m_before_json:
+>         val = int(m_before_json.group(1))
+>     else:
+>         # Choose nearest integer to the token
+>         candidates = []
+>         for nm in re.finditer(r'-?\d+', after):
+>             candidates.append((abs(nm.start()), int(nm.group(0))))
+>         for nm in re.finditer(r'-?\d+', before):
+>             dist = abs(len(before) - nm.start())
+>             candidates.append((dist, int(nm.group(0))))
+>         if candidates:
+>             candidates.sort(key=lambda x: x[0])
+>             val = candidates[0][1]
+>     if val is not None and w not in pairs:
+>         pairs[w] = val
+> arr = [{'word': w, 'value': pairs[w]} for w in sorted(pairs)]
+> with open(out, 'w') as f:
+>     json.dump(arr, f)
+> PY
+root@76e008dc0888:/app# chmod +x /app/recover_extract2.py
+root@76e008dc0888:/app# python3 /app/recover_extract2.py
+root@76e008dc0888:/app# python3 -c "import re; s=open('/app/trunc.db','rb').read().decode('latin1','ignore'); print(len(list(re.finditer(r'testword([A-Za-z0-9]{
+2})', s))))"
+10
+root@76e008dc0888:/app# python3 -c "import json; print(len(json.load(open('/app/recover.json'))))"
+10
+root@76e008dc0888:/app# head -n 5 /app/recover.json
+[{"word": "testword00", "value": 1}, {"word": "testword01", "value": 2}, {"word": "testword02", "value": 3}, {"word": "testword03", "value": 4}, {"word": "testw
+ord04", "value": 52}, {"word": "testword05", "value": 2}, {"word": "testword06", "value": 7}, {"word": "testword07", "value": 6}, {"word": "testword08", "value"
+: 9}, {"word": "testword09", "value": 8}]root@76e008dc0888:/app#

@@ -1,0 +1,529 @@
+root@93213478a063:/app# asciinema rec --stdin /logs/agent.cast
+asciinema: recording asciicast to /logs/agent.cast
+asciinema: press <ctrl-d> or type "exit" when you're done
+root@93213478a063:/app# clear
+root@93213478a063:/app# ls -la
+total 980176
+drwxr-xr-x 1 root root       4096 Dec  9 23:38 .
+drwxr-xr-x 1 root root       4096 Dec  9 23:39 ..
+-rw-r--r-- 1 root root     197120 Dec  9 23:38 alpine-disk.qcow2
+-rw-r--r-- 1 root root 1003487232 Dec  7  2023 alpine.iso
+root@93213478a063:/app# ls -lh alpine.iso || ls -lh *.iso || true
+-rw-r--r-- 1 root root 957M Dec  7  2023 alpine.iso
+root@93213478a063:/app# qemu-system-x86_64 --version
+QEMU emulator version 5.2.0 (Debian 1:5.2+dfsg-11+deb11u5)
+Copyright (c) 2003-2020 Fabrice Bellard and the QEMU Project developers
+root@93213478a063:/app# sh -lc 'if command -v ss >/dev/null 2>&1; then p=$(ss -ltnp 2>/dev/null | awk "/:6665/ {print \$NF}" | sed -n "s/.*pid=\([0-9]*\),.*/\1/
+p"); [ -n "$p" ] && kill -9 $p || true; fi'
+root@93213478a063:/app# qemu-system-x86_64 -m 1024 -cdrom alpine.iso -boot d -display none -serial telnet:127.0.0.1:6665,server,nowait -daemonize -pidfile /tmp/
+qemu-alpine.pid -name alpine-telnet
+root@93213478a063:/app# bash -lc 'for i in $(seq 1 180); do out=$(timeout 3 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665; sleep 0.2; dd bs=1 count=8192 status=none
+ <&3 2>/dev/null" | tr -d "\r"); if echo "$out" | grep -qi "login:"; then echo READY; exit 0; fi; sleep 1; done; echo TIMEOUT; exit 1'
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+bash: line 1: warning: command substitution: ignored null byte in input
+READY
+root@93213478a063:/app# sh -lc 'if [ -f /tmp/qemu-alpine.pid ]; then kill -9 $(cat /tmp/qemu-alpine.pid) 2>/dev/null || true; rm -f /tmp/qemu-alpine.pid; fi'
+root@93213478a063:/app# sh -lc 'pids=$(ss -ltnp 2>/dev/null | awk "/:6665 /{print \$NF}" | sed -n "s/.*pid=\([0-9]*\),.*/\1/p" | sort -u); [ -n "$pids" ] && kil
+l -9 $pids || true'
+root@93213478a063:/app# mkdir -p /mnt/iso
+root@93213478a063:/app# sh -lc 'mountpoint -q /mnt/iso || mount -o loop,ro alpine.iso /mnt/iso'
+mount: /mnt/iso: mount failed: Operation not permitted.
+root@93213478a063:/app# ls -la /mnt/iso/boot || true
+ls: cannot access '/mnt/iso/boot': No such file or directory
+root@93213478a063:/app# bash -lc 'K=""; I=""; for base in virt lts; do if [ -f /mnt/iso/boot/vmlinuz-$base ] && [ -f /mnt/iso/boot/initramfs-$base ]; then K=/mn
+t/iso/boot/vmlinuz-$base; I=/mnt/iso/boot/initramfs-$base; break; fi; done; if [ -z "$K" ]; then K=$(ls /mnt/iso/boot/vmlinuz* 2>/dev/null | head -n1); I=$(ls /
+mnt/iso/boot/initramfs* 2>/dev/null | head -n1); fi; echo -n "$K" >/tmp/alpine-kernel; echo -n "$I" >/tmp/alpine-initrd; printf "Using kernel: %s\nUsing initrd:
+ %s\n" "$K" "$I"'
+Using kernel:
+Using initrd:
+root@93213478a063:/app# bash -lc 'K=$(cat /tmp/alpine-kernel); I=$(cat /tmp/alpine-initrd); qemu-system-x86_64 -m 1024 -name alpine-telnet -pidfile /tmp/qemu-al
+pine.pid -daemonize -display none -serial telnet:127.0.0.1:6665,server,nowait -drive file=alpine-disk.qcow2,if=virtio,format=qcow2 -drive file=alpine.iso,media=
+cdrom,if=ide,readonly=on -kernel "$K" -initrd "$I" -append "console=ttyS0,115200 modules=loop,squashfs,sd-mod,usb-storage quiet alpine_dev=cdrom:iso9660"'
+qemu: could not open kernel file '': No such file or directory
+root@93213478a063:/app# bash -lc 'for i in $(seq 1 45); do out=$(timeout 2 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665; sleep 0.2; dd bs=1 count=4096 status=none
+<&3 2>/dev/null" | tr -d "\r"); if echo "$out" | grep -Eqi "(^| )login:"; then echo READY; exit 0; fi; sleep 1; done; echo WAITING'
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash -lc 'for i in $(seq 1 45); do out=$(timeout 2 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665; sleep 0.2; dd bs=1 count=4096 status=none <&3 2>/dev/null" | tr -d
+ "\r"); if echo "$out" | grep -Eqi "(^| )login:"; then echo READY; exit 0; fi; sleep 1; done; echo WAITING'
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+WAITING
+root@93213478a063:/app# bash -lc 'for i in $(seq 1 45); do out=$(timeout 2 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665; sleep 0.2; dd bs=1 count=4096 status=none
+<&3 2>/dev/null" | tr -d "\r"); if echo "$out" | grep -Eqi "(^| )login:"; then echo READY; exit 0; fi; sleep 1; done; echo WAITING'
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash -lc 'for i in $(seq 1 45); do out=$(timeout 2 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665; sleep 0.2; dd bs=1 count=4096 status=none <&3 2>/dev/null" | tr -d
+ "\r"); if echo "$out" | grep -Eqi "(^| )login:"; then echo READY; exit 0; fi; sleep 1; done; echo WAITING'
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+WAITING
+root@93213478a063:/app# bash -lc 'for i in $(seq 1 45); do out=$(timeout 2 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665; sleep 0.2; dd bs=1 count=4096 status=none
+<&3 2>/dev/null" | tr -d "\r"); if echo "$out" | grep -Eqi "(^| )login:"; then echo READY; exit 0; fi; sleep 1; done; echo WAITING'
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/127.0.0.1/6665: Connection refused
+bash: line 1: 3: Bad file descriptor
+WAITING
+root@93213478a063:/app# sh -lc 'pids=$(ss -ltnp 2>/dev/null | awk "/:6665 /{print \$NF}" | sed -n "s/.*pid=\([0-9]*\),.*/\1/p" | sort -u); [ -n "$pids" ] && kil
+l -9 $pids || true'
+root@93213478a063:/app# qemu-system-x86_64 -m 1024 -name alpine-telnet -pidfile /tmp/qemu-alpine.pid -daemonize -display none -serial telnet:127.0.0.1:6665,serv
+er,nowait -drive file=alpine-disk.qcow2,if=virtio,format=qcow2 -cdrom alpine.iso -boot d
+root@93213478a063:/app# bash -lc 'for i in $(seq 1 60); do out=$(timeout 3 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \"\\r\\n\" >&3; sleep 0.5
+; dd bs=1 count=8192 status=none <&3 2>/dev/null | tr -d $'\r\x00'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "logi
+n:"; then echo READY; exit 0; fi; sleep 1; done; echo WAITING'
+bash -lc 'for i in $(seq 1 60); do out=$(timeout 3 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \"\\r\\n\" >&3; sleep 0.5; dd bs=1 count=8192 sta
+tus=none <&3 2>/dev/null | tr -d $'\r\x00'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; ex
+it 0; fi; sleep 1; done; echo WAITING'
+bash -lc 'for i in $(seq 1 60); do out=$(timeout 3 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \"\\r\\n\" >&3; sleep 0.5; dd bs=1 count=8192 sta
+tus=none <&3 2>/dev/null | tr -d $'\r\x00'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; ex
+it 0; fi; sleep 1; done; echo TIMEOUT; exit 1'
+WAITING
+root@93213478a063:/app# bash -lc 'for i in $(seq 1 60); do out=$(timeout 3 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \"\\r\\n\" >&3; sleep 0.5
+; dd bs=1 count=8192 status=none <&3 2>/dev/null | tr -d $'\r\x00'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "logi
+n:"; then echo READY; exit 0; fi; sleep 1; done; echo WAITING'
+sh -lc 'if [ -f /tmp/qemu-alpine.pid ] && ps -p $(cat /tmp/qemu-alpine.pid) >/dev/null 2>&1; then echo QEMU_RUNNING; else echo QEMU_NOT_RUNNING; fi; ss -ltnp 2>
+/dev/null | grep -E ":6665\b" || true'
+sh -lc '[ -f /tmp/qemu-alpine.pid ] && ps -p $(cat /tmp/qemu-alpine.pid) >/dev/null 2>&1 || qemu-system-x86_64 -m 1024 -name alpine-telnet -pidfile /tmp/qemu-al
+pine.pid -daemonize -display none -serial telnet:127.0.0.1:6665,server,nowait -drive file=alpine-disk.qcow2,if=virtio,format=qcow2 -cdrom alpine.iso -boot d'
+bash -lc 'for i in $(seq 1 60); do out=$(timeout 5 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \"\\r\\n\" >&3; sleep 1; dd bs=1 count=8192 statu
+s=none <&3 2>/dev/null | tr -d $'\r\x00'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; exit
+ 0; fi; sleep 2; done; echo WAITING'
+bash -lc 'for i in $(seq 1 60); do out=$(timeout 5 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \"\\r\\n\" >&3; sleep 1; dd bs=1 count=8192 statu
+s=none <&3 2>/dev/null | tr -d $'\r\x00'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; exit
+ 0; fi; sleep 2; done; echo WAITING'
+WAITING
+root@93213478a063:/app# bash -lc 'for i in $(seq 1 60); do out=$(timeout 3 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \"\\r\\n\" >&3; sleep 0.5
+; dd bs=1 count=8192 status=none <&3 2>/dev/null | tr -d $'\r\x00'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "logi
+n:"; then echo READY; exit 0; fi; sleep 1; done; echo TIMEOUT; exit 1'
+bash -lc 'for i in $(seq 1 60); do out=$(timeout 5 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \"\\r\\n\" >&3; sleep 1; dd bs=1 count=8192 statu
+s=none <&3 2>/dev/null | tr -d $'\r\x00'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; exit
+ 0; fi; sleep 2; done; echo WAITING'
+bash -lc 'for i in $(seq 1 60); do out=$(timeout 5 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \"\\r\\n\" >&3; sleep 1; dd bs=1 count=8192 statu
+s=none <&3 2>/dev/null | tr -d $'\r\x00'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; exit
+ 0; fi; sleep 2; done; echo WAITING'
+TIMEOUT
+root@93213478a063:/app# sh -lc 'if [ -f /tmp/qemu-alpine.pid ] && ps -p $(cat /tmp/qemu-alpine.pid) >/dev/null 2>&1; then echo QEMU_RUNNING; else echo QEMU_NOT_
+RUNNING; fi; ss -ltnp 2>/dev/null | grep -E ":6665\b" || true'
+QEMU_NOT_RUNNING
+root@93213478a063:/app# sh -lc '[ -f /tmp/qemu-alpine.pid ] && ps -p $(cat /tmp/qemu-alpine.pid) >/dev/null 2>&1 || qemu-system-x86_64 -m 1024 -name alpine-teln
+et -pidfile /tmp/qemu-alpine.pid -daemonize -display none -serial telnet:127.0.0.1:6665,server,nowait -drive file=alpine-disk.qcow2,if=virtio,format=qcow2 -cdro
+m alpine.iso -boot d'
+qemu-system-x86_64: cannot create PID file: Cannot lock pid file: Resource temporarily unavailable
+root@93213478a063:/app# bash -lc 'for i in $(seq 1 60); do out=$(timeout 5 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \"\\r\\n\" >&3; sleep 1;
+dd bs=1 count=8192 status=none <&3 2>/dev/null | tr -d $'\r\x00'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:
+"; then echo READY; exit 0; fi; sleep 2; done; echo WAITING'
+bash -lc 'for i in $(seq 1 60); do out=$(timeout 5 bash -lc "exec 3<>/dev/tcp/127.0.0.1/6665 || exit 7; printf \"\\r\\n\" >&3; sleep 1; dd bs=1 count=8192 statu
+s=none <&3 2>/dev/null | tr -d $'\r\x00'" 2>/dev/null); if [ "$?" -eq 7 ]; then sleep 1; continue; fi; if echo "$out" | grep -qi "login:"; then echo READY; exit
+ 0; fi; sleep 2; done; echo TIMEOUT; exit 1'
+

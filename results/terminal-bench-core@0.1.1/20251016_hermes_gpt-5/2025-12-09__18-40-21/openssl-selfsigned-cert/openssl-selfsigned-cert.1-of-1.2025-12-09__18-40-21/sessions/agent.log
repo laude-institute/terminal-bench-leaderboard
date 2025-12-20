@@ -1,0 +1,91 @@
+[?2004hroot@529b1f57e64c:/app# asciinema rec --stdin /logs/agent.cast
+[?2004l[0;32masciinema: recording asciicast to /logs/agent.cast[0m
+[0;32masciinema: press <ctrl-d> or type "exit" when you're done[0m
+[?2004hroot@529b1f57e64c:/app# clear
+[?2004l[H[J[3J[?2004hroot@529b1f57e64c:/app# mkdir -p /app/ssl
+[?2004l[?2004hroot@529b1f57e64c:/app# openssl genrsa -out /app/ssl/server.key 2048
+[?2004l[?2004hroot@529b1f57e64c:/app# chmod 600 /app/ssl/server.key
+[?2004l[?2004hroot@529b1f57e64c:/app# openssl req -new -x509 -sha256 -days 365 -key /app/ssl/server.key -out /app/ssl/server.crt -subj "/O=DevOps Team/CN=dev-internal.company.local"
+[?2004l[?2004hroot@529b1f57e64c:/app# cat /app/ssl/server.key /app/ssl/server.crt > /app/ssl/server.pem
+[?2004l[?2004hroot@529b1f57e64c:/app# openssl x509 -in /app/ssl/server.crt -noout -subject -dates -fingerprint -sha256 > /app/ssl/verification.txt
+[?2004l[?2004hroot@529b1f57e64c:/app# cat > /app/check_cert.py << 'PY'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> import ssl
+[?2004l[?2004h> import subprocess
+[?2004l[?2004h> import os
+[?2004l[?2004h> import sys
+[?2004l[?2004h> import datetime
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     cert_path = "/app/ssl/server.crt"
+[?2004l[?2004h>     key_path = "/app/ssl/server.key"
+[?2004l[?2004h>     pem_path = "/app/ssl/server.pem"
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Ensure files exist
+[?2004l[?2004h>     for p in [cert_path, key_path, pem_path]:
+[?2004l[?2004h>         if not os.path.exists(p):
+[?2004l[?2004h>             print(f"Missing required file: {p}")
+[?2004l[?2004h>             sys.exit(1)
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Try to load certificate and key
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+[?2004l[?2004h>         ctx.load_cert_chain(certfile=cert_path, keyfile=key_path)
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         print(f"Failed to load certificate: {e}")
+[?2004l[?2004h>         sys.exit(1)
+[?2004l[?2004h> 
+[?2004l[?2004h>     # Get subject and end date via openssl
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         subj_output = subprocess.check_output(["openssl", "x509", "-in", cert_path, "-noout", "-subject"], text=True).strip()
+[?2004l[?2004h>         enddate_output = subprocess.check_output(["openssl", "x509", "-in", cert_path, "-noout", "-enddate"], text=True).strip()
+[?2004l[?2004h> 
+[?2004l[?2004h>         # Parse CN from subject
+[?2004l[?2004h>         subj_text = subj_output
+[?2004l[?2004h>         if subj_text.startswith("subject="):
+[?2004l[?2004h>             subj_text = subj_text[len("subject="):].strip()
+[?2004l[?2004h>         cn = None
+[?2004l[?2004h>         if "CN=" in subj_text or "CN =" in subj_text:
+[?2004l[?2004h>             temp = subj_text.replace("/", ",")
+[?2004l[?2004h>             for part in temp.split(","):
+[?2004l[?2004h>                 part = part.strip()
+[?2004l[?2004h>                 if part.startswith("CN="):
+[?2004l[?2004h>                     cn = part.split("=", 1)[1].strip()
+[?2004l[?2004h>                     break
+[?2004l[?2004h>                 if part.startswith("CN ="):
+[?2004l[?2004h>                     cn = part.split("=", 1)[1].strip()
+[?2004l[?2004h>                     break
+[?2004l[?2004h> 
+[?2004l[?2004h>         # Parse expiration date
+[?2004l[?2004h>         # enddate_output like: "notAfter=Nov 12 12:34:56 2025 GMT"
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             not_after = enddate_output.split("=", 1)[1]
+[?2004l[?2004h>             dt = datetime.datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
+[?2004l[?2004h>             exp_date = dt.strftime("%Y-%m-%d")
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             # Fallback: try without timezone
+[?2004l[?2004h>             not_after = enddate_output.split("=", 1)[1]
+[?2004l[?2004h>             dt = datetime.datetime.strptime(not_after, "%b %d %H:%M:%S %Y")
+[?2004l[?2004h>             exp_date = dt.strftime("%Y-%m-%d")
+[?2004l[?2004h> 
+[?2004l[?2004h>         print(f"Common Name: {cn}")
+[?2004l[?2004h>         print(f"Expiration Date: {exp_date}")
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         print(f"Failed to parse certificate details: {e}")
+[?2004l[?2004h>         sys.exit(1)
+[?2004l[?2004h> 
+[?2004l[?2004h>     print("Certificate verification successful")
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == "__main__":
+[?2004l[?2004h>     main()
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@529b1f57e64c:/app# chmod +x /app/check_cert.py
+[?2004l[?2004hroot@529b1f57e64c:/app# python3 /app/check_cert.py
+[?2004lCommon Name: dev-internal.company.local
+Expiration Date: 2026-12-10
+Certificate verification successful
+[?2004hroot@529b1f57e64c:/app# [?2004l
+exit
+[0;32masciinema: recording finished[0m
+[0;32masciinema: asciicast saved to /logs/agent.cast[0m
+[?2004hroot@529b1f57e64c:/app# 
