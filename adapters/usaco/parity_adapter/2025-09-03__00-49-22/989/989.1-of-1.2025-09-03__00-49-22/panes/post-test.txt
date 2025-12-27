@@ -1,0 +1,165 @@
+root@5aa7c6815b90:/app# bash /tests/run-tests.sh; tmux wait -S done
+Hit:1 http://deb.debian.org/debian bookworm InRelease
+Hit:2 http://deb.debian.org/debian bookworm-updates InRelease
+Hit:3 http://deb.debian.org/debian-security bookworm-security InRelease
+Reading package lists... Done
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+curl is already the newest version (7.88.1-10+deb12u12).
+0 upgraded, 0 newly installed, 0 to remove and 30 not upgraded.
+downloading uv 0.7.13 aarch64-unknown-linux-gnu
+no checksums to verify
+installing to /root/.local/bin
+  uv
+  uvx
+everything's installed!
+
+To add $HOME/.local/bin to your PATH, either restart your shell or run:
+
+    source $HOME/.local/bin/env (sh, bash, zsh)
+    source $HOME/.local/bin/env.fish (fish)
+Initialized project `app`
+Using CPython 3.13.1 interpreter at: /usr/local/bin/python3.13
+Creating virtual environment at: .venv
+Resolved 8 packages in 480ms
+Prepared 6 packages in 1.30s
+Installed 6 packages in 45ms
+ + iniconfig==2.1.0
+ + numpy==2.3.2
+ + packaging==25.0
+ + pluggy==1.6.0
+ + pygments==2.19.2
+ + pytest==8.4.1
+===================================================================== test session starts ======================================================================
+platform linux -- Python 3.13.1, pytest-8.4.1, pluggy-1.6.0
+rootdir: /tests
+collected 2 items
+
+../tests/test_outputs.py .F                                                                                                                              [100%]
+
+=========================================================================== FAILURES ===========================================================================
+_______________________________________________________________________ test_single_task _______________________________________________________________________
+
+workdir = PosixPath('/tests')
+
+    def test_single_task(workdir):
+        # eval
+        with open(workdir / "data" / "constraint.json", 'r') as f:
+            constraint = json.load(f)
+
+        task_id = constraint["cp_id"]
+        with open("/app/solution.py", "r") as f:
+            completion = f.read()
+        solution_dict = {task_id: [completion]}
+        problem_dict = {task_id: constraint}
+>       result_sets = evaluate_solution_sets(
+            workdir,
+            solution_dict,
+            problem_dict,
+            mode="fail_fast"
+        )
+
+/tests/test_outputs.py:28:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/tests/evaluate.py:26: in evaluate_solution_sets
+    result_sets = judge.judge(workdir, solution_dict, problem_dict, **kwargs)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tests/judges/usaco_batch_judge.py:52: in judge
+    result_list.append(future.result())
+                       ^^^^^^^^^^^^^^^
+/usr/local/lib/python3.13/concurrent/futures/_base.py:449: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.13/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.13/concurrent/futures/thread.py:59: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tests/judges/usaco_batch_judge.py:86: in usaco_judge
+    return usaco_python3_judge(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+workdir = PosixPath('/tests'), problem_id = '989'
+solution_code = '#!/usr/bin/env python3\nimport sys\n\ndef max_dist(T, X):\n    # Maximum distance in T seconds, start speed 0, end sp...  out.append(str(min_ti
+me(K, X)))\n    sys.stdout.write("\\n".join(out))\n\nif __name__ == \'__main__\':\n    main()\n'
+runtime_limit = 600, memory_limit = 1280, num_tests = 10, mode = 'fail_fast'
+
+    def usaco_python3_judge(workdir: Union[Path, str],
+                            problem_id: str,
+                            solution_code: str,
+                            runtime_limit: float,
+                            memory_limit: int,
+                            num_tests: int,
+                            mode: str = 'fail_fast') -> Result:
+        '''
+        mode = "fail_fast": returns the first result that fails, or ResultType.ACCEPTED
+            if none fail
+        mode = "eval_all": evaluates on all test cases no matter of result and returns a
+            meta-result with a summary status and result_type, and a results_list of
+            per-test-case Results (summary result_type of the first incorrect result, or
+            ResultType.ACCEPTED)
+        '''
+        # (all show up as runtime error right now)
+        assert mode == 'fail_fast' or mode == 'eval_all', \
+            'Only modes fail_fast and eval_all are supported'
+
+        # saving solution code if save_solution
+        timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M_%S_%f")
+
+        result = {}
+        if mode == 'eval_all':
+            result['result_list'] = []
+        result['problem_id'] = problem_id
+        result['num_tests'] = num_tests
+        assert num_tests > 0, 'Problem cannot have 0 tests'
+
+        # construct judge sandbox directories if they don't exist
+        path = Path(f"{workdir}/predictions/")
+        path.mkdir(parents=True, exist_ok=True)
+        pred_path = os.path.join(path.resolve(), '{}_{}.pred')
+
+        for i in range(1, num_tests+1):
+            input_file, output_file = get_test_in_out_files(workdir, problem_id, i)
+            # include timestamp to avoid concurrency issues
+            pred_file = pred_path.format(i, timestamp)
+
+            # eval
+            result_i = check_correctness(
+                solution_code,
+                i,
+                runtime_limit,
+                memory_limit,
+                input_file,
+                pred_file,
+                output_file
+            )
+            if mode == 'fail_fast':
+>               assert result_i['result_type'] == ResultType.ACCEPTED, \
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                    f"Failed because {result_i} on test {i}."
+E               AssertionError: Failed because {'result_type': <ResultType.WRONG_ANSWER: 2>, 'status': 'wrong answer.\nInput:\n999856020 1\n1\nPredicted output:
+\n63241\nCorrect output:\n63240'} on test 4.
+
+/tests/judges/usaco_batch_judge.py:146: AssertionError
+======================================================================= warnings summary =======================================================================
+test_outputs.py::test_single_task
+test_outputs.py::test_single_task
+test_outputs.py::test_single_task
+test_outputs.py::test_single_task
+test_outputs.py::test_single_task
+test_outputs.py::test_single_task
+test_outputs.py::test_single_task
+test_outputs.py::test_single_task
+  /usr/local/lib/python3.13/multiprocessing/popen_fork.py:67: DeprecationWarning: This process (pid=1671) is multi-threaded, use of fork() may lead to deadlocks
+ in the child.
+    self.pid = os.fork()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================================================================ PASSES ============================================================================
+=================================================================== short test summary info ====================================================================
+PASSED ../tests/test_outputs.py::test_solution_exists
+FAILED ../tests/test_outputs.py::test_single_task - AssertionError: Failed because {'result_type': <ResultType.WRONG_ANSWER: 2>, 'status': 'wrong answer.\nInput
+:\n999856020 1\n1\nPredicted output:\n63241\nCo...
+=========================================================== 1 failed, 1 passed, 8 warnings in 0.20s ============================================================
+root@5aa7c6815b90:/app#

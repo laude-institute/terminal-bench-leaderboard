@@ -1,0 +1,193 @@
+root@55fc9650d513:/app# bash /tests/run-tests.sh; tmux wait -S done
+Hit:1 http://deb.debian.org/debian bookworm InRelease
+Hit:2 http://deb.debian.org/debian bookworm-updates InRelease
+Hit:3 http://deb.debian.org/debian-security bookworm-security InRelease
+Reading package lists... Done
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+curl is already the newest version (7.88.1-10+deb12u12).
+0 upgraded, 0 newly installed, 0 to remove and 30 not upgraded.
+downloading uv 0.7.13 aarch64-unknown-linux-gnu
+no checksums to verify
+installing to /root/.local/bin
+  uv
+  uvx
+everything's installed!
+
+To add $HOME/.local/bin to your PATH, either restart your shell or run:
+
+    source $HOME/.local/bin/env (sh, bash, zsh)
+    source $HOME/.local/bin/env.fish (fish)
+Initialized project `app`
+Using CPython 3.13.1 interpreter at: /usr/local/bin/python3.13
+Creating virtual environment at: .venv
+Resolved 8 packages in 146ms
+Prepared 6 packages in 833ms
+Installed 6 packages in 12ms
+ + iniconfig==2.1.0
+ + numpy==2.3.2
+ + packaging==25.0
+ + pluggy==1.6.0
+ + pygments==2.19.2
+ + pytest==8.4.1
+===================================================================== test session starts ======================================================================
+platform linux -- Python 3.13.1, pytest-8.4.1, pluggy-1.6.0
+rootdir: /tests
+collected 2 items
+
+../tests/test_outputs.py .F                                                                                                                              [100%]
+
+=========================================================================== FAILURES ===========================================================================
+_______________________________________________________________________ test_single_task _______________________________________________________________________
+
+workdir = PosixPath('/tests')
+
+    def test_single_task(workdir):
+        # eval
+        with open(workdir / "data" / "constraint.json", 'r') as f:
+            constraint = json.load(f)
+
+        task_id = constraint["cp_id"]
+        with open("/app/solution.py", "r") as f:
+            completion = f.read()
+        solution_dict = {task_id: [completion]}
+        problem_dict = {task_id: constraint}
+>       result_sets = evaluate_solution_sets(workdir, solution_dict, problem_dict, mode="fail_fast")
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+/tests/test_outputs.py:27:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/tests/evaluate.py:26: in evaluate_solution_sets
+    result_sets = judge.judge(workdir, solution_dict, problem_dict, **kwargs)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tests/judges/usaco_batch_judge.py:54: in judge
+    result_list.append(future.result())
+                       ^^^^^^^^^^^^^^^
+/usr/local/lib/python3.13/concurrent/futures/_base.py:449: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.13/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+/usr/local/lib/python3.13/concurrent/futures/thread.py:59: in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/tests/judges/usaco_batch_judge.py:87: in usaco_judge
+    return usaco_python3_judge(workdir, problem['cp_id'], solution_code, problem['runtime_limit_sec'], problem['memory_limit_mb'], num_tests, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+workdir = PosixPath('/tests'), problem_id = '550'
+solution_code = '#!/usr/bin/env python3\n"""\nSolution to the hay bale trapping problem.\n"""\nimport sys\n\ndef main():\n    data = s... 1\n    if ans >= INF:\
+n        print(-1)\n    else:\n        print(ans)\n\nif __name__ == \'__main__\':\n    main()\n'
+runtime_limit = 600, memory_limit = 1280, num_tests = 14, mode = 'fail_fast', verbose = False
+
+    def usaco_python3_judge(workdir: Union[Path, str],
+                            problem_id: str,
+                            solution_code: str,
+                            runtime_limit: float,
+                            memory_limit: int,
+                            num_tests: int,
+                            mode: str = 'fail_fast',
+                            verbose=False) -> Result:
+        '''
+        mode = "fail_fast": returns the first result that fails, or ResultType.ACCEPTED
+            if none fail
+        mode = "eval_all": evaluates on all test cases no matter of result and returns a meta-result
+            with a summary status and result_type, and a results_list of per-test-case Results
+            (summary result_type of the first incorrect result, or ResultType.ACCEPTED)
+        '''
+        # TODO make sure time and memory limits in dataset
+        # TODO implement compile error and memory limit in usaco_utils (all show up as runtime error right now)
+        assert mode == 'fail_fast' or mode == 'eval_all', 'Only modes fail_fast and eval_all are supported'
+
+        # saving solution code if save_solution
+        timestamp = datetime.now().strftime("%m_%d_%Y_%H_%M_%S_%f")
+
+        result = {}
+        if mode == 'eval_all':
+            result['result_list'] = []
+        result['problem_id'] = problem_id
+        result['num_tests'] = num_tests
+        assert num_tests > 0, 'Problem cannot have 0 tests'
+
+        # construct judge sandbox directories if they don't exist
+        path = Path(f"{workdir}/predictions/")
+        path.mkdir(parents=True, exist_ok=True)
+        pred_path = os.path.join(path.resolve(), '{}_{}.pred')
+
+        for i in range(1, num_tests+1):
+            input_file, output_file = get_test_in_out_files(workdir, problem_id, i)
+            pred_file = pred_path.format(i, timestamp) # include timestamp to avoid concurrency issues
+
+            # eval
+            result_i = check_correctness(solution_code, i, runtime_limit, memory_limit, input_file, pred_file, output_file)
+            if mode == 'fail_fast':
+>               assert result_i['result_type'] == ResultType.ACCEPTED, f"Failed because {result_i} on test {i}."
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E               AssertionError: Failed because {'result_type': <ResultType.WRONG_ANSWER: 2>, 'status': 'wrong answer.\nInput:\n749 28272\n166 18872\n17 53012\n3
+15 7703\n85 6164\n17 60725\n64 88717\n21 38377\n40 90058\n42 82462\n3710 476\n28 27470\n18 44145\n2371 339\n34 77483\n18 59167\n159 460\n27 37374\n61 6962\n17 5
+3512\n17 59672\n6978 3117\n17 48651\n24 65621\n81 76971\n20899 2713\n17 55033\n17 71942\n38 85350\n41 30608\n67 100891\n17 30928\n18 58331\n17 47507\n29 3896\n3
+4 74081\n307 628\n2240 104642\n188 13545\n20 80672\n1228 740\n17 60647\n59 6252\n17 45468\n963 97555\n18 41975\n17 58536\n42 85168\n49 31722\n20 72677\n226 2123
+4\n43 99184\n21 11496\n31 68970\n17 56483\n22 8241\n269 20567\n57 3513\n33 89826\n450 8939\n246 19910\n26 68222\n495 14334\n20 85830\n33 73605\n86 81671\n854 90
+637\n1700 7218\n23 67075\n85 19859\n260 11203\n20 71298\n283 90482\n17 54251\n93 18645\n17 50084\n3122 6789\n214 5350\n18 59235\n20 67176\n28 35059\n53 13052\n6
+88 12097\n117 15369\n172 89952\n1283 93247\n18 56823\n63 23442\n38 24727\n19 10008\n21 35736\n26 77590\n39 71082\n19 61477\n17 64637\n17 50697\n24 65039\n40 107
+63\n20 77513\n18 46825\n18 57023\n18 56160\n292 87820\n17 48690\n17 49979\n17 48604\n21 13642\n214 18756\n12054 101819\n33 2581\n196 101570\n17 53691\n37 5376\n
+56 29117\n50 86248\n28 37893\n472 1385\n17 44656\n23 64171\n97 94437\n19 44729\n19 92550\n18 56775\n33 35780\n29 84224\n212 5276\n495 87301\n36 32631\n326 11769
+\n20 68250\n22 28207\n65 28828\n509 90713\n1136 9314\n18 59516\n17 56574\n27 32163\n17 53133\n18 47971\n32 30735\n31 17791\n1707 384\n304 88471\n37 90453\n255 8
+8257\n62 93111\n17 52386\n25 34404\n25 88108\n22 83354\n19 37985\n30 37241\n25 78761\n17 49603\n26 71972\n17 46466\n19 9034\n320 89708\n56 75527\n31 92599\n46 2
+1259\n20 65619\n284 95188\n320 2115\n33 36426\n46 11147\n297 12938\n34 35077\n24 33615\n4540 5970\n19 59871\n95 90203\n301 97116\n17 56928\n17 40300\n424 16654\
+n990 15463\n35 25721\n20 74982\n22 79319\n68 3822\n28 76336\n29 31539\n2439 1143\n356 90946\n19 61258\n17 57379\n29 2926\n39 11599\n29 7365\n55 102065\n758 6143
+\n71 101955\n233 15719\n17 55361\n30 75884\n19 76021\n43 75941\n17 51173\n18 61063\n86 82027\n94 78308\n17 61322\n101 81441\n28 33773\n75 15337\n5629 3342\n21 4
+3074\n18 49005\n21 69773\n18 42179\n17 56234\n39 83250\n1481 11133\n57 99777\n20 61914\n30 87202\n6593 3605\n1114 6827\n184 4648\n19 62200\n39 71291\n28 34958\n
+18 63524\n18 61506\n112 78846\n24 64327\n3559 7257\n17 52627\n24 69539\n24 26307\n18 66136\n21 20207\n20 63873\n915 4679\n17 57969\n25 68448\n17 55284\n27 77553
+\n37 29690\n175 5633\n19 60549\n41 33317\n326 86025\n19 65204\n38 28472\n20 42571\n19 41243\n1177 94638\n17 56378\n668 102273\n324 12329\n59 21062\n24 33760\n58
+17 99545\n122 97004\n510 87341\n48 31261\n18 48072\n19 62882\n788 89185\n50 76343\n67 29234\n20 65970\n135 86016\n27 24163\n21 70301\n163 6798\n174 16183\n80 22
+831\n141 95102\n18 59659\n17 49786\n23 86099\n58 28571\n156 91362\n89 80052\n49 89087\n219 92197\n32 29007\n144 570\n17 56635\n39 33425\n114 99301\n19 61530\n32
+1 19757\n25 37679\n37 89512\n20 42937\n26 37740\n17 55212\n29 81949\n63 84347\n62 29922\n25 10656\n20 34984\n28075 2616\n75 77758\n18 47737\n30 81310\n19 86730\
+n17 51270\n28 71001\n37 102391\n1758 103933\n67 78131\n17 56773\n26 35974\n63 4557\n69 21999\n31 35042\n20 63932\n4612 1500\n22 64915\n32 73967\n17 54997\n20 12
+992\n23 31407\n25 67169\n19 45248\n82 8848\n17 53780\n20 71714\n37 72957\n367 87643\n54 30274\n20 18698\n29 34717\n100 84694\n199 91441\n18 59185\n845 11754\n19
+275 3903\n393 11323\n49 79022\n18 65910\n17 48503\n17 42170\n38 99961\n500 89174\n30053 102769\n602 97828\n22 1193\n38 32181\n87 19717\n58 27751\n18 57601\n17 4
+3764\n53 80496\n28 25260\n63 4343\n42 32760\n110 101377\n18 65749\n74 80575\n23 71337\n18 59742\n217 90182\n23 87082\n22 35170\n31 33525\n31 76218\n630 100256\n
+21 43146\n19 67754\n23 20496\n17 50093\n307 19797\n228 20872\n20 33035\n159 23672\n20 70162\n18 58910\n21 34865\n18 68078\n18 38163\n53 25640\n247 83246\n228 21
+902\n30 94187\n368 85315\n17 56607\n18 60625\n24 74418\n17 50298\n35 73460\n35029 104510\n17 50068\n156 89337\n975 94784\n19 45484\n18 46558\n22 34867\n70 87537
+\n18 41569\n19 41278\n94 81779\n17 52000\n21 66973\n3657 9272\n56 21410\n29 83925\n78 13893\n38 74712\n247 4297\n18 48185\n36 89982\n176 11422\n92 9919\n54 7647
+1\n20 66054\n34 71057\n26 1006\n88 77777\n26 34846\n24 77935\n20 64634\n23 72693\n58 81225\n40 74442\n113 1464\n19 23652\n56 2742\n12247 3835\n37 24549\n17 6197
+9\n314 88572\n76 25976\n18 43632\n17 50241\n78 83488\n81 25250\n52 75408\n1090 9853\n43 32889\n26 25358\n837 97439\n137 16316\n103 81913\n91 5527\n23 96119\n279
+ 87582\n20 93226\n19 61808\n92 2683\n45 707\n28 25597\n183 19665\n767 14417\n19 40841\n6862 6498\n105 79489\n2109 7894\n123 96803\n2718 8641\n132 86786\n21 6252
+0\n56 76991\n62 75466\n22 75807\n19 36221\n17 54837\n44 98133\n17 53340\n50 99681\n17 54709\n17 50897\n2257 102802\n28 15374\n21 41284\n143 89475\n205 21461\n15
+4 87810\n44 90945\n138 24791\n55 26796\n50 28638\n166 15515\n17 48819\n82 26860\n17 53552\n19 42220\n291 1138\n17 55926\n145 24853\n20 40526\n25 10651\n17 49527
+\n17 53123\n17 47108\n219 94763\n18 31611\n17 48222\n30 37711\n986 6497\n42 33082\n22 38825\n18 57184\n170 5695\n17 56474\n1535 103004\n33 35393\n17 49503\n251
+104801\n18 46763\n173 380\n20 100500\n19 61575\n17 52009\n18 44640\n22 82215\n18 48091\n17 54558\n17 53728\n28 37213\n18 58211\n2525 10185\n34 72064\n20 64206\n
+551 103697\n34 33287\n40 17008\n32 11062\n21 66783\n23 22570\n32 70168\n185 1483\n18 47672\n21 96829\n107 11247\n34 76192\n17 51457\n70 28863\n37 69830\n195 835
+81\n59 94555\n18 62976\n21 36026\n39 80663\n63 27626\n211 104749\n3100 100703\n18 1424\n17 54958\n31 35147\n453 17666\n25 28348\n141 88233\n72 83160\n19 42965\n
+1370 13984\n42 71149\n20 34455\n19 41515\n17179 100501\n21 5892\n18 57451\n4919 99023\n18 42510\n17 49812\n114 7726\n19 81681\n96 27117\n332 91115\n43 10371\n24
+ 64558\n18 56972\n96 99146\n23 30421\n790 101398\n2365 100319\n98 16400\n192 1425\n15715 4185\n17 54775\n51 14277\n39 11992\n22 94238\n17 51244\n20 42071\n24488
+ 104805\n33 83801\n33 29875\n20 42911\n34 3834\n102 79567\n24 39139\n17 49463\n2049 101906\n42 80161\n4169 329\n161 6723\n227 83081\n18 47092\n20 73853\n670 886
+26\n26 88476\n82 22829\n29 35600\n20 66995\n600 102735\n29 34104\n32 30069\n21 72955\n47 29899\n96 78365\n21 35093\n19 38211\n49 76565\n18 37872\n25 67150\n1143
+ 9303\n42 86464\n17 57180\n967 97870\n17 52014\n18 58277\n37 20538\n21 62369\n107 10030\n18 34148\n25 15181\n20 63999\n48 77932\n27 31379\n17 78521\n51 29841\n2
+5 39526\n28 12641\n18 23740\n2763 8420\n2406 96488\n17 54557\n18 47729\n984 101035\n7006 101879\n21 38838\n5309 97108\n18 63136\n23 30940\n26 78384\n118 85728\n
+629 87802\n22 12070\n1228 7331\n16206 103638\n6348 4250\n24 80279\n13676 104691\n27 66250\n25 78451\n173 23303\n40 74897\n1207 7665\n43 80824\n41 22256\n19 3858
+2\n17 54973\n65 18610\n44 16534\n2395 98516\n22 39523\n6518 2693\n17 54257\n31 35349\n5298 98482\n23 78345\n161 18628\n60 27569\n42 76647\n18 58391\n17 52972\n3
+021 97405\n422 10897\n18 63338\n21 36809\n24 40288\n17 54327\n250 88818\n19 40883\n67 14463\n53 23338\n19 46522\n25 29254\n20 63920\n43 73000\n1398 97489\n73 68
+24\n20 17122\n2828 98449\n22 40813\n18 29853\n21 102107\n80 14600\n49 83280\n68 100464\n184 85364\n25 81068\n18 58453\n222 96494\n90 3763\n19 30056\n128 80839\n
+54 81518\n17 52430\n18 68937\n257 100596\n20 64861\n40 75654\n20 73855\n37 27628\n21 42049\n260 83492\n62 30251\n37 20979\n17 49690\n83 81611\n90 16511\n200 931
+0\n18 45782\n19 65535\n18 45499\n4968 1048\n18 49061\n99 82506\n35 21008\n45 80438\n139 8499\n80 78859\n54 93415\n17 53843\n186 15097\n194 10390\n201 83276\n137
+ 24489\n36 77101\n73 29149\n21 41527\n130 20500\n45192 104729\n8936 101852\n1133 103658\n23 81479\n43 30782\n18 41423\n18 47716\n17 54841\n37 18260\n260 92251\n
+63 80592\nPredicted output:\n-1\nCorrect output:\n25707'} on test 5.
+
+/tests/judges/usaco_batch_judge.py:143: AssertionError
+======================================================================= warnings summary =======================================================================
+test_outputs.py: 10 warnings
+  /usr/local/lib/python3.13/multiprocessing/popen_fork.py:67: DeprecationWarning: This process (pid=1674) is multi-threaded, use of fork() may lead to deadlocks
+ in the child.
+    self.pid = os.fork()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================================================================ PASSES ============================================================================
+=================================================================== short test summary info ====================================================================
+PASSED ../tests/test_outputs.py::test_solution_exists
+FAILED ../tests/test_outputs.py::test_single_task - AssertionError: Failed because {'result_type': <ResultType.WRONG_ANSWER: 2>, 'status': 'wrong answer.\nInput
+:\n749 28272\n166 18872\n17 53012\n315 7703\n85...
+=========================================================== 1 failed, 1 passed, 10 warnings in 0.11s ===========================================================
+root@55fc9650d513:/app#
