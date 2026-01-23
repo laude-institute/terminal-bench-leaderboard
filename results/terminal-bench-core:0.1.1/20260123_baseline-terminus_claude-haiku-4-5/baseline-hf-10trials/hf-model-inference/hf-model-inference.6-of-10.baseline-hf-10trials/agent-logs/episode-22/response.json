@@ -1,0 +1,17 @@
+{
+    "state_analysis": "The model download script has been created and is ready to be executed. We'll create a Flask API script to use the downloaded model.",
+    "explanation": "Create a Flask API script that will load the sentiment analysis model and expose a /sentiment endpoint for sentiment analysis.",
+    "commands": [
+        {
+            "keystrokes": "cat > /app/sentiment_service/app.py << EOL\nfrom flask import Flask, request, jsonify\nfrom transformers import pipeline\n\napp = Flask(__name__)\n\n# Load sentiment analysis model\nmodel = pipeline('sentiment-analysis', model='/app/model_cache/sentiment_model')\n\n@app.route('/sentiment', methods=['POST'])\ndef analyze_sentiment():\n    data = request.get_json()\n    if not data or 'text' not in data:\n        return jsonify({\"error\": \"No text provided\"}), 400\n    \n    text = data['text']\n    result = model(text)[0]\n    \n    return jsonify({\n        \"sentiment\": result['label'].lower(),\n        \"confidence\": {\n            \"positive\": result['score'] if result['label'] == 'POSITIVE' else 1 - result['score'],\n            \"negative\": result['score'] if result['label'] == 'NEGATIVE' else 1 - result['score']\n        }\n    })\n\nif __name__ == '__main__':\n    app.run(host='0.0.0.0', port=5000)\nEOL\n",
+            "is_blocking": true,
+            "timeout_sec": 10
+        },
+        {
+            "keystrokes": "cat > /app/sentiment_service/test_service.py << EOL\nimport requests\n\nsamples = [\n    \"I absolutely love this product! It's amazing.\",\n    \"This is the worst experience I've ever had.\",\n    \"The movie was okay, nothing special.\"\n]\n\nfor text in samples:\n    response = requests.post('http://localhost:5000/sentiment', json={'text': text})\n    print(f'Text: {text}')\n    print(f'Response: {response.json()}\\n')\nEOL\n",
+            "is_blocking": true,
+            "timeout_sec": 10
+        }
+    ],
+    "is_task_complete": false
+}

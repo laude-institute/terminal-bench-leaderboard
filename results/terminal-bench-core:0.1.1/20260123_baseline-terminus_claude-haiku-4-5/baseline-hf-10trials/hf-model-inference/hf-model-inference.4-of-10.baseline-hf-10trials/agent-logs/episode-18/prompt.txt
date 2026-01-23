@@ -1,0 +1,40 @@
+> sentiment_classifier = pipeline('sentiment-analysis', model='/app/model_cache/sentiment_model')
+>
+> @app.route('/sentiment', methods=['POST'])
+> def analyze_sentiment():
+>     try:
+>         data = request.get_json()
+>         if not data or 'text' not in data:
+>             return jsonify({"error": "No text provided"}), 400
+>
+>         text = data['text']
+>         result = sentiment_classifier(text)[0]
+>
+>         return jsonify({
+>             "sentiment": result['label'].lower(),
+>             "confidence": {
+>                 "positive": result['label'] == 'POSITIVE' and result['score'] or 1 - result['score'],
+>                 "negative": result['label'] == 'NEGATIVE' and result['score'] or 1 - result['score']
+>             }
+>         })
+>     except Exception as e:
+>         return jsonify({"error": str(e)}), 500
+>
+> if __name__ == '__main__':
+>     app.run(host='0.0.0.0', port=5000)
+> EOL; tmux wait -S done
+> cat > /app/test_sentiment_service.py << EOL
+> import requests
+>
+> test_texts = [
+>     "I love this product, it's amazing!",
+>     "This is the worst experience ever.",
+>     "The service was okay, nothing special."
+> ]
+>
+> for text in test_texts:
+>     response = requests.post('http://localhost:5000/sentiment', json={'text': text})
+>     print(f"Text: {text}")
+>     print(f"Response: {json.dumps(response.json(), indent=2)}\n")
+> EOL; tmux wait -S done
+>
