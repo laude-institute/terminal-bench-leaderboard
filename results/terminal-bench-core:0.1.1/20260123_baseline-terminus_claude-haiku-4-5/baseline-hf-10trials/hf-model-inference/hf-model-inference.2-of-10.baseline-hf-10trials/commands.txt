@@ -1,0 +1,12 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'pip install transformers flask torch\n'
+'pip install --no-cache-dir transformers flask torch\n'
+'mkdir -p /app/model_cache/sentiment_model\n'
+'python3 -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; model = AutoModelForSequenceClassification.from_pretrained(\'distilbert-base-uncased-finetuned-sst-2-english\'); tokenizer = AutoTokenizer.from_pretrained(\'distilbert-base-uncased-finetuned-sst-2-english\'); model.save_pretrained(\'/app/model_cache/sentiment_model\'); tokenizer.save_pretrained(\'/app/model_cache/sentiment_model\')"\n'
+"cat > /app/sentiment_service.py << EOL\nimport torch\nfrom flask import Flask, request, jsonify\nfrom transformers import AutoModelForSequenceClassification, AutoTokenizer\n\napp = Flask(__name__)\n\n# Load model and tokenizer\nmodel = AutoModelForSequenceClassification.from_pretrained('/app/model_cache/sentiment_model')\ntokenizer = AutoTokenizer.from_pretrained('/app/model_cache/sentiment_model')\n\n@app.route('/sentiment', methods=['POST'])\ndef analyze_sentiment():\n    data = request.get_json()\n    if not data or 'text' not in data:\n        return jsonify({'error': 'No text provided'}), 400\n    \n    text = data['text']\n    inputs = tokenizer(text, return_tensors='pt', truncation=True, padding=True)\n    \n    with torch.no_grad():\n        outputs = model(**inputs)\n        probabilities = torch.softmax(outputs.logits, dim=1)[0]\n        \n        sentiment = 'positive' if probabilities[1] > probabilities[0] else 'negative'\n        confidence = {\n            'positive': probabilities[1].item(),\n            'negative': probabilities[0].item()\n        }\n    \n    return jsonify({\n        'sentiment': sentiment,\n        'confidence': confidence\n    })\n\nif __name__ == '__main__':\n    app.run(host='0.0.0.0', port=5000)\nEOL\n"
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

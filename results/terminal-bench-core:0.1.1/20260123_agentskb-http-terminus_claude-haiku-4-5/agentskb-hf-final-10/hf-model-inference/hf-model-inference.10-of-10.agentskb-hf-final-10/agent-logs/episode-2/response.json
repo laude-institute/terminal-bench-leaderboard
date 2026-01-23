@@ -1,0 +1,17 @@
+{
+    "state_analysis": "Model successfully downloaded and saved locally. Now creating the Flask API for sentiment analysis.",
+    "explanation": "Create app.py with the Flask sentiment analysis API that uses the downloaded Hugging Face model",
+    "commands": [
+        {
+            "keystrokes": "cat > /app/app.py << 'EOF'\nfrom flask import Flask, request, jsonify\nfrom transformers import AutoTokenizer, AutoModelForSequenceClassification\nimport torch\n\napp = Flask(__name__)\n\n# Load model at startup\nmodel_path = '/app/model_cache/sentiment_model'\ntokenizer = AutoTokenizer.from_pretrained(model_path)\nmodel = AutoModelForSequenceClassification.from_pretrained(model_path)\nmodel.eval()\n\n@app.route('/sentiment', methods=['POST'])\ndef analyze():\n    data = request.get_json()\n    if not data or 'text' not in data:\n        return jsonify({'error': 'No text provided'}), 400\n    \n    inputs = tokenizer(data['text'], return_tensors='pt', truncation=True)\n    with torch.no_grad():\n        probs = torch.nn.functional.softmax(model(**inputs).logits, dim=-1)[0]\n    \n    return jsonify({\n        'sentiment': 'positive' if probs[1] > probs[0] else 'negative',\n        'confidence': {'positive': float(probs[1]), 'negative': float(probs[0])}\n    })\n\nif __name__ == '__main__':\n    app.run(host='0.0.0.0', port=5000)\nEOF\n",
+            "is_blocking": true,
+            "timeout_sec": 10
+        },
+        {
+            "keystrokes": "chmod +x /app/app.py\n",
+            "is_blocking": true,
+            "timeout_sec": 5
+        }
+    ],
+    "is_task_complete": false
+}

@@ -1,0 +1,32 @@
+{
+    "state_analysis": "The Hugging Face model has been successfully downloaded and saved to the specified directory. Now we need to create the Flask API for sentiment analysis.",
+    "explanation": "We'll create a Python script that sets up a Flask API with a sentiment analysis endpoint using the downloaded DistilBERT model.",
+    "commands": [
+        {
+            "keystrokes": "cat > /app/sentiment_service.py << EOL\nimport torch\nfrom flask import Flask, request, jsonify\nfrom transformers import AutoModelForSequenceClassification, AutoTokenizer\n\napp = Flask(__name__)\n\n# Load pre-trained model and tokenizer\nmodel_path = '/app/model_cache/sentiment_model'\nmodel = AutoModelForSequenceClassification.from_pretrained(model_path)\ntokenizer = AutoTokenizer.from_pretrained(model_path)\n\n@app.route('/sentiment', methods=['POST'])\ndef analyze_sentiment():\n    # Get text from request\n    data = request.get_json()\n    if not data or 'text' not in data:\n        return jsonify({'error': 'No text provided'}), 400\n    \n    text = data['text']\n    \n    # Tokenize and predict\n    inputs = tokenizer(text, return_tensors='pt', truncation=True, padding=True)\n    \n    with torch.no_grad():\n        outputs = model(**inputs)\n        probabilities = torch.softmax(outputs.logits, dim=1)[0]\n    \n    # Get sentiment and confidence\n    negative_prob, positive_prob = probabilities.tolist()\n    sentiment = 'positive' if positive_prob > negative_prob else 'negative'\n    \n    return jsonify({\n        'sentiment': sentiment,\n        'confidence': {\n            'positive': positive_prob,\n            'negative': negative_prob\n        }\n    })\n\nif __name__ == '__main__':\n    app.run(host='0.0.0.0', port=5000)\nEOL\n",
+            "is_blocking": true,
+            "timeout_sec": 10
+        },
+        {
+            "keystrokes": "cat > /app/test_sentiment_api.py << EOL\nimport requests\n\nsample_texts = [\n    'I love this product, it works great!',\n    'This is the worst experience I have ever had.',\n    'The service was okay, nothing special.'\n]\n\nfor text in sample_texts:\n    response = requests.post('http://localhost:5000/sentiment', json={'text': text})\n    print(f'Text: {text}')\n    print(f'Response: {response.json()}\\n')\nEOL\n",
+            "is_blocking": true,
+            "timeout_sec": 10
+        },
+        {
+            "keystrokes": "nohup python3 /app/sentiment_service.py > /app/sentiment_service.log 2>&1 &\n",
+            "is_blocking": true,
+            "timeout_sec": 5
+        },
+        {
+            "keystrokes": "pip install requests\n",
+            "is_blocking": true,
+            "timeout_sec": 30
+        },
+        {
+            "keystrokes": "python3 /app/test_sentiment_api.py\n",
+            "is_blocking": true,
+            "timeout_sec": 20
+        }
+    ],
+    "is_task_complete": true
+}

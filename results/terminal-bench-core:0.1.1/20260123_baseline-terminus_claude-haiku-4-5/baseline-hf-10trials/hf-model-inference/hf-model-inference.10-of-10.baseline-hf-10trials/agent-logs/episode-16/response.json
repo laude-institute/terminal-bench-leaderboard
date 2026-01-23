@@ -1,0 +1,22 @@
+{
+    "state_analysis": "Model download and local save appears to have completed successfully. The sentiment analysis model from Hugging Face has been downloaded and saved to the specified local directory.",
+    "explanation": "Now we'll create the Flask API script to serve sentiment analysis predictions.",
+    "commands": [
+        {
+            "keystrokes": "cat > /app/sentiment_service.py << EOL\nimport torch\nfrom flask import Flask, request, jsonify\nfrom transformers import AutoModelForSequenceClassification, AutoTokenizer\n\n# Load pre-trained model and tokenizer\nmodel = AutoModelForSequenceClassification.from_pretrained('/app/model_cache/sentiment_model')\ntokenizer = AutoTokenizer.from_pretrained('/app/model_cache/sentiment_model')\n\napp = Flask(__name__)\n\n@app.route('/sentiment', methods=['POST'])\ndef analyze_sentiment():\n    data = request.get_json()\n    if not data or 'text' not in data:\n        return jsonify({'error': 'No text provided'}), 400\n    \n    text = data['text']\n    \n    # Tokenize and predict\n    inputs = tokenizer(text, return_tensors='pt', truncation=True, padding=True)\n    with torch.no_grad():\n        outputs = model(**inputs)\n        predictions = torch.softmax(outputs.logits, dim=1)\n        sentiment_scores = predictions[0].tolist()\n    \n    # Interpret results\n    sentiment = 'positive' if sentiment_scores[1] > sentiment_scores[0] else 'negative'\n    \n    return jsonify({\n        'sentiment': sentiment,\n        'confidence': {\n            'positive': sentiment_scores[1],\n            'negative': sentiment_scores[0]\n        }\n    })\n\nif __name__ == '__main__':\n    app.run(host='0.0.0.0', port=5000)\nEOL\n",
+            "is_blocking": true,
+            "timeout_sec": 10
+        },
+        {
+            "keystrokes": "cat > /app/test_sentiment_api.py << EOL\nimport requests\n\nsamples = [\n    'I love this movie, it was amazing!',\n    'This is the worst experience ever.',\n    'The product is okay, nothing special.'\n]\n\nfor text in samples:\n    response = requests.post('http://localhost:5000/sentiment', json={'text': text})\n    print(f'Text: {text}')\n    print(f'Response: {response.json()}\\n')\nEOL\n",
+            "is_blocking": true,
+            "timeout_sec": 10
+        },
+        {
+            "keystrokes": "python3 /app/sentiment_service.py &\n",
+            "is_blocking": false,
+            "timeout_sec": 10
+        }
+    ],
+    "is_task_complete": false
+}

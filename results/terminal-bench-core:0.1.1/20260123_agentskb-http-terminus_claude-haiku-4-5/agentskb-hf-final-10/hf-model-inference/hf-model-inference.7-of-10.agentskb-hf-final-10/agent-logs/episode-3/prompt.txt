@@ -1,0 +1,40 @@
+root@4a004e5adba5:/app# python3 -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; model = AutoModelForSequenceClassification.from_
+pretrained('distilbert-base-uncased-finetuned-sst-2-english'); tokenizer = AutoTokenizer.from_pretrained('distilbert-base-uncased-finetuned-sst-2-english'); mod
+el.save_pretrained('/app/model_cache/sentiment_model'); tokenizer.save_pretrained('/app/model_cache/sentiment_model')"; tmux wait -S done
+config.json: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████| 629/629 [00:00<00:00, 2.16MB/s]
+model.safetensors: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 268M/268M [00:07<00:00, 33.6MB/s]
+tokenizer_config.json: 100%|██████████████████████████████████████████████████████████████████████████████████████████████████| 48.0/48.0 [00:00<00:00, 255kB/s]
+vocab.txt: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████| 232k/232k [00:00<00:00, 1.98MB/s]
+root@4a004e5adba5:/app# cat > /app/app.py << 'EOF'
+> from flask import Flask, request, jsonify
+> from transformers import AutoTokenizer, AutoModelForSequenceClassification
+> import torch
+>
+> app = Flask(__name__)
+>
+> # Load model at startup
+> model_path = '/app/model_cache/sentiment_model'
+> tokenizer = AutoTokenizer.from_pretrained(model_path)
+> model = AutoModelForSequenceClassification.from_pretrained(model_path)
+> model.eval()
+>
+> @app.route('/sentiment', methods=['POST'])
+> def analyze():
+>     data = request.get_json()
+>     if not data or 'text' not in data:
+>         return jsonify({'error': 'No text provided'}), 400
+>
+>     inputs = tokenizer(data['text'], return_tensors='pt', truncation=True)
+>     with torch.no_grad():
+>         probs = torch.nn.functional.softmax(model(**inputs).logits, dim=-1)[0]
+>
+>     return jsonify({
+>         'sentiment': 'positive' if probs[1] > probs[0] else 'negative',
+>         'confidence': {'positive': float(probs[1]), 'negative': float(probs[0])}
+>     })
+>
+> if __name__ == '__main__':
+>     app.run(host='0.0.0.0', port=5000)
+> EOF
+root@4a004e5adba5:/app# chmod +x /app/app.py; tmux wait -S done
+root@4a004e5adba5:/app#

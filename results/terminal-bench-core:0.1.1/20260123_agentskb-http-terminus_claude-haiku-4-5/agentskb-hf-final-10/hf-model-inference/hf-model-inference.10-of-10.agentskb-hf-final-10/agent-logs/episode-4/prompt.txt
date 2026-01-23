@@ -1,0 +1,40 @@
+>     with torch.no_grad():
+>         probs = torch.nn.functional.softmax(model(**inputs).logits, dim=-1)[0]
+>
+>     return jsonify({
+>         'sentiment': 'positive' if probs[1] > probs[0] else 'negative',
+>         'confidence': {'positive': float(probs[1]), 'negative': float(probs[0])}
+>     })
+>
+> if __name__ == '__main__':
+>     app.run(host='0.0.0.0', port=5000)
+> EOF
+root@757d0f8c7d81:/app# chmod +x /app/app.py; tmux wait -S done
+root@757d0f8c7d81:/app# cd /app && nohup python3 app.py > app.log 2>&1 &
+[1] 233
+root@757d0f8c7d81:/app# sleep 5; tmux wait -S done
+root@757d0f8c7d81:/app# cat > /app/test_sentiment.py << 'EOF'
+> import requests
+>
+> samples = [
+>     "I love this amazing product!",
+>     "This is the worst experience ever.",
+>     "The movie was okay, nothing special."
+> ]
+>
+> for text in samples:
+>     response = requests.post('http://localhost:5000/sentiment', json={'text': text})
+>     print(f"Text: {text}")
+>     print(f"Result: {response.json()}\n")
+> EOF
+root@757d0f8c7d81:/app# python3 /app/test_sentiment.py; tmux wait -S done
+Text: I love this amazing product!
+Result: {'confidence': {'negative': 0.0001104313851101324, 'positive': 0.999889612197876}, 'sentiment': 'positive'}
+
+Text: This is the worst experience ever.
+Result: {'confidence': {'negative': 0.9997727274894714, 'positive': 0.00022728204203303903}, 'sentiment': 'negative'}
+
+Text: The movie was okay, nothing special.
+Result: {'confidence': {'negative': 0.9925116300582886, 'positive': 0.007488420233130455}, 'sentiment': 'negative'}
+
+root@757d0f8c7d81:/app#

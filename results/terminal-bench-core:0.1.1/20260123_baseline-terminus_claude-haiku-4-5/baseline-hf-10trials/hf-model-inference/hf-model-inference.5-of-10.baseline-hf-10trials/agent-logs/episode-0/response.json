@@ -1,0 +1,47 @@
+{
+    "state_analysis": "We are in the /app directory as the root user in a Docker container, and need to set up a sentiment analysis service using Hugging Face's DistilBERT model.",
+    "explanation": "First, we'll set up the project structure, install necessary Python dependencies, and create the Flask API for sentiment analysis.",
+    "commands": [
+        {
+            "keystrokes": "pip install transformers flask torch\n",
+            "is_blocking": true,
+            "timeout_sec": 60
+        },
+        {
+            "keystrokes": "mkdir -p /app/model_cache/sentiment_model\n",
+            "is_blocking": true,
+            "timeout_sec": 10
+        },
+        {
+            "keystrokes": "python3 -c \"from transformers import AutoModelForSequenceClassification, AutoTokenizer; model = AutoModelForSequenceClassification.from_pretrained('distilbert-base-uncased-finetuned-sst-2-english'); tokenizer = AutoTokenizer.from_pretrained('distilbert-base-uncased-finetuned-sst-2-english'); model.save_pretrained('/app/model_cache/sentiment_model'); tokenizer.save_pretrained('/app/model_cache/sentiment_model')\"\n",
+            "is_blocking": true,
+            "timeout_sec": 60
+        },
+        {
+            "keystrokes": "cat > /app/sentiment_service.py << EOL\nimport torch\nfrom flask import Flask, request, jsonify\nfrom transformers import AutoModelForSequenceClassification, AutoTokenizer\n\napp = Flask(__name__)\n\n# Load model and tokenizer\nmodel = AutoModelForSequenceClassification.from_pretrained('/app/model_cache/sentiment_model')\ntokenizer = AutoTokenizer.from_pretrained('/app/model_cache/sentiment_model')\n\n@app.route('/sentiment', methods=['POST'])\ndef analyze_sentiment():\n    try:\n        data = request.get_json()\n        text = data.get('text', '')\n        \n        # Tokenize and predict\n        inputs = tokenizer(text, return_tensors='pt', truncation=True, padding=True)\n        with torch.no_grad():\n            outputs = model(**inputs)\n        \n        # Get probabilities\n        probabilities = torch.softmax(outputs.logits, dim=1)[0]\n        negative_prob = probabilities[0].item()\n        positive_prob = probabilities[1].item()\n        \n        # Determine sentiment\n        sentiment = 'positive' if positive_prob > negative_prob else 'negative'\n        \n        return jsonify({\n            'sentiment': sentiment,\n            'confidence': {\n                'positive': positive_prob,\n                'negative': negative_prob\n            }\n        })\n    except Exception as e:\n        return jsonify({'error': str(e)}), 400\n\nif __name__ == '__main__':\n    app.run(host='0.0.0.0', port=5000)\nEOL\n",
+            "is_blocking": true,
+            "timeout_sec": 10
+        },
+        {
+            "keystrokes": "cat > /app/test_sentiment_api.py << EOL\nimport requests\n\ntest_texts = [\n    'I love this product, it works great!',\n    'This is the worst experience ever.',\n    'The service was okay, nothing special.'\n]\n\nfor text in test_texts:\n    response = requests.post('http://localhost:5000/sentiment', json={'text': text})\n    print(f'Text: {text}')\n    print(f'Response: {response.json()}\\n')\nEOL\n",
+            "is_blocking": true,
+            "timeout_sec": 10
+        },
+        {
+            "keystrokes": "pip install requests\n",
+            "is_blocking": true,
+            "timeout_sec": 30
+        },
+        {
+            "keystrokes": "python3 /app/sentiment_service.py &\n",
+            "is_blocking": false,
+            "timeout_sec": 10
+        },
+        {
+            "keystrokes": "sleep 3 && python3 /app/test_sentiment_api.py\n",
+            "is_blocking": true,
+            "timeout_sec": 20
+        }
+    ],
+    "is_task_complete": true
+}

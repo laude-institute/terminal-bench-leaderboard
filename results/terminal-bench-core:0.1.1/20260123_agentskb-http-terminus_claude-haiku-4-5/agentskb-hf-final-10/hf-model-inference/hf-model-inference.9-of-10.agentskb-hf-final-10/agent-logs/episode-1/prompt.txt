@@ -1,0 +1,40 @@
+>
+> # Load model at startup
+> model_path = '/app/model_cache/sentiment_model'
+> tokenizer = AutoTokenizer.from_pretrained(model_path)
+> model = AutoModelForSequenceClassification.from_pretrained(model_path)
+> model.eval()
+>
+> @app.route('/sentiment', methods=['POST'])
+> def analyze():
+>     data = request.get_json()
+>     if not data or 'text' not in data:
+>         return jsonify({'error': 'No text provided'}), 400
+>
+>     inputs = tokenizer(data['text'], return_tensors='pt', truncation=True)
+>     with torch.no_grad():
+>         probs = torch.nn.functional.softmax(model(**inputs).logits, dim=-1)[0]
+>
+>     return jsonify({
+>         'sentiment': 'positive' if probs[1] > probs[0] else 'negative',
+>         'confidence': {'positive': float(probs[1]), 'negative': float(probs[0])}
+>     })
+>
+> if __name__ == '__main__':
+>     app.run(host='0.0.0.0', port=5000)
+> EOF
+root@37b69e7a5db8:/app# cat > /app/test_sentiment.py << 'EOF'
+> import requests
+>
+> samples = [
+>     "I love this product, it's amazing!",
+>     "This is the worst experience ever.",
+>     "The movie was okay, not great but not terrible."
+> ]
+>
+> for text in samples:
+>     response = requests.post('http://localhost:5000/sentiment', json={'text': text})
+>     print(f"Text: {text}")
+>     print(f"Result: {response.json()}\n")
+> EOF
+root@37b69e7a5db8:/app#
