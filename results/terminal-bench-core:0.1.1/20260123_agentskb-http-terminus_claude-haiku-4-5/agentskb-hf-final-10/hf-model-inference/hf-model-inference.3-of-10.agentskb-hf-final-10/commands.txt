@@ -1,0 +1,15 @@
+['asciinema rec --stdin /logs/agent.cast', 'Enter']
+['clear', 'Enter']
+'pip install torch transformers flask --extra-index-url https://download.pytorch.org/whl/cpu\n'
+'mkdir -p /app/model_cache/sentiment_model\n'
+'python3 -c "from transformers import AutoModelForSequenceClassification, AutoTokenizer; model = AutoModelForSequenceClassification.from_pretrained(\'distilbert-base-uncased-finetuned-sst-2-english\'); tokenizer = AutoTokenizer.from_pretrained(\'distilbert-base-uncased-finetuned-sst-2-english\'); model.save_pretrained(\'/app/model_cache/sentiment_model\'); tokenizer.save_pretrained(\'/app/model_cache/sentiment_model\')"\n'
+"cat > /app/app.py << 'EOF'\nfrom flask import Flask, request, jsonify\nfrom transformers import AutoTokenizer, AutoModelForSequenceClassification\nimport torch\n\napp = Flask(__name__)\n\n# Load model at startup\nmodel_path = '/app/model_cache/sentiment_model'\ntokenizer = AutoTokenizer.from_pretrained(model_path)\nmodel = AutoModelForSequenceClassification.from_pretrained(model_path)\nmodel.eval()\n\n@app.route('/sentiment', methods=['POST'])\ndef analyze():\n    data = request.get_json()\n    if not data or 'text' not in data:\n        return jsonify({'error': 'No text provided'}), 400\n    \n    inputs = tokenizer(data['text'], return_tensors='pt', truncation=True)\n    with torch.no_grad():\n        probs = torch.nn.functional.softmax(model(**inputs).logits, dim=-1)[0]\n    \n    return jsonify({\n        'sentiment': 'positive' if probs[1] > probs[0] else 'negative',\n        'confidence': {'positive': float(probs[1]), 'negative': float(probs[0])}\n    })\n\nif __name__ == '__main__':\n    app.run(host='0.0.0.0', port=5000)\nEOF\n"
+'cat > /app/test_sentiment.py << \'EOF\'\nimport requests\n\ntest_texts = [\n    "I love this amazing product!",\n    "This is the worst experience ever.",\n    "The movie was okay, not great but not terrible."\n]\n\nfor text in test_texts:\n    response = requests.post(\'http://localhost:5000/sentiment\', json={\'text\': text})\n    print(f"Text: {text}")\n    print(f"Result: {response.json()}\\n")\nEOF\n'
+'nohup python app.py > app.log 2>&1 &\n'
+'sleep 10\n'
+'python test_sentiment.py\n'
+['asciinema rec --stdin /logs/tests.cast', 'Enter']
+['clear', 'Enter']
+['bash ', '/tests/run-tests.sh', 'Enter']
+['C-d']
+['C-d']

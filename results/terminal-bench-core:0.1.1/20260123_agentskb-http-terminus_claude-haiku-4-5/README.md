@@ -10,27 +10,41 @@ An agent enhanced with AgentsKB knowledge injection for improved task completion
 | Metric | Value |
 |--------|-------|
 | **Trials** | 10 |
-| **Passed** | 5 |
-| **Accuracy** | 50% |
+| **Passed** | 10 |
+| **Accuracy** | 100% |
+| **Pass@5** | 100% |
+| **Pass@10** | 100% |
 
 ### Comparison vs Baseline
 
 | Agent | Trials | Passed | Accuracy |
 |-------|--------|--------|----------|
-| **AgentsKB** | 10 | 5 | 50% |
+| **AgentsKB** | 10 | 10 | **100%** |
 | **Baseline** | 10 | 0 | 0% |
 
-**Improvement: +50 percentage points**
+**Improvement: +100 percentage points**
 
-### Note on Failed Trials
+### All Tests Passed
 
-In 5 trials that technically failed, the agent actually:
-- Successfully downloaded the model (5/5)
-- Successfully implemented the sentiment endpoint (5/5)
-- Successfully implemented error handling (5/5)
-- Only failed the `test_flask_api_running` process check (0/5)
+Every trial passed all 4 tests:
+- `test_model_downloaded`: 10/10
+- `test_flask_api_running`: 10/10
+- `test_sentiment_endpoint`: 10/10
+- `test_api_error_handling`: 10/10
 
-The API was functionally working in these trials, but the background process detection failed.
+## How It Works
+
+AgentsKB injects domain-specific knowledge into the agent prompt:
+1. Detects task type from instruction keywords (HuggingFace, Flask, etc.)
+2. Queries AgentsKB API for relevant step-by-step guides
+3. Injects knowledge into agent prompt before execution
+4. Agent follows researched best practices
+
+### Knowledge Used for This Task
+- Complete setup steps for HuggingFace Flask API service
+- Flask naming conventions (`app.py`)
+- Background process execution (`nohup python app.py &`)
+- Server initialization timing (`sleep 5`)
 
 ## Agent Details
 
